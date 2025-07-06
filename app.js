@@ -1,20 +1,24 @@
 // GitHub Gist 配置
 let GITHUB_TOKEN = '';
 let GIST_ID = '';
+let ADMIN_PASSWORD = '';
 const GIST_FILENAME = 'bookclub_members.json';
 
 // 存储所有成员数据
 let members = [];
+let isAdmin = false;
 
 // 页面加载时初始化
 window.onload = function() {
     // 检查是否已配置
     GITHUB_TOKEN = localStorage.getItem('github_token') || '';
     GIST_ID = localStorage.getItem('gist_id') || '';
+    ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
     
-    if (!GITHUB_TOKEN) {
+    if (!GITHUB_TOKEN || !ADMIN_PASSWORD) {
         document.getElementById('configSection').style.display = 'block';
     } else {
+        document.getElementById('loginSection').style.display = 'block';
         loadMembersFromGist();
     }
 };
@@ -22,13 +26,22 @@ window.onload = function() {
 // 保存配置
 async function saveConfig() {
     const token = document.getElementById('githubToken').value.trim();
+    const adminPwd = document.getElementById('adminPassword').value.trim();
+    
     if (!token) {
         alert('请输入 GitHub Token');
         return;
     }
     
+    if (!adminPwd) {
+        alert('请设置管理员密码');
+        return;
+    }
+    
     GITHUB_TOKEN = token;
+    ADMIN_PASSWORD = adminPwd;
     localStorage.setItem('github_token', token);
+    localStorage.setItem('admin_password', adminPwd);
     
     // 创建或获取 Gist
     try {
@@ -41,7 +54,7 @@ async function saveConfig() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    description: '读书社团成员数据',
+                    description: '求索书社成员数据',
                     public: false,
                     files: {
                         [GIST_FILENAME]: {
@@ -61,11 +74,49 @@ async function saveConfig() {
         }
         
         document.getElementById('configSection').style.display = 'none';
+        document.getElementById('loginSection').style.display = 'block';
         alert('配置成功！');
         loadMembersFromGist();
     } catch (error) {
         alert('配置失败：' + error.message);
     }
+}
+
+// 显示成员表单
+function showMemberForm() {
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('memberSection').style.display = 'block';
+}
+
+// 显示管理员登录
+function showAdminLogin() {
+    document.getElementById('adminLoginForm').style.display = 'block';
+}
+
+// 管理员登录
+function adminLogin() {
+    const password = document.getElementById('loginPassword').value.trim();
+    
+    if (password === ADMIN_PASSWORD) {
+        isAdmin = true;
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('adminSection').style.display = 'block';
+        renderMemberList();
+        alert('管理员登录成功！');
+    } else {
+        alert('密码错误！');
+    }
+}
+
+// 管理员退出登录
+function adminLogout() {
+    isAdmin = false;
+    document.getElementById('adminSection').style.display = 'none';
+    document.getElementById('loginSection').style.display = 'block';
+    document.getElementById('adminLoginForm').style.display = 'none';
+    document.getElementById('loginPassword').value = '';
+    // 清空匹配结果
+    document.getElementById('matchResults').innerHTML = '';
 }
 
 // 从 Gist 加载成员数据
@@ -95,10 +146,14 @@ async function loadMembersFromGist() {
             members = [];
         }
         
-        renderMemberList();
+        if (isAdmin) {
+            renderMemberList();
+        }
     } catch (error) {
         console.error('加载失败:', error);
-        alert('加载数据失败，请检查网络连接');
+        if (isAdmin) {
+            alert('加载数据失败，请检查网络连接');
+        }
     }
 }
 
@@ -147,6 +202,9 @@ document.getElementById('memberForm').addEventListener('submit', async function(
         return;
     }
     
+    // 先加载最新数据
+    await loadMembersFromGist();
+    
     // 检查是否已存在同名成员
     if (members.some(m => m.name === name)) {
         alert('该昵称已存在，请使用其他昵称');
@@ -175,10 +233,11 @@ document.getElementById('memberForm').addEventListener('submit', async function(
     // 清空表单
     clearForm();
     
-    // 更新显示
-    renderMemberList();
+    alert('信息提交成功！管理员会进行匹配分析。');
     
-    alert('成员添加成功！');
+    // 返回登录选择界面
+    document.getElementById('memberSection').style.display = 'none';
+    document.getElementById('loginSection').style.display = 'block';
 });
 
 // 清空表单
@@ -186,9 +245,12 @@ function clearForm() {
     document.getElementById('memberForm').reset();
 }
 
-// 渲染成员列表
+// 渲染成员列表（仅管理员可见）
 function renderMemberList() {
+    if (!isAdmin) return;
+    
     const memberListDiv = document.getElementById('memberList');
+    const memberCountSpan = document.getElementById('memberCount');
     
     if (!GITHUB_TOKEN) {
         memberListDiv.innerHTML = '<div class="no-data">请先完成配置</div>';
@@ -196,9 +258,12 @@ function renderMemberList() {
     }
     
     if (members.length === 0) {
-        memberListDiv.innerHTML = '<div class="no-data">暂无成员，请添加成员信息</div>';
+        memberListDiv.innerHTML = '<div class="no-data">暂无成员，等待成员提交信息</div>';
+        memberCountSpan.textContent = '';
         return;
     }
+    
+    memberCountSpan.textContent = `(共 ${members.length} 人)`;
     
     memberListDiv.innerHTML = members.map(member => `
         <div class="member-item">
@@ -207,6 +272,7 @@ function renderMemberList() {
                 <div class="member-details">
                     <div>兴趣：${member.hobbies.length > 0 ? member.hobbies.join('、') : '未填写'}</div>
                     <div>读过：${member.books.length > 0 ? member.books.slice(0, 3).join('、') + (member.books.length > 3 ? '...' : '') : '未填写'}</div>
+                    <div style="color: #888; font-size: 12px;">加入时间：${member.joinDate}</div>
                 </div>
             </div>
             <button class="delete-btn" onclick="deleteMember('${member.id}')">删除</button>
@@ -214,8 +280,13 @@ function renderMemberList() {
     `).join('');
 }
 
-// 删除成员
+// 删除成员（仅管理员）
 async function deleteMember(id) {
+    if (!isAdmin) {
+        alert('只有管理员可以删除成员');
+        return;
+    }
+    
     if (confirm('确定要删除这个成员吗？')) {
         members = members.filter(m => m.id !== id);
         await saveMembersToGist();
@@ -246,8 +317,13 @@ function calculateSimilarity(member1, member2) {
     };
 }
 
-// 寻找相似搭档
+// 寻找相似搭档（仅管理员）
 function findSimilarMatches() {
+    if (!isAdmin) {
+        alert('只有管理员可以进行匹配');
+        return;
+    }
+    
     if (members.length < 2) {
         alert('需要至少2个成员才能进行匹配');
         return;
@@ -279,8 +355,13 @@ function findSimilarMatches() {
     displayMatches(matches.slice(0, 10), '相似搭档推荐');
 }
 
-// 寻找互补搭档
+// 寻找互补搭档（仅管理员）
 function findComplementaryMatches() {
+    if (!isAdmin) {
+        alert('只有管理员可以进行匹配');
+        return;
+    }
+    
     if (members.length < 2) {
         alert('需要至少2个成员才能进行匹配');
         return;
@@ -322,6 +403,9 @@ function displayMatches(matches, title) {
     resultsDiv.innerHTML = `
         <div class="section">
             <h2>${title}</h2>
+            <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                <p>📊 管理员专用：匹配结果分析</p>
+            </div>
             ${matches.map((match, index) => `
                 <div class="match-item">
                     <h3>匹配 ${index + 1}</h3>
