@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>求索书社灵魂寻友</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 16px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+        
+        .section h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section h2::before {
+            content: "📋";
+            font-size: 1.2rem;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        input[type="text"], input[type="password"], textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        
+        input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin-right: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button.secondary {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+            box-shadow: 0 4px 15px rgba(149, 165, 166, 0.3);
+        }
+        
+        button.secondary:hover {
+            box-shadow: 0 6px 20px rgba(149, 165, 166, 0.4);
+        }
+        
+        .member-list {
+            margin-top: 20px;
+        }
+        
+        .member-item {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .member-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .member-info h3 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .member-details {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .delete-btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            padding: 8px 16px;
+            font-size: 14px;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+        
+        .delete-btn:hover {
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+        
+        .match-section {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .match-btn {
+            background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 18px;
+            box-shadow: 0 4px 15px rgba(0, 184, 148, 0.3);
+        }
+        
+        .match-btn:hover {
+            box-shadow: 0 6px 20px rgba(0, 184, 148, 0.4);
+        }
+        
+        .match-results {
+            margin-top: 30px;
+        }
+        
+        .match-item {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+            border-left: 5px solid #00b894;
+            box-shadow: 0 8px 32px rgba(0, 184, 148, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .match-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0, 184, 148, 0.15);
+        }
+        
+        .match-item h3 {
+            color: #27ae60;
+            margin-bottom: 10px;
+        }
+        
+        .match-score {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00b894;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 4px rgba(0, 184, 148, 0.2);
+        }
+        
+        .match-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .person-info {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .person-info:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .person-info h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .common-interests {
+            margin-top: 15px;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 4px;
+        }
+        
+        .common-interests h4 {
+            color: #856404;
+            margin-bottom: 5px;
+        }
+        
+        .tag {
+            display: inline-block;
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            margin: 3px;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(116, 185, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .tag:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(116, 185, 255, 0.4);
+        }
+        
+        .no-data {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 12px;
+            border: 2px dashed #ddd;
+        }
+        
+        /* 添加动画效果 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .section {
+            animation: fadeInUp 0.6s ease-out;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .match-details {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .match-btn {
+                padding: 12px 20px;
+                font-size: 16px;
+                margin: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 求索书社灵魂寻友</h1>
+        
+        <div id="configSection" class="section" style="background-color: #fff3cd; border: 1px solid #ffeaa7; display: none;">
+            <h2>⚙️ 初始配置</h2>
+            <p>首次使用需要配置 GitHub Token：</p>
+            <ol>
+                <li>登录你的 GitHub 账号</li>
+                <li>访问 <a href="https://github.com/settings/tokens/new" target="_blank">创建 Token 页面</a></li>
+                <li>填写 Note（如：读书社团工具）</li>
+                <li>勾选 <strong>gist</strong> 权限</li>
+                <li>点击生成，复制 Token</li>
+            </ol>
+            <div class="form-group">
+                <label for="githubToken">GitHub Token</label>
+                <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxx">
+            </div>
+            <div class="form-group">
+                <label for="adminPassword">设置管理员密码</label>
+                <input type="password" id="adminPassword" placeholder="设置一个管理员密码">
+                <div class="hint">管理员可以查看所有成员信息和进行匹配</div>
+            </div>
+            <button onclick="saveConfig()">保存配置</button>
+        </div>
+        
+        <div id="loginSection" class="section" style="display: none;">
+            <h2>🔐 身份选择</h2>
+            <div style="display: flex; gap: 20px; justify-content: center; margin: 20px 0;">
+                <button onclick="showMemberForm()">我是成员</button>
+                <button onclick="showAdminLogin()">我是管理员</button>
+            </div>
+            
+            <div id="adminLoginForm" style="display: none; margin-top: 20px;">
+                <div class="form-group">
+                    <label for="loginPassword">管理员密码</label>
+                    <input type="password" id="loginPassword" placeholder="输入管理员密码">
+                </div>
+                <button onclick="adminLogin()">登录</button>
+            </div>
+        </div>
+        
+        <div id="memberSection" class="section" style="display: none;">
+            <h2>添加成员信息</h2>
+            <form id="memberForm">
+                <div class="form-group">
+                    <label for="name">昵称</label>
+                    <input type="text" id="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="hobbies">兴趣爱好</label>
+                    <textarea id="hobbies" placeholder="如：文学，历史，心理学，旅行"></textarea>
+                    <div class="hint">多个爱好用逗号分隔（中英文逗号均可）</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="books">读过的书</label>
+                    <textarea id="books" placeholder="如：百年孤独，人类简史，小王子"></textarea>
+                    <div class="hint">多本书用逗号分隔（中英文逗号均可）</div>
+                </div>
+                
+                <button type="submit">提交我的信息</button>
+                <button type="button" class="secondary" onclick="clearForm()">清空表单</button>
+            </form>
+            <div style="margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 8px;">
+                <p>✅ 信息提交成功后，管理员会进行匹配并公布结果</p>
+            </div>
+        </div>
+        
+        <div id="adminSection" style="display: none;">
+            <div class="section">
+                <h2>管理员面板</h2>
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button class="secondary" onclick="loadMembersFromGist()">🔄 刷新数据</button>
+                    <button class="secondary" onclick="adminLogout()">📤 退出登录</button>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h2>成员列表 <span id="memberCount" style="color: #666; font-size: 14px;"></span></h2>
+                <div id="memberList" class="member-list">
+                    <div class="no-data">正在加载成员数据...</div>
+                </div>
+            </div>
+            
+            <div class="match-section">
+                <button class="match-btn" onclick="findSimilarMatches()">🤝 寻找相似搭档</button>
+                <button class="match-btn" onclick="findComplementaryMatches()">🌈 寻找互补搭档</button>
+            </div>
+        </div>
+        
+        <div id="matchResults" class="match-results"></div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
