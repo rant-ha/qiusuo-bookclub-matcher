@@ -1,7 +1,7 @@
-// GitHub Gist 配置
-let GITHUB_TOKEN = '';
-let GIST_ID = '';
-let ADMIN_PASSWORD = '';
+// GitHub Gist 配置 - 构建时替换
+let GITHUB_TOKEN = 'BUILD_TIME_GITHUB_TOKEN';
+let GIST_ID = 'BUILD_TIME_GIST_ID';
+let ADMIN_PASSWORD = 'BUILD_TIME_ADMIN_PASSWORD';
 const GIST_FILENAME = 'bookclub_members.json';
 
 // 存储所有成员数据
@@ -10,16 +10,27 @@ let isAdmin = false;
 
 // 页面加载时初始化
 window.onload = function() {
-    // 检查是否已配置
-    GITHUB_TOKEN = localStorage.getItem('github_token') || '';
-    GIST_ID = localStorage.getItem('gist_id') || '';
-    ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
+    // 检查是否是构建时配置（包含占位符说明未配置）
+    const isBuiltWithEnv = GITHUB_TOKEN !== 'BUILD_TIME_GITHUB_TOKEN' 
+                          && ADMIN_PASSWORD !== 'BUILD_TIME_ADMIN_PASSWORD' 
+                          && GIST_ID !== 'BUILD_TIME_GIST_ID';
     
-    if (!GITHUB_TOKEN || !ADMIN_PASSWORD) {
-        document.getElementById('configSection').style.display = 'block';
-    } else {
+    if (isBuiltWithEnv) {
+        // 使用构建时配置，直接进入身份选择
         document.getElementById('loginSection').style.display = 'block';
         loadMembersFromGist();
+    } else {
+        // 降级到手动配置
+        GITHUB_TOKEN = localStorage.getItem('github_token') || '';
+        GIST_ID = localStorage.getItem('gist_id') || '';
+        ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
+        
+        if (!GITHUB_TOKEN || !ADMIN_PASSWORD) {
+            document.getElementById('configSection').style.display = 'block';
+        } else {
+            document.getElementById('loginSection').style.display = 'block';
+            loadMembersFromGist();
+        }
     }
 };
 
