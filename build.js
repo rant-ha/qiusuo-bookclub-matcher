@@ -7,7 +7,7 @@ const GIST_ID = process.env.GIST_ID || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const AI_BASE_URL = process.env.AI_BASE_URL || '';
 const AI_API_KEY = process.env.AI_API_KEY || '';
-const AI_MODEL_NAME = process.env.AI_MODEL_NAME || 'gpt-4o'; // 默认为 gpt-4o
+const AI_MODEL_NAME = process.env.AI_MODEL_NAME || 'gpt-4.1-mini'; // 默认为 gpt-4.1-mini
 
 console.log('构建开始...');
 console.log('Token配置:', GITHUB_TOKEN ? '已配置' : '未配置');
@@ -49,6 +49,7 @@ if (!fs.existsSync('dist')) {
 
 // 复制文件到构建目录
 fs.copyFileSync('index.html', 'dist/index.html');
+fs.copyFileSync('register.html', 'dist/register.html');
 fs.writeFileSync('dist/app.js', appJsContent);
 fs.copyFileSync('README.md', 'dist/README.md');
 
