@@ -9,166 +9,154 @@ const GIST_FILENAME = 'bookclub_members.json';
 
 // 存储所有成员数据
 let members = [];
+let currentUser = null; // 当前登录用户
 let isAdmin = false;
 
 // 页面加载时初始化
-window.onload = function() {
-    // 检查是否是构建时配置（包含占位符说明未配置）
-    const isBuiltWithEnv = GITHUB_TOKEN !== 'BUILD_TIME_GITHUB_TOKEN' 
-                          && ADMIN_PASSWORD !== 'BUILD_TIME_ADMIN_PASSWORD' 
-                          && GIST_ID !== 'BUILD_TIME_GIST_ID';
-    
-    if (isBuiltWithEnv) {
-        // 使用构建时配置，直接进入身份选择
-        document.getElementById('loginSection').style.display = 'block';
-        loadMembersFromGist();
-    } else {
-        // 降级到手动配置
-        GITHUB_TOKEN = localStorage.getItem('github_token') || '';
-        GIST_ID = localStorage.getItem('gist_id') || '';
-        ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
-        
-        if (!GITHUB_TOKEN || !ADMIN_PASSWORD) {
-            document.getElementById('configSection').style.display = 'block';
-        } else {
-            document.getElementById('loginSection').style.display = 'block';
-            loadMembersFromGist();
-        }
-    }
+window.onload = async function() {
+   // 优先使用构建时注入的配置
+   const isBuiltWithEnv = GITHUB_TOKEN !== 'BUILD_TIME_GITHUB_TOKEN' && ADMIN_PASSWORD !== 'BUILD_TIME_ADMIN_PASSWORD' && GIST_ID !== 'BUILD_TIME_GIST_ID';
+   if (!isBuiltWithEnv) {
+       // 降级到手动配置
+       GITHUB_TOKEN = localStorage.getItem('github_token') || '';
+       GIST_ID = localStorage.getItem('gist_id') || '';
+       ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
+   }
+
+   // 如果是注册页面，则不需要执行登录逻辑
+   if (window.location.pathname.endsWith('register.html')) {
+       return;
+   }
+   
+   // 自动加载Gist数据
+   if (GIST_ID) {
+       await loadMembersFromGist();
+   }
+
+   // 检查本地存储的登录状态
+   const loggedInUser = sessionStorage.getItem('currentUser');
+   if (loggedInUser) {
+       currentUser = JSON.parse(loggedInUser);
+       isAdmin = sessionStorage.getItem('isAdmin') === 'true';
+       showLoggedInView();
+   } else {
+       showLoginView();
+   }
+
+   // 绑定登录表单事件
+   const loginForm = document.getElementById('loginForm');
+   if(loginForm) {
+       loginForm.addEventListener('submit', handleLogin);
+   }
+
+   // 绑定成员信息更新表单事件
+   const memberForm = document.getElementById('memberForm');
+   if(memberForm) {
+       memberForm.addEventListener('submit', handleUpdateMemberInfo);
+   }
 };
 
-// 保存配置
-async function saveConfig() {
-    const token = document.getElementById('githubToken').value.trim();
-    const adminPwd = document.getElementById('adminPassword').value.trim();
-    
-    if (!token) {
-        alert('请输入 GitHub Token');
-        return;
-    }
-    
-    if (!adminPwd) {
-        alert('请设置管理员密码');
-        return;
-    }
-    
-    GITHUB_TOKEN = token;
-    ADMIN_PASSWORD = adminPwd;
-    localStorage.setItem('github_token', token);
-    localStorage.setItem('admin_password', adminPwd);
-    
-    // 创建或获取 Gist
-    try {
-        if (!GIST_ID) {
-            // 创建新的 Gist
-            const response = await fetch('https://api.github.com/gists', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `token ${GITHUB_TOKEN}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    description: '求索书社成员数据',
-                    public: false,
-                    files: {
-                        [GIST_FILENAME]: {
-                            content: JSON.stringify([])
-                        }
-                    }
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error('创建 Gist 失败');
-            }
-            
-            const gist = await response.json();
-            GIST_ID = gist.id;
-            localStorage.setItem('gist_id', GIST_ID);
-        }
-        
-        document.getElementById('configSection').style.display = 'none';
-        document.getElementById('loginSection').style.display = 'block';
-        alert('配置成功！');
-        loadMembersFromGist();
-    } catch (error) {
-        alert('配置失败：' + error.message);
-    }
+// 处理注册
+async function handleRegistration(name, studentId) {
+   await loadMembersFromGist(); // 确保数据最新
+
+   const userExists = members.some(m => m.name === name || m.studentId === studentId);
+   if (userExists) {
+       alert('该姓名或学号已被注册！');
+       return;
+   }
+
+   const newUser = {
+       id: Date.now().toString(),
+       name: name,
+       studentId: studentId,
+       hobbies: [],
+       books: [],
+       status: 'pending', // 'pending', 'approved'
+       joinDate: new Date().toLocaleDateString('zh-CN')
+   };
+
+   members.push(newUser);
+   await saveMembersToGist();
+   alert('注册申请已提交，请等待管理员审核！');
+   window.location.href = 'index.html';
 }
 
-// 显示成员表单
-function showMemberForm() {
-    document.getElementById('loginSection').style.display = 'none';
-    document.getElementById('memberSection').style.display = 'block';
+// 处理登录
+async function handleLogin(e) {
+   e.preventDefault();
+   const name = document.getElementById('loginName').value.trim();
+   const studentId = document.getElementById('loginStudentId').value.trim();
+   const password = document.getElementById('loginPassword').value.trim();
+
+   // 管理员登录
+   if (password) {
+       if (password === ADMIN_PASSWORD) {
+           isAdmin = true;
+           currentUser = { name: 'Admin' };
+           sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+           sessionStorage.setItem('isAdmin', 'true');
+           showLoggedInView();
+           alert('管理员登录成功！');
+       } else {
+           alert('管理员密码错误！');
+       }
+       return;
+   }
+
+   // 普通用户登录
+   if (!name || !studentId) {
+       alert('请输入姓名和学号');
+       return;
+   }
+
+   await loadMembersFromGist();
+   const foundUser = members.find(m => m.name === name && m.studentId === studentId);
+
+   if (foundUser) {
+       if (foundUser.status === 'approved') {
+           currentUser = foundUser;
+           isAdmin = false;
+           sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+           sessionStorage.setItem('isAdmin', 'false');
+           showLoggedInView();
+       } else {
+           alert('您的账号正在审核中，请耐心等待。');
+       }
+   } else {
+       alert('姓名或学号不正确，请检查或先注册。');
+   }
 }
 
-// 显示管理员登录
-function showAdminLogin() {
-    document.getElementById('adminLoginForm').style.display = 'block';
-}
-
-// 管理员登录
-function adminLogin() {
-    const password = document.getElementById('loginPassword').value.trim();
-    
-    if (password === ADMIN_PASSWORD) {
-        isAdmin = true;
-        document.getElementById('loginSection').style.display = 'none';
-        document.getElementById('adminSection').style.display = 'block';
-        renderMemberList();
-        alert('管理员登录成功！');
-    } else {
-        alert('密码错误！');
-    }
-}
-
-// 管理员退出登录
-function adminLogout() {
-    isAdmin = false;
-    document.getElementById('adminSection').style.display = 'none';
-    document.getElementById('loginSection').style.display = 'block';
-    document.getElementById('adminLoginForm').style.display = 'none';
-    document.getElementById('loginPassword').value = '';
-    // 清空匹配结果
-    document.getElementById('matchResults').innerHTML = '';
+// 退出登录
+function logout() {
+   currentUser = null;
+   isAdmin = false;
+   sessionStorage.removeItem('currentUser');
+   sessionStorage.removeItem('isAdmin');
+   showLoginView();
 }
 
 // 从 Gist 加载成员数据
 async function loadMembersFromGist() {
-    if (!GITHUB_TOKEN || !GIST_ID) {
-        renderMemberList();
-        return;
-    }
-    
-    try {
-        const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-            headers: {
-                'Authorization': `token ${GITHUB_TOKEN}`,
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error('加载数据失败');
-        }
-        
-        const gist = await response.json();
-        const content = gist.files[GIST_FILENAME]?.content;
-        
-        if (content) {
-            members = JSON.parse(content);
-        } else {
-            members = [];
-        }
-        
-        if (isAdmin) {
-            renderMemberList();
-        }
-    } catch (error) {
-        console.error('加载失败:', error);
-        if (isAdmin) {
-            alert('加载数据失败，请检查网络连接');
-        }
-    }
+   if (!GIST_ID) {
+       console.log("GIST_ID is not configured.");
+       return;
+   }
+   // 对于公开Gist，不需要Token
+   const headers = GITHUB_TOKEN ? { 'Authorization': `token ${GITHUB_TOKEN}` } : {};
+   try {
+       const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, { headers });
+       if (!response.ok) {
+           throw new Error(`加载数据失败: ${response.statusText}`);
+       }
+       const gist = await response.json();
+       const content = gist.files[GIST_FILENAME]?.content;
+       members = content ? JSON.parse(content) : [];
+   } catch (error) {
+       console.error('加载Gist失败:', error);
+       alert('加载数据失败，请联系管理员检查配置。');
+   }
 }
 
 // 保存成员数据到 Gist
@@ -203,111 +191,127 @@ async function saveMembersToGist() {
     }
 }
 
-// 处理表单提交
-document.getElementById('memberForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const name = document.getElementById('name').value.trim();
-    const hobbiesText = document.getElementById('hobbies').value.trim();
-    const booksText = document.getElementById('books').value.trim();
-    
-    if (!name) {
-        alert('请输入昵称');
-        return;
-    }
-    
-    // 先加载最新数据
-    await loadMembersFromGist();
-    
-    // 检查是否已存在同名成员
-    if (members.some(m => m.name === name)) {
-        alert('该昵称已存在，请使用其他昵称');
-        return;
-    }
-    
-    // 将输入的文本转换为数组
-    const hobbies = hobbiesText ? hobbiesText.split(/[，,]/).map(item => item.trim()).filter(item => item) : [];
-    const books = booksText ? booksText.split(/[，,]/).map(item => item.trim()).filter(item => item) : [];
-    
-    // 创建新成员
-    const newMember = {
-        id: Date.now().toString(),
-        name: name,
-        hobbies: hobbies,
-        books: books,
-        joinDate: new Date().toLocaleDateString('zh-CN')
-    };
-    
-    // 添加到成员列表
-    members.push(newMember);
-    
-    // 保存到 Gist
-    await saveMembersToGist();
-    
-    // 清空表单
-    clearForm();
-    
-    alert('信息提交成功！管理员会进行匹配分析。');
-    
-    // 返回登录选择界面
-    document.getElementById('memberSection').style.display = 'none';
-    document.getElementById('loginSection').style.display = 'block';
-});
+// 处理成员信息更新
+async function handleUpdateMemberInfo(e) {
+   e.preventDefault();
+   if (!currentUser) return;
 
-// 清空表单
-function clearForm() {
-    document.getElementById('memberForm').reset();
+   const hobbiesText = document.getElementById('hobbies').value.trim();
+   const booksText = document.getElementById('books').value.trim();
+
+   const userIndex = members.findIndex(m => m.id === currentUser.id);
+   if (userIndex > -1) {
+       members[userIndex].hobbies = hobbiesText ? hobbiesText.split(/[，,]/).map(item => item.trim()).filter(item => item) : [];
+       members[userIndex].books = booksText ? booksText.split(/[，,]/).map(item => item.trim()).filter(item => item) : [];
+       
+       await saveMembersToGist();
+       // 更新本地 currentUser
+       currentUser = members[userIndex];
+       sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+       
+       alert('信息更新成功！');
+   }
 }
 
-// 渲染成员列表（仅管理员可见）
+// 渲染待审核列表（仅管理员）
+function renderPendingList() {
+   if (!isAdmin) return;
+   const pendingListDiv = document.getElementById('pendingList');
+   const pendingMembers = members.filter(m => m.status === 'pending');
+
+   if (pendingMembers.length === 0) {
+       pendingListDiv.innerHTML = '<div class="no-data">没有待审核的用户</div>';
+       return;
+   }
+
+   pendingListDiv.innerHTML = pendingMembers.map(member => `
+       <div class="member-item">
+           <div class="member-info">
+               <h3>${member.name}</h3>
+               <div class="member-details">学号：${member.studentId}</div>
+           </div>
+           <button onclick="approveMember('${member.id}')">批准</button>
+           <button class="delete-btn" onclick="deleteMember('${member.id}')">拒绝</button>
+       </div>
+   `).join('');
+}
+
+// 批准成员
+async function approveMember(id) {
+   if (!isAdmin) return;
+   const memberIndex = members.findIndex(m => m.id === id);
+   if (memberIndex > -1) {
+       members[memberIndex].status = 'approved';
+       await saveMembersToGist();
+       renderPendingList();
+       renderMemberList();
+   }
+}
+
+// 渲染已批准的成员列表
 function renderMemberList() {
-    if (!isAdmin) return;
-    
-    const memberListDiv = document.getElementById('memberList');
-    const memberCountSpan = document.getElementById('memberCount');
-    
-    if (!GITHUB_TOKEN) {
-        memberListDiv.innerHTML = '<div class="no-data">请先完成配置</div>';
-        return;
-    }
-    
-    if (members.length === 0) {
-        memberListDiv.innerHTML = '<div class="no-data">暂无成员，等待成员提交信息</div>';
-        memberCountSpan.textContent = '';
-        return;
-    }
-    
-    memberCountSpan.textContent = `(共 ${members.length} 人)`;
-    
-    memberListDiv.innerHTML = members.map(member => `
-        <div class="member-item">
-            <div class="member-info">
-                <h3>${member.name}</h3>
-                <div class="member-details">
-                    <div>兴趣：${member.hobbies.length > 0 ? member.hobbies.join('、') : '未填写'}</div>
-                    <div>读过：${member.books.length > 0 ? member.books.slice(0, 3).join('、') + (member.books.length > 3 ? '...' : '') : '未填写'}</div>
-                    <div style="color: #888; font-size: 12px;">加入时间：${member.joinDate}</div>
-                </div>
-            </div>
-            <button class="delete-btn" onclick="deleteMember('${member.id}')">删除</button>
-        </div>
-    `).join('');
+   if (!isAdmin) return;
+   const memberListDiv = document.getElementById('memberList');
+   const memberCountSpan = document.getElementById('memberCount');
+   const approvedMembers = members.filter(m => m.status === 'approved');
+
+   if (approvedMembers.length === 0) {
+       memberListDiv.innerHTML = '<div class="no-data">暂无已批准成员</div>';
+       memberCountSpan.textContent = '';
+       return;
+   }
+
+   memberCountSpan.textContent = `(共 ${approvedMembers.length} 人)`;
+   memberListDiv.innerHTML = approvedMembers.map(member => `
+       <div class="member-item">
+           <div class="member-info">
+               <h3>${member.name} (学号: ${member.studentId})</h3>
+               <div class="member-details">
+                   <div>兴趣：${member.hobbies.join('、') || '未填写'}</div>
+                   <div>读过：${member.books.join('、') || '未填写'}</div>
+               </div>
+           </div>
+           <button class="delete-btn" onclick="deleteMember('${member.id}')">删除</button>
+       </div>
+   `).join('');
 }
 
-// 删除成员（仅管理员）
+// 删除成员（管理员操作，可删除任何状态的用户）
 async function deleteMember(id) {
-    if (!isAdmin) {
-        alert('只有管理员可以删除成员');
-        return;
-    }
-    
-    if (confirm('确定要删除这个成员吗？')) {
-        members = members.filter(m => m.id !== id);
-        await saveMembersToGist();
-        renderMemberList();
-        // 清空匹配结果
-        document.getElementById('matchResults').innerHTML = '';
-    }
+   if (!isAdmin) return;
+   const memberName = members.find(m => m.id === id)?.name || '该用户';
+   if (confirm(`确定要删除 ${memberName} 吗？此操作不可撤销。`)) {
+       members = members.filter(m => m.id !== id);
+       await saveMembersToGist();
+       renderPendingList();
+       renderMemberList();
+       document.getElementById('matchResults').innerHTML = '';
+   }
+}
+
+// UI 更新
+function showLoginView() {
+   document.getElementById('loginSection').style.display = 'block';
+   document.getElementById('memberSection').style.display = 'none';
+   document.getElementById('adminSection').style.display = 'none';
+}
+
+function showLoggedInView() {
+   document.getElementById('loginSection').style.display = 'none';
+   if (isAdmin) {
+       document.getElementById('adminSection').style.display = 'block';
+       document.getElementById('memberSection').style.display = 'none';
+       renderPendingList();
+       renderMemberList();
+   } else {
+       document.getElementById('adminSection').style.display = 'none';
+       document.getElementById('memberSection').style.display = 'block';
+       // 填充用户信息
+       document.getElementById('name').value = currentUser.name;
+       document.getElementById('studentId').value = currentUser.studentId;
+       document.getElementById('hobbies').value = currentUser.hobbies.join(', ');
+       document.getElementById('books').value = currentUser.books.join(', ');
+   }
 }
 
 // 兴趣爱好分类和同义词库
