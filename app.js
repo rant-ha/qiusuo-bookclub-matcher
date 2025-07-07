@@ -2,6 +2,9 @@
 let GITHUB_TOKEN = 'BUILD_TIME_GITHUB_TOKEN';
 let GIST_ID = 'BUILD_TIME_GIST_ID';
 let ADMIN_PASSWORD = 'BUILD_TIME_ADMIN_PASSWORD';
+let AI_BASE_URL = 'BUILD_TIME_AI_BASE_URL';
+let AI_API_KEY = 'BUILD_TIME_AI_API_KEY';
+let AI_MODEL_NAME = 'BUILD_TIME_AI_MODEL_NAME';
 const GIST_FILENAME = 'bookclub_members.json';
 
 // 存储所有成员数据
@@ -335,193 +338,224 @@ const BOOK_CATEGORIES = {
     '自我提升': ['高效能人士的七个习惯', '刻意练习', '原子习惯', '深度工作', '时间管理', '学会提问']
 };
 
-// 智能匹配算法
-function calculateSimilarity(member1, member2) {
+// AI驱动的智能匹配算法
+async function getAiSimilarity(word1, word2) {
+    if (!AI_BASE_URL || !AI_API_KEY) {
+        return 0; // 如果未配置AI，则返回0
+    }
+
+    const systemPrompt = `You are an expert in judging the semantic similarity of words. Your task is to determine how similar two given words or phrases are in meaning. Respond ONLY with a JSON object containing a single key "similarity_score", with a value from 0.0 to 1.0, where 1.0 is identical meaning and 0.0 is completely unrelated.`;
+    const userPrompt = JSON.stringify({ word1, word2 });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI API Error:', response.status, await response.text());
+            return 0;
+        }
+
+        const result = await response.json();
+        const score = result.choices[0]?.message?.content;
+        
+        if (score) {
+            const parsedScore = JSON.parse(score);
+            return parsedScore.similarity_score || 0;
+        }
+        return 0;
+    } catch (error) {
+        console.error('Failed to fetch AI similarity:', error);
+        return 0;
+    }
+}
+
+async function calculateSimilarity(member1, member2) {
     const result = {
         score: 0,
         commonHobbies: [],
         commonBooks: [],
-        semanticMatches: [],
-        detailLevel: {
-            exactMatches: 0,
-            semanticMatches: 0,
-            categoryMatches: 0
-        }
+        detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }
     };
-    
-    // 计算兴趣爱好相似度
-    const hobbyResult = calculateSmartMatches(member1.hobbies, member2.hobbies, INTEREST_CATEGORIES);
+
+    const hobbyResult = await calculateSmartMatches(member1.hobbies, member2.hobbies, INTEREST_CATEGORIES);
     result.commonHobbies = hobbyResult.matches;
     result.score += hobbyResult.score;
     result.detailLevel.exactMatches += hobbyResult.exactMatches;
     result.detailLevel.semanticMatches += hobbyResult.semanticMatches;
     result.detailLevel.categoryMatches += hobbyResult.categoryMatches;
-    
-    // 计算书籍相似度
-    const bookResult = calculateSmartMatches(member1.books, member2.books, BOOK_CATEGORIES);
+
+    const bookResult = await calculateSmartMatches(member1.books, member2.books, BOOK_CATEGORIES);
     result.commonBooks = bookResult.matches;
     result.score += bookResult.score;
     result.detailLevel.exactMatches += bookResult.exactMatches;
     result.detailLevel.semanticMatches += bookResult.semanticMatches;
     result.detailLevel.categoryMatches += bookResult.categoryMatches;
-    
+
     return result;
 }
 
-// 智能匹配函数
-function calculateSmartMatches(list1, list2, categories) {
+async function calculateSmartMatches(list1, list2, categories) {
     const matches = [];
     let score = 0;
     let exactMatches = 0;
     let semanticMatches = 0;
     let categoryMatches = 0;
-    
-    // 精确匹配（权重：1.0）
+    const processedPairs = new Set();
+
+    // 1. 精确匹配 (权重: 1.0)
     for (const item1 of list1) {
         for (const item2 of list2) {
             if (item1 === item2) {
                 matches.push({ item: item1, type: 'exact', weight: 1.0 });
                 score += 1.0;
                 exactMatches++;
+                processedPairs.add(`${item1}|${item2}`);
             }
         }
     }
-    
-    // 包含关系匹配（权重：0.8）
+
+    // 2. AI 语义匹配 (权重: AI分数 * 0.8)
+    const SIMILARITY_THRESHOLD = 0.6; // 相似度阈值
     for (const item1 of list1) {
         for (const item2 of list2) {
-            if (item1 !== item2) {
-                if (item1.includes(item2) || item2.includes(item1)) {
-                    const existing = matches.find(m => m.item === item1 || m.item === item2);
-                    if (!existing) {
-                        matches.push({ 
-                            item: `${item1} ≈ ${item2}`, 
-                            type: 'contains', 
-                            weight: 0.8 
-                        });
-                        score += 0.8;
-                        semanticMatches++;
-                    }
+            const pairKey1 = `${item1}|${item2}`;
+            const pairKey2 = `${item2}|${item1}`;
+            if (item1 !== item2 && !processedPairs.has(pairKey1) && !processedPairs.has(pairKey2)) {
+                const aiScore = await getAiSimilarity(item1, item2);
+                if (aiScore > SIMILARITY_THRESHOLD) {
+                    const weightedScore = aiScore * 0.8;
+                    matches.push({
+                        item: `${item1} ≈ ${item2} (${aiScore.toFixed(2)})`,
+                        type: 'semantic',
+                        weight: weightedScore
+                    });
+                    score += weightedScore;
+                    semanticMatches++;
                 }
+                processedPairs.add(pairKey1);
+                processedPairs.add(pairKey2);
             }
         }
     }
-    
-    // 同类别匹配（权重：0.6）
+
+    // 3. 同类别匹配 (权重: 0.6)
     for (const [category, keywords] of Object.entries(categories)) {
-        const matches1 = list1.filter(item => keywords.some(keyword => 
-            item.includes(keyword) || keyword.includes(item)
-        ));
-        const matches2 = list2.filter(item => keywords.some(keyword => 
-            item.includes(keyword) || keyword.includes(item)
-        ));
-        
-        if (matches1.length > 0 && matches2.length > 0) {
-            const existingExact = matches.find(m => 
-                m.type === 'exact' && (matches1.includes(m.item) || matches2.includes(m.item))
-            );
-            const existingContains = matches.find(m => 
-                m.type === 'contains' && (
-                    matches1.some(item => m.item.includes(item)) || 
-                    matches2.some(item => m.item.includes(item))
-                )
-            );
-            
-            if (!existingExact && !existingContains) {
-                matches.push({ 
-                    item: `${category}类兴趣`, 
-                    type: 'category', 
-                    weight: 0.6,
-                    details: `${matches1.join('、')} ⟷ ${matches2.join('、')}`
+        const inCategory1 = list1.some(item => keywords.includes(item));
+        const inCategory2 = list2.some(item => keywords.includes(item));
+
+        if (inCategory1 && inCategory2) {
+            // 检查是否已有更精确的匹配
+            const hasMoreSpecificMatch = matches.some(m => {
+                const items = m.item.split(' ≈ ');
+                return keywords.includes(items[0]) || keywords.includes(items[1]);
+            });
+
+            if (!hasMoreSpecificMatch) {
+                matches.push({
+                    item: `${category}类兴趣`,
+                    type: 'category',
+                    weight: 0.6
                 });
                 score += 0.6;
                 categoryMatches++;
             }
         }
     }
-    
-    return {
-        matches: matches,
-        score: score,
-        exactMatches,
-        semanticMatches,
-        categoryMatches
-    };
+
+    return { matches, score, exactMatches, semanticMatches, categoryMatches };
 }
 
 // 寻找相似搭档（仅管理员）
-function findSimilarMatches() {
+async function findSimilarMatches() {
     if (!isAdmin) {
         alert('只有管理员可以进行匹配');
         return;
     }
-    
     if (members.length < 2) {
         alert('需要至少2个成员才能进行匹配');
         return;
     }
-    
+
+    document.getElementById('loadingIndicator').style.display = 'block';
     const matches = [];
-    
-    // 计算所有成员两两之间的相似度
+    const promises = [];
+
     for (let i = 0; i < members.length; i++) {
         for (let j = i + 1; j < members.length; j++) {
-            const similarity = calculateSimilarity(members[i], members[j]);
-            if (similarity.score > 0) {
-                matches.push({
-                    member1: members[i],
-                    member2: members[j],
-                    score: similarity.score,
-                    commonHobbies: similarity.commonHobbies,
-                    commonBooks: similarity.commonBooks,
-                    detailLevel: similarity.detailLevel, // 传递 detailLevel
-                    type: 'similar'
-                });
-            }
+            promises.push(
+                calculateSimilarity(members[i], members[j]).then(similarity => {
+                    if (similarity.score > 0) {
+                        matches.push({
+                            member1: members[i],
+                            member2: members[j],
+                            score: similarity.score,
+                            commonHobbies: similarity.commonHobbies,
+                            commonBooks: similarity.commonBooks,
+                            detailLevel: similarity.detailLevel,
+                            type: 'similar'
+                        });
+                    }
+                })
+            );
         }
     }
-    
-    // 按相似度排序
+
+    await Promise.all(promises);
     matches.sort((a, b) => b.score - a.score);
-    
-    // 显示前10个匹配
+    document.getElementById('loadingIndicator').style.display = 'none';
     displayMatches(matches.slice(0, 10), '相似搭档推荐');
 }
 
 // 寻找互补搭档（仅管理员）
-function findComplementaryMatches() {
+async function findComplementaryMatches() {
     if (!isAdmin) {
         alert('只有管理员可以进行匹配');
         return;
     }
-    
     if (members.length < 2) {
         alert('需要至少2个成员才能进行匹配');
         return;
     }
-    
+
+    document.getElementById('loadingIndicator').style.display = 'block';
     const matches = [];
-    
-    // 计算所有成员两两之间的相似度
+    const promises = [];
+
     for (let i = 0; i < members.length; i++) {
         for (let j = i + 1; j < members.length; j++) {
-            const similarity = calculateSimilarity(members[i], members[j]);
-            matches.push({
-                member1: members[i],
-                member2: members[j],
-                score: similarity.score,
-                commonHobbies: similarity.commonHobbies,
-                commonBooks: similarity.commonBooks,
-                detailLevel: similarity.detailLevel, // 传递 detailLevel
-                type: 'complementary'
-            });
+            promises.push(
+                calculateSimilarity(members[i], members[j]).then(similarity => {
+                    matches.push({
+                        member1: members[i],
+                        member2: members[j],
+                        score: similarity.score,
+                        commonHobbies: similarity.commonHobbies,
+                        commonBooks: similarity.commonBooks,
+                        detailLevel: similarity.detailLevel,
+                        type: 'complementary'
+                    });
+                })
+            );
         }
     }
-    
-    // 按相似度从低到高排序（互补就是相似度低）
+
+    await Promise.all(promises);
     matches.sort((a, b) => a.score - b.score);
-    
-    // 显示前10个匹配
+    document.getElementById('loadingIndicator').style.display = 'none';
     displayMatches(matches.slice(0, 10), '互补搭档推荐');
 }
 
@@ -649,7 +683,7 @@ function categorizeMatches(matches) {
     
     if (semantic.length > 0) {
         html += `<div class="match-type-group">
-            <span class="match-type-label">🔗 语义相关：</span>
+            <span class="match-type-label">🔗 AI语义相关：</span>
             ${semantic.map(m => `<span class="tag semantic-tag">${m.item}</span>`).join('')}
         </div>`;
     }
