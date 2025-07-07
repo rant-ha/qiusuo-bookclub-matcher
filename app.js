@@ -152,7 +152,31 @@ async function loadMembersFromGist() {
        }
        const gist = await response.json();
        const content = gist.files[GIST_FILENAME]?.content;
-       members = content ? JSON.parse(content) : [];
+       if (content) {
+           let needsSave = false;
+           members = JSON.parse(content);
+           
+           // 数据迁移：为没有status的老数据自动添加 'approved' 状态
+           members = members.map(member => {
+               if (typeof member.status === 'undefined') {
+                   needsSave = true;
+                   return {
+                       ...member,
+                       studentId: member.studentId || 'N/A', // 如果没有学号，则添加占位符
+                       status: 'approved'
+                   };
+               }
+               return member;
+           });
+
+           // 如果进行了数据迁移，则自动保存回Gist
+           if (needsSave) {
+               console.log('检测到旧版本数据，已自动执行数据迁移并保存。');
+               await saveMembersToGist();
+           }
+       } else {
+           members = [];
+       }
    } catch (error) {
        console.error('加载Gist失败:', error);
        alert('加载数据失败，请联系管理员检查配置。');
