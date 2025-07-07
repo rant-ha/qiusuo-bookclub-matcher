@@ -307,24 +307,145 @@ async function deleteMember(id) {
     }
 }
 
-// 计算两个成员的相似度
+// 兴趣爱好分类和同义词库
+const INTEREST_CATEGORIES = {
+    '音乐': ['音乐', '古典音乐', '流行音乐', '摇滚音乐', '民谣', '爵士乐', '电子音乐', '说唱', '钢琴', '吉他', '小提琴', '唱歌', '作曲'],
+    '文学': ['文学', '小说', '诗歌', '散文', '古典文学', '现代文学', '外国文学', '中国文学', '科幻小说', '推理小说', '言情小说', '历史小说', '写作', '阅读'],
+    '艺术': ['艺术', '绘画', '素描', '油画', '水彩', '国画', '书法', '雕塑', '摄影', '设计', '美术', '插画', '动漫'],
+    '运动': ['运动', '跑步', '游泳', '篮球', '足球', '羽毛球', '乒乓球', '网球', '健身', '瑜伽', '登山', '骑行', '滑雪', '武术'],
+    '电影': ['电影', '看电影', '影视', '纪录片', '动画', '独立电影', '好莱坞', '欧洲电影', '亚洲电影', '导演', '编剧'],
+    '科技': ['科技', '编程', '计算机', '人工智能', '数据科学', '机器学习', '网络安全', '区块链', '游戏开发', '前端', '后端'],
+    '旅行': ['旅行', '旅游', '背包客', '自驾游', '出国', '摄影旅行', '户外', '探险', '徒步', '露营'],
+    '美食': ['美食', '烹饪', '做饭', '烘焙', '品酒', '咖啡', '茶道', '日料', '西餐', '中餐', '甜品'],
+    '心理学': ['心理学', '心理咨询', '认知科学', '行为分析', '社会心理学', '发展心理学', '临床心理学'],
+    '历史': ['历史', '古代史', '近代史', '世界史', '中国史', '考古', '文物', '博物馆', '传统文化'],
+    '哲学': ['哲学', '伦理学', '逻辑学', '形而上学', '认识论', '存在主义', '禅学', '思辨'],
+    '科学': ['科学', '物理', '化学', '生物', '数学', '天文', '地理', '环境科学', '医学', '药学']
+};
+
+// 书籍分类库
+const BOOK_CATEGORIES = {
+    '文学经典': ['红楼梦', '西游记', '水浒传', '三国演义', '老人与海', '百年孤独', '追忆似水年华', '战争与和平', '罪与罚', '简爱', '傲慢与偏见'],
+    '现代小说': ['活着', '平凡的世界', '白夜行', '解忧杂货店', '挪威的森林', '1984', '动物农场', '麦田里的守望者', '了不起的盖茨比'],
+    '心理学': ['乌合之众', '影响力', '思考快与慢', '心理学与生活', '社会心理学', '人性的弱点', '冥想正念指南'],
+    '历史传记': ['人类简史', '未来简史', '万历十五年', '明朝那些事儿', '史记', '资治通鉴', '苏东坡传', '梵高传'],
+    '哲学思想': ['苏菲的世界', '存在与时间', '论语', '道德经', '庄子', '沉思录', '理想国', '尼采文集'],
+    '科学科普': ['时间简史', '果壳中的宇宙', '自私的基因', '枪炮病菌与钢铁', '宇宙大爆炸', '相对论'],
+    '商业管理': ['从优秀到卓越', '创新者的窘境', '精益创业', '原则', '金字塔原理', '麦肯锡方法'],
+    '自我提升': ['高效能人士的七个习惯', '刻意练习', '原子习惯', '深度工作', '时间管理', '学会提问']
+};
+
+// 智能匹配算法
 function calculateSimilarity(member1, member2) {
-    const hobbies1 = new Set(member1.hobbies);
-    const hobbies2 = new Set(member2.hobbies);
-    const books1 = new Set(member1.books);
-    const books2 = new Set(member2.books);
+    const result = {
+        score: 0,
+        commonHobbies: [],
+        commonBooks: [],
+        semanticMatches: [],
+        detailLevel: {
+            exactMatches: 0,
+            semanticMatches: 0,
+            categoryMatches: 0
+        }
+    };
     
-    // 计算共同爱好和书籍
-    const commonHobbies = [...hobbies1].filter(h => hobbies2.has(h));
-    const commonBooks = [...books1].filter(b => books2.has(b));
+    // 计算兴趣爱好相似度
+    const hobbyResult = calculateSmartMatches(member1.hobbies, member2.hobbies, INTEREST_CATEGORIES);
+    result.commonHobbies = hobbyResult.matches;
+    result.score += hobbyResult.score;
+    result.detailLevel.exactMatches += hobbyResult.exactMatches;
+    result.detailLevel.semanticMatches += hobbyResult.semanticMatches;
+    result.detailLevel.categoryMatches += hobbyResult.categoryMatches;
     
-    // 计算相似度分数（共同项目数量）
-    const score = commonHobbies.length + commonBooks.length;
+    // 计算书籍相似度
+    const bookResult = calculateSmartMatches(member1.books, member2.books, BOOK_CATEGORIES);
+    result.commonBooks = bookResult.matches;
+    result.score += bookResult.score;
+    result.detailLevel.exactMatches += bookResult.exactMatches;
+    result.detailLevel.semanticMatches += bookResult.semanticMatches;
+    result.detailLevel.categoryMatches += bookResult.categoryMatches;
+    
+    return result;
+}
+
+// 智能匹配函数
+function calculateSmartMatches(list1, list2, categories) {
+    const matches = [];
+    let score = 0;
+    let exactMatches = 0;
+    let semanticMatches = 0;
+    let categoryMatches = 0;
+    
+    // 精确匹配（权重：1.0）
+    for (const item1 of list1) {
+        for (const item2 of list2) {
+            if (item1 === item2) {
+                matches.push({ item: item1, type: 'exact', weight: 1.0 });
+                score += 1.0;
+                exactMatches++;
+            }
+        }
+    }
+    
+    // 包含关系匹配（权重：0.8）
+    for (const item1 of list1) {
+        for (const item2 of list2) {
+            if (item1 !== item2) {
+                if (item1.includes(item2) || item2.includes(item1)) {
+                    const existing = matches.find(m => m.item === item1 || m.item === item2);
+                    if (!existing) {
+                        matches.push({ 
+                            item: `${item1} ≈ ${item2}`, 
+                            type: 'contains', 
+                            weight: 0.8 
+                        });
+                        score += 0.8;
+                        semanticMatches++;
+                    }
+                }
+            }
+        }
+    }
+    
+    // 同类别匹配（权重：0.6）
+    for (const [category, keywords] of Object.entries(categories)) {
+        const matches1 = list1.filter(item => keywords.some(keyword => 
+            item.includes(keyword) || keyword.includes(item)
+        ));
+        const matches2 = list2.filter(item => keywords.some(keyword => 
+            item.includes(keyword) || keyword.includes(item)
+        ));
+        
+        if (matches1.length > 0 && matches2.length > 0) {
+            const existingExact = matches.find(m => 
+                m.type === 'exact' && (matches1.includes(m.item) || matches2.includes(m.item))
+            );
+            const existingContains = matches.find(m => 
+                m.type === 'contains' && (
+                    matches1.some(item => m.item.includes(item)) || 
+                    matches2.some(item => m.item.includes(item))
+                )
+            );
+            
+            if (!existingExact && !existingContains) {
+                matches.push({ 
+                    item: `${category}类兴趣`, 
+                    type: 'category', 
+                    weight: 0.6,
+                    details: `${matches1.join('、')} ⟷ ${matches2.join('、')}`
+                });
+                score += 0.6;
+                categoryMatches++;
+            }
+        }
+    }
     
     return {
+        matches: matches,
         score: score,
-        commonHobbies: commonHobbies,
-        commonBooks: commonBooks
+        exactMatches,
+        semanticMatches,
+        categoryMatches
     };
 }
 
@@ -415,14 +536,21 @@ function displayMatches(matches, title) {
         <div class="section">
             <h2>${title}</h2>
             <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
-                <p>📊 管理员专用：匹配结果分析</p>
+                <p>📊 管理员专用：智能匹配结果分析</p>
+                <small>匹配类型：✅ 精确匹配 (1.0分) | 🔗 语义匹配 (0.8分) | 📂 类别匹配 (0.6分)</small>
             </div>
             ${matches.map((match, index) => `
                 <div class="match-item">
-                    <h3>匹配 ${index + 1}</h3>
+                    <h3>匹配 ${index + 1} ${generateMatchIcon(match.score)}</h3>
                     ${match.type === 'similar' ? 
-                        `<div class="match-score">相似度：${match.score} 个共同点</div>` :
-                        `<div class="match-score">差异度：仅 ${match.score} 个共同点</div>`
+                        `<div class="match-score">
+                            智能相似度：${match.score.toFixed(1)} 分
+                            <span class="match-breakdown">(精确${match.detailLevel.exactMatches} + 语义${match.detailLevel.semanticMatches} + 类别${match.detailLevel.categoryMatches})</span>
+                        </div>` :
+                        `<div class="match-score">
+                            差异度：仅 ${match.score.toFixed(1)} 分共同点
+                            <span class="match-breakdown">(适合互补发展)</span>
+                        </div>`
                     }
                     
                     <div class="match-details">
@@ -439,17 +567,7 @@ function displayMatches(matches, title) {
                         </div>
                     </div>
                     
-                    ${(match.commonHobbies.length > 0 || match.commonBooks.length > 0) ? `
-                        <div class="common-interests">
-                            <h4>共同点</h4>
-                            ${match.commonHobbies.length > 0 ? 
-                                `<div>共同兴趣：${match.commonHobbies.map(h => `<span class="tag">${h}</span>`).join('')}</div>` : ''
-                            }
-                            ${match.commonBooks.length > 0 ? 
-                                `<div>都读过：${match.commonBooks.map(b => `<span class="tag">${b}</span>`).join('')}</div>` : ''
-                            }
-                        </div>
-                    ` : ''}
+                    ${generateMatchDetails(match)}
                 </div>
             `).join('')}
         </div>
@@ -457,4 +575,75 @@ function displayMatches(matches, title) {
     
     // 滚动到结果区域
     resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 生成匹配图标
+function generateMatchIcon(score) {
+    if (score >= 3) return '🔥';
+    if (score >= 2) return '⭐';
+    if (score >= 1) return '✨';
+    return '💫';
+}
+
+// 生成详细匹配信息
+function generateMatchDetails(match) {
+    let detailsHtml = '';
+    
+    // 兴趣爱好匹配详情
+    if (match.commonHobbies && match.commonHobbies.length > 0) {
+        const hobbyDetails = categorizeMatches(match.commonHobbies);
+        detailsHtml += `
+            <div class="common-interests">
+                <h4>🎯 兴趣爱好匹配</h4>
+                ${hobbyDetails}
+            </div>
+        `;
+    }
+    
+    // 书籍匹配详情
+    if (match.commonBooks && match.commonBooks.length > 0) {
+        const bookDetails = categorizeMatches(match.commonBooks);
+        detailsHtml += `
+            <div class="common-interests">
+                <h4>📚 书籍阅读匹配</h4>
+                ${bookDetails}
+            </div>
+        `;
+    }
+    
+    return detailsHtml;
+}
+
+// 分类显示匹配项
+function categorizeMatches(matches) {
+    const exact = matches.filter(m => m.type === 'exact');
+    const semantic = matches.filter(m => m.type === 'contains');
+    const category = matches.filter(m => m.type === 'category');
+    
+    let html = '';
+    
+    if (exact.length > 0) {
+        html += `<div class="match-type-group">
+            <span class="match-type-label">✅ 完全一致：</span>
+            ${exact.map(m => `<span class="tag exact-tag">${m.item}</span>`).join('')}
+        </div>`;
+    }
+    
+    if (semantic.length > 0) {
+        html += `<div class="match-type-group">
+            <span class="match-type-label">🔗 语义相关：</span>
+            ${semantic.map(m => `<span class="tag semantic-tag">${m.item}</span>`).join('')}
+        </div>`;
+    }
+    
+    if (category.length > 0) {
+        html += `<div class="match-type-group">
+            <span class="match-type-label">📂 同类兴趣：</span>
+            ${category.map(m => `
+                <span class="tag category-tag" title="${m.details || ''}">${m.item}</span>
+            `).join('')}
+        </div>`;
+    }
+    
+    return html;
 }
