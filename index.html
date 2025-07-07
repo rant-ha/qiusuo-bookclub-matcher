@@ -289,6 +289,58 @@
             box-shadow: 0 4px 12px rgba(116, 185, 255, 0.4);
         }
         
+        /* 不同类型匹配的标签样式 */
+        .exact-tag {
+            background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+            box-shadow: 0 2px 8px rgba(0, 184, 148, 0.3);
+        }
+        
+        .exact-tag:hover {
+            box-shadow: 0 4px 12px rgba(0, 184, 148, 0.4);
+        }
+        
+        .semantic-tag {
+            background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
+            box-shadow: 0 2px 8px rgba(253, 203, 110, 0.3);
+        }
+        
+        .semantic-tag:hover {
+            box-shadow: 0 4px 12px rgba(253, 203, 110, 0.4);
+        }
+        
+        .category-tag {
+            background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
+            box-shadow: 0 2px 8px rgba(162, 155, 254, 0.3);
+        }
+        
+        .category-tag:hover {
+            box-shadow: 0 4px 12px rgba(162, 155, 254, 0.4);
+        }
+        
+        /* 匹配类型分组 */
+        .match-type-group {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        
+        .match-type-label {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-right: 8px;
+            min-width: 80px;
+        }
+        
+        /* 匹配分数细节 */
+        .match-breakdown {
+            font-size: 12px;
+            color: #666;
+            font-weight: normal;
+            margin-left: 10px;
+        }
+        
         .no-data {
             text-align: center;
             color: #999;
