@@ -5,23 +5,41 @@ const path = require('path');
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 const GIST_ID = process.env.GIST_ID || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const AI_BASE_URL = process.env.AI_BASE_URL || '';
+const AI_API_KEY = process.env.AI_API_KEY || '';
+const AI_MODEL_NAME = process.env.AI_MODEL_NAME || 'gpt-4o'; // 默认为 gpt-4o
 
 console.log('构建开始...');
 console.log('Token配置:', GITHUB_TOKEN ? '已配置' : '未配置');
 console.log('Gist ID配置:', GIST_ID ? '已配置' : '未配置');
 console.log('管理员密码配置:', ADMIN_PASSWORD ? '已配置' : '未配置');
+console.log('AI Base URL配置:', AI_BASE_URL ? '已配置' : '未配置');
+console.log('AI API Key配置:', AI_API_KEY ? '已配置' : '部分配置'); // Key不完全显示
+console.log('AI Model配置:', AI_MODEL_NAME);
 
 // 读取 app.js 文件
 let appJsContent = fs.readFileSync('app.js', 'utf8');
 
-// 替换占位符
+// 替换 Gist 相关占位符
+appJsContent = appJsContent.replace('BUILD_TIME_GITHUB_TOKEN', GITHUB_TOKEN);
+appJsContent = appJsContent.replace('BUILD_TIME_GIST_ID', GIST_ID);
+appJsContent = appJsContent.replace('BUILD_TIME_ADMIN_PASSWORD', ADMIN_PASSWORD);
+
+// 替换 AI 相关占位符
+appJsContent = appJsContent.replace('BUILD_TIME_AI_BASE_URL', AI_BASE_URL);
+appJsContent = appJsContent.replace('BUILD_TIME_AI_API_KEY', AI_API_KEY);
+appJsContent = appJsContent.replace('BUILD_TIME_AI_MODEL_NAME', AI_MODEL_NAME);
+
 if (GITHUB_TOKEN && GIST_ID && ADMIN_PASSWORD) {
-    appJsContent = appJsContent.replace('BUILD_TIME_GITHUB_TOKEN', GITHUB_TOKEN);
-    appJsContent = appJsContent.replace('BUILD_TIME_GIST_ID', GIST_ID);
-    appJsContent = appJsContent.replace('BUILD_TIME_ADMIN_PASSWORD', ADMIN_PASSWORD);
-    console.log('✅ 环境变量已注入到构建中');
+    console.log('✅ Gist 环境变量已注入');
 } else {
-    console.log('⚠️  环境变量未完整配置，将使用手动配置模式');
+    console.log('⚠️  Gist 环境变量未完整配置，将使用手动配置模式');
+}
+
+if (AI_BASE_URL && AI_API_KEY) {
+    console.log('✅ AI 环境变量已注入');
+} else {
+    console.log('⚠️  AI 环境变量未配置，语义匹配将不可用');
 }
 
 // 创建构建目录
