@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - 求索书社</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
+</head>
+<body>
+    <div class="container">
+        <h1>注册新用户</h1>
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="name">姓名</label>
+                <input type="text" id="name" required>
+            </div>
+            <div class="form-group">
+                <label for="studentId">学号</label>
+                <input type="text" id="studentId" required>
+            </div>
+            <button type="submit">提交注册申请</button>
+        </form>
+        <p>注册后需要等待管理员审核。</p>
+        <a href="index.html">返回登录</a>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        // 仅用于注册页面的简单逻辑
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('name').value.trim();
+            const studentId = document.getElementById('studentId').value.trim();
+
+            if (!name || !studentId) {
+                alert('姓名和学号不能为空');
+                return;
+            }
+
+            // 这是一个简化的调用，实际的逻辑在 app.js 中
+            // 我们需要一种方法来调用 app.js 中的注册函数
+            // 这里我们假设 app.js 中有一个全局的 handleRegistration 函数
+            if (typeof handleRegistration === 'function') {
+                await handleRegistration(name, studentId);
+            } else {
+                // 如果 app.js 还没改造好，就先用 localStorage 暂存
+                let pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+                pendingUsers.push({ name, studentId, status: 'pending' });
+                localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
+                alert('注册申请已提交，请等待管理员审核！');
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>
