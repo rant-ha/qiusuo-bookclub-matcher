@@ -474,6 +474,7 @@ function findSimilarMatches() {
                     score: similarity.score,
                     commonHobbies: similarity.commonHobbies,
                     commonBooks: similarity.commonBooks,
+                    detailLevel: similarity.detailLevel, // 传递 detailLevel
                     type: 'similar'
                 });
             }
@@ -511,6 +512,7 @@ function findComplementaryMatches() {
                 score: similarity.score,
                 commonHobbies: similarity.commonHobbies,
                 commonBooks: similarity.commonBooks,
+                detailLevel: similarity.detailLevel, // 传递 detailLevel
                 type: 'complementary'
             });
         }
@@ -542,16 +544,7 @@ function displayMatches(matches, title) {
             ${matches.map((match, index) => `
                 <div class="match-item">
                     <h3>匹配 ${index + 1} ${generateMatchIcon(match.score)}</h3>
-                    ${match.type === 'similar' ? 
-                        `<div class="match-score">
-                            智能相似度：${match.score.toFixed(1)} 分
-                            <span class="match-breakdown">(精确${match.detailLevel.exactMatches} + 语义${match.detailLevel.semanticMatches} + 类别${match.detailLevel.categoryMatches})</span>
-                        </div>` :
-                        `<div class="match-score">
-                            差异度：仅 ${match.score.toFixed(1)} 分共同点
-                            <span class="match-breakdown">(适合互补发展)</span>
-                        </div>`
-                    }
+                    ${generateMatchScoreHtml(match)}
                     
                     <div class="match-details">
                         <div class="person-info">
@@ -575,6 +568,31 @@ function displayMatches(matches, title) {
     
     // 滚动到结果区域
     resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 生成匹配分数和描述的HTML
+function generateMatchScoreHtml(match) {
+    const score = match.score;
+    const scoreText = score.toFixed(1);
+
+    if (match.type === 'similar') {
+        const breakdown = `(精确${match.detailLevel.exactMatches} + 语义${match.detailLevel.semanticMatches} + 类别${match.detailLevel.categoryMatches})`;
+        return `
+            <div class="match-score">
+                智能相似度：${scoreText} 分
+                <span class="match-breakdown">${breakdown}</span>
+            </div>`;
+    } else { // complementary
+        let description = '';
+        if (score <= 1.0) {
+            description = `差异度：高 (仅 ${scoreText} 分共同点)，<span class="complementary-high">极具互补潜力</span>`;
+        } else if (score > 1.0 && score < 2.5) {
+            description = `差异度：中 (有 ${scoreText} 分共同点)，<span class="complementary-medium">可共同探索</span>`;
+        } else {
+            description = `差异度：低 (高达 ${scoreText} 分共同点)，<span class="complementary-low">更像相似搭档</span>`;
+        }
+        return `<div class="match-score">${description}</div>`;
+    }
 }
 
 // 生成匹配图标
