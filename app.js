@@ -527,15 +527,19 @@ function renderMemberList() {
        
        // 显示信息的辅助函数
        const formatHobbies = () => {
-           if (questionnaire.hobbies && questionnaire.hobbies.length > 0) {
-               return questionnaire.hobbies.join('、');
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const hobbies = questionnaire.hobbies || migratedMember.hobbies || [];
+           if (hobbies && hobbies.length > 0) {
+               return hobbies.join('、');
            }
            return '未填写';
        };
        
        const formatBooks = () => {
-           if (questionnaire.books && questionnaire.books.length > 0) {
-               return questionnaire.books.join('、');
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const books = questionnaire.books || migratedMember.books || [];
+           if (books && books.length > 0) {
+               return books.join('、');
            }
            return '未填写';
        };
@@ -547,11 +551,15 @@ function renderMemberList() {
                'other': '其他',
                'prefer_not_to_say': '不愿透露'
            };
-           return questionnaire.gender ? genderMap[questionnaire.gender] || questionnaire.gender : '未填写';
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const gender = questionnaire.gender || migratedMember.gender || '';
+           return gender ? genderMap[gender] || gender : '未填写';
        };
        
        const formatBookCategories = () => {
-           if (questionnaire.bookCategories && questionnaire.bookCategories.length > 0) {
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const bookCategories = questionnaire.bookCategories || migratedMember.bookCategories || [];
+           if (bookCategories && bookCategories.length > 0) {
                const categoryMap = {
                    'literature_fiction': '文学/当代小说',
                    'mystery_detective': '悬疑侦探/推理',
@@ -561,14 +569,16 @@ function renderMemberList() {
                    'psychology_self_help': '心理成长/自助',
                    'art_design_lifestyle': '艺术设计/生活方式'
                };
-               return questionnaire.bookCategories.map(cat => categoryMap[cat] || cat).join('、');
+               return bookCategories.map(cat => categoryMap[cat] || cat).join('、');
            }
            return '未填写';
        };
        
        const formatFavoriteBooks = () => {
-           if (questionnaire.favoriteBooks && questionnaire.favoriteBooks.length > 0) {
-               return questionnaire.favoriteBooks.join('、');
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const favoriteBooks = questionnaire.favoriteBooks || migratedMember.favoriteBooks || [];
+           if (favoriteBooks && favoriteBooks.length > 0) {
+               return favoriteBooks.join('、');
            }
            return '未填写';
        };
@@ -579,7 +589,9 @@ function renderMemberList() {
                'female': '女生',
                'no_preference': '不介意'
            };
-           return questionnaire.matchGenderPreference ? preferenceMap[questionnaire.matchGenderPreference] || questionnaire.matchGenderPreference : '未设置';
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const matchGenderPreference = questionnaire.matchGenderPreference || migratedMember.matchGenderPreference || '';
+           return matchGenderPreference ? preferenceMap[matchGenderPreference] || matchGenderPreference : '未设置';
        };
        
        const formatReadingCommitment = () => {
@@ -589,7 +601,9 @@ function renderMemberList() {
                'intensive': '投入阅读(25w-50w字)',
                'epic': '史诗阅读(50w+字)'
            };
-           return questionnaire.readingCommitment ? commitmentMap[questionnaire.readingCommitment] || questionnaire.readingCommitment : '未填写';
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const readingCommitment = questionnaire.readingCommitment || migratedMember.readingCommitment || '';
+           return readingCommitment ? commitmentMap[readingCommitment] || readingCommitment : '未填写';
        };
        
        return `
@@ -604,7 +618,10 @@ function renderMemberList() {
                        <div><strong>读过的书：</strong>${formatBooks()}</div>
                        <div><strong>最爱书籍：</strong>${formatFavoriteBooks()}</div>
                        <div><strong>阅读预期：</strong>${formatReadingCommitment()}</div>
-                       ${questionnaire.detailedBookPreferences ? `<div><strong>详细偏好：</strong>${questionnaire.detailedBookPreferences}</div>` : ''}
+                       ${(() => {
+                           const detailedPreferences = questionnaire.detailedBookPreferences || migratedMember.detailedBookPreferences || '';
+                           return detailedPreferences ? `<div><strong>详细偏好：</strong>${detailedPreferences}</div>` : '';
+                       })()}
                    </div>
                </div>
                <button class="delete-btn" onclick="deleteMember('${migratedMember.id}')">删除</button>
