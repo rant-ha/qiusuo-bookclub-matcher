@@ -323,6 +323,11 @@ function logout() {
    showLoginView();
 }
 
+// 管理员退出登录
+function adminLogout() {
+   logout(); // 调用通用退出登录函数
+}
+
 // 从 Gist 加载成员数据
 async function loadMembersFromGist() {
    if (!GIST_ID) {
