@@ -18,6 +18,10 @@ const VALIDATION_RULES = {
         required: false,
         enum: ['male', 'female', 'other', 'prefer_not_to_say']
     },
+    matchGenderPreference: {
+        required: false,
+        enum: ['male', 'female', 'no_preference']
+    },
     bookCategories: {
         required: true,
         minItems: 1,
@@ -64,6 +68,7 @@ function migrateUserData(user) {
                 
                 // 新增字段，使用默认值
                 gender: user.gender || '',
+                matchGenderPreference: user.matchGenderPreference || '',
                 bookCategories: user.bookCategories || [],
                 detailedBookPreferences: user.detailedBookPreferences || '',
                 favoriteBooks: user.favoriteBooks || (user.books ? [...user.books] : []), // 将旧书籍数据迁移到最爱书籍
@@ -568,6 +573,15 @@ function renderMemberList() {
            return '未填写';
        };
        
+       const formatMatchGenderPreference = () => {
+           const preferenceMap = {
+               'male': '男生',
+               'female': '女生',
+               'no_preference': '不介意'
+           };
+           return questionnaire.matchGenderPreference ? preferenceMap[questionnaire.matchGenderPreference] || questionnaire.matchGenderPreference : '未设置';
+       };
+       
        const formatReadingCommitment = () => {
            const commitmentMap = {
                'light': '轻量阅读(5w-10w字)',
@@ -584,6 +598,7 @@ function renderMemberList() {
                    <h3>${migratedMember.name} (学号: ${migratedMember.studentId})</h3>
                    <div class="member-details">
                        <div><strong>性别：</strong>${formatGender()}</div>
+                       <div><strong>匹配偏好：</strong>${formatMatchGenderPreference()}</div>
                        <div><strong>书目类型：</strong>${formatBookCategories()}</div>
                        <div><strong>兴趣爱好：</strong>${formatHobbies()}</div>
                        <div><strong>读过的书：</strong>${formatBooks()}</div>
@@ -644,6 +659,12 @@ function showLoggedInView() {
        if (questionnaire.gender) {
            const genderRadio = document.querySelector(`input[name="gender"][value="${questionnaire.gender}"]`);
            if (genderRadio) genderRadio.checked = true;
+       }
+       
+       // 填充匹配性别偏好
+       if (questionnaire.matchGenderPreference) {
+           const matchGenderRadio = document.querySelector(`input[name="matchGenderPreference"][value="${questionnaire.matchGenderPreference}"]`);
+           if (matchGenderRadio) matchGenderRadio.checked = true;
        }
        
        // 填充书目类型（多选）
@@ -870,6 +891,39 @@ async function calculateSmartMatches(list1, list2, categories) {
     return { matches, score, exactMatches, semanticMatches, categoryMatches };
 }
 
+// 检查两个用户是否符合性别偏好匹配
+function checkGenderPreferenceMatch(user1, user2) {
+    // 确保用户数据已迁移
+    const migratedUser1 = migrateUserData(user1);
+    const migratedUser2 = migrateUserData(user2);
+    
+    const user1Gender = migratedUser1.questionnaire.gender;
+    const user2Gender = migratedUser2.questionnaire.gender;
+    const user1Preference = migratedUser1.questionnaire.matchGenderPreference;
+    const user2Preference = migratedUser2.questionnaire.matchGenderPreference;
+    
+    // 如果任一用户没有设置偏好，则不进行过滤
+    if (!user1Preference || !user2Preference) {
+        return true;
+    }
+    
+    // 如果任一用户偏好是"不介意"，则匹配
+    if (user1Preference === 'no_preference' || user2Preference === 'no_preference') {
+        return true;
+    }
+    
+    // 如果任一用户没有填写性别，则不进行过滤（避免排除没填性别的用户）
+    if (!user1Gender || !user2Gender) {
+        return true;
+    }
+    
+    // 检查双向匹配：user1希望匹配user2的性别，且user2希望匹配user1的性别
+    const user1WantsUser2 = (user1Preference === user2Gender);
+    const user2WantsUser1 = (user2Preference === user1Gender);
+    
+    return user1WantsUser2 && user2WantsUser1;
+}
+
 // 寻找相似搭档（仅管理员）
 async function findSimilarMatches() {
     if (!isAdmin) {
@@ -887,6 +941,11 @@ async function findSimilarMatches() {
 
     for (let i = 0; i < members.length; i++) {
         for (let j = i + 1; j < members.length; j++) {
+            // 首先检查性别偏好匹配
+            if (!checkGenderPreferenceMatch(members[i], members[j])) {
+                continue; // 跳过不符合性别偏好的配对
+            }
+            
             promises.push(
                 calculateSimilarity(members[i], members[j]).then(similarity => {
                     if (similarity.score > 0) {
@@ -928,6 +987,11 @@ async function findComplementaryMatches() {
 
     for (let i = 0; i < members.length; i++) {
         for (let j = i + 1; j < members.length; j++) {
+            // 首先检查性别偏好匹配
+            if (!checkGenderPreferenceMatch(members[i], members[j])) {
+                continue; // 跳过不符合性别偏好的配对
+            }
+            
             promises.push(
                 calculateSimilarity(members[i], members[j]).then(similarity => {
                     matches.push({
