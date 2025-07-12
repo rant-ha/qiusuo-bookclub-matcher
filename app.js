@@ -12,6 +12,166 @@ let members = [];
 let currentUser = null; // 当前登录用户
 let isAdmin = false;
 
+// 验证规则配置
+const VALIDATION_RULES = {
+    gender: {
+        required: false,
+        enum: ['male', 'female', 'other', 'prefer_not_to_say']
+    },
+    bookCategories: {
+        required: true,
+        minItems: 1,
+        maxItems: 7,
+        allowedValues: [
+            'literature_fiction', 'mystery_detective', 'sci_fi_fantasy',
+            'history_biography', 'social_science_philosophy', 
+            'psychology_self_help', 'art_design_lifestyle'
+        ]
+    },
+    detailedBookPreferences: {
+        required: false,
+        maxLength: 500
+    },
+    favoriteBooks: {
+        required: true,
+        minItems: 2,
+        maxItems: 10,
+        itemMaxLength: 100
+    },
+    readingCommitment: {
+        required: true,
+        enum: ['light', 'medium', 'intensive', 'epic']
+    }
+};
+
+// 数据迁移函数：将老用户数据升级到新版本
+function migrateUserData(user) {
+    if (!user.questionnaire || user.questionnaire.version !== '2.0') {
+        return {
+            ...user,
+            // 确保所有现有字段都被保留
+            studentId: user.studentId || 'N/A',
+            status: user.status || 'approved',
+            hobbies: user.hobbies || [],
+            books: user.books || [],
+            
+            // 添加新字段，使用默认值
+            gender: user.gender || '',
+            bookCategories: user.bookCategories || [],
+            detailedBookPreferences: user.detailedBookPreferences || '',
+            favoriteBooks: user.favoriteBooks || (user.books ? [...user.books] : []), // 将旧书籍数据迁移到最爱书籍
+            readingCommitment: user.readingCommitment || '',
+            readingHabits: user.readingHabits || {
+                weeklyHours: '',
+                preferredTimes: [],
+                readingMethods: [],
+                preferredLocations: []
+            },
+            questionnaire: {
+                version: '2.0',
+                completedAt: user.questionnaire?.completedAt || '',
+                lastUpdated: new Date().toISOString()
+            }
+        };
+    }
+    return user;
+}
+
+// 增强表单验证函数
+function validateEnhancedForm(formData) {
+    const errors = [];
+    
+    // 性别验证
+    if (formData.gender && !VALIDATION_RULES.gender.enum.includes(formData.gender)) {
+        errors.push('请选择有效的性别选项');
+    }
+    
+    // 书籍类别验证
+    if (!formData.bookCategories || formData.bookCategories.length === 0) {
+        errors.push('请至少选择一个书籍类别');
+    }
+    if (formData.bookCategories && formData.bookCategories.length > VALIDATION_RULES.bookCategories.maxItems) {
+        errors.push('书籍类别选择不能超过7个');
+    }
+    
+    // 详细偏好验证
+    if (formData.detailedBookPreferences && formData.detailedBookPreferences.length > VALIDATION_RULES.detailedBookPreferences.maxLength) {
+        errors.push('详细偏好描述不能超过500字符');
+    }
+    
+    // 最爱书籍验证
+    if (!formData.favoriteBooks || formData.favoriteBooks.length < VALIDATION_RULES.favoriteBooks.minItems) {
+        errors.push('请至少输入2本最爱的书籍');
+    }
+    if (formData.favoriteBooks && formData.favoriteBooks.length > VALIDATION_RULES.favoriteBooks.maxItems) {
+        errors.push('最爱书籍不能超过10本');
+    }
+    
+    // 验证每本书的长度
+    if (formData.favoriteBooks) {
+        for (const book of formData.favoriteBooks) {
+            if (book.length > VALIDATION_RULES.favoriteBooks.itemMaxLength) {
+                errors.push(`书名"${book}"超过100字符限制`);
+                break;
+            }
+        }
+    }
+    
+    // 阅读承诺验证
+    if (!formData.readingCommitment) {
+        errors.push('请选择您的阅读承诺期望');
+    }
+    if (formData.readingCommitment && !VALIDATION_RULES.readingCommitment.enum.includes(formData.readingCommitment)) {
+        errors.push('请选择有效的阅读承诺选项');
+    }
+    
+    return errors;
+}
+
+// 增强注册处理函数
+async function handleEnhancedRegistration(enhancedFormData) {
+    await loadMembersFromGist(); // 确保数据最新
+
+    const userExists = members.some(m => m.name === enhancedFormData.name || m.studentId === enhancedFormData.studentId);
+    if (userExists) {
+        alert('该姓名或学号已被注册！');
+        return;
+    }
+
+    const newUser = {
+        id: Date.now().toString(),
+        name: enhancedFormData.name,
+        studentId: enhancedFormData.studentId,
+        hobbies: [], // Keep for backward compatibility
+        books: [],  // Keep for backward compatibility
+        status: 'pending', // 'pending', 'approved'
+        joinDate: new Date().toLocaleDateString('zh-CN'),
+        
+        // New enhanced fields
+        gender: enhancedFormData.gender || '',
+        bookCategories: enhancedFormData.bookCategories || [],
+        detailedBookPreferences: enhancedFormData.detailedBookPreferences || '',
+        favoriteBooks: enhancedFormData.favoriteBooks || [],
+        readingCommitment: enhancedFormData.readingCommitment || '',
+        readingHabits: enhancedFormData.readingHabits || {
+            weeklyHours: '',
+            preferredTimes: [],
+            readingMethods: [],
+            preferredLocations: []
+        },
+        questionnaire: {
+            version: '2.0',
+            completedAt: new Date().toISOString(),
+            lastUpdated: new Date().toISOString()
+        }
+    };
+
+    members.push(newUser);
+    await saveMembersToGist();
+    alert('注册申请已提交，请等待管理员审核！');
+    window.location.href = 'index.html';
+}
+
 // 页面加载时初始化
 window.onload = async function() {
    // 优先使用构建时注入的配置
@@ -70,10 +230,28 @@ async function handleRegistration(name, studentId) {
        id: Date.now().toString(),
        name: name,
        studentId: studentId,
-       hobbies: [],
-       books: [],
+       hobbies: [], // Keep for backward compatibility
+       books: [],  // Keep for backward compatibility
        status: 'pending', // 'pending', 'approved'
-       joinDate: new Date().toLocaleDateString('zh-CN')
+       joinDate: new Date().toLocaleDateString('zh-CN'),
+       
+       // New enhanced fields
+       gender: '', // 'male', 'female', 'other', 'prefer_not_to_say'
+       bookCategories: [], // Array of selected categories
+       detailedBookPreferences: '', // Free text description
+       favoriteBooks: [], // Array of favorite books
+       readingCommitment: '', // 'light', 'medium', 'intensive', 'epic'
+       readingHabits: {
+           weeklyHours: '',
+           preferredTimes: [],
+           readingMethods: [],
+           preferredLocations: []
+       },
+       questionnaire: {
+           version: '2.0',
+           completedAt: '',
+           lastUpdated: new Date().toISOString()
+       }
    };
 
    members.push(newUser);
@@ -156,15 +334,15 @@ async function loadMembersFromGist() {
            let needsSave = false;
            members = JSON.parse(content);
            
-           // 数据迁移：为没有status的老数据自动添加 'approved' 状态
+           // 数据迁移：为老数据添加新字段并保持向下兼容
            members = members.map(member => {
-               if (typeof member.status === 'undefined') {
+               const needsMigration = typeof member.status === 'undefined' || 
+                                    !member.questionnaire || 
+                                    member.questionnaire.version !== '2.0';
+               
+               if (needsMigration) {
                    needsSave = true;
-                   return {
-                       ...member,
-                       studentId: member.studentId || 'N/A', // 如果没有学号，则添加占位符
-                       status: 'approved'
-                   };
+                   return migrateUserData(member);
                }
                return member;
            });
@@ -220,13 +398,61 @@ async function handleUpdateMemberInfo(e) {
    e.preventDefault();
    if (!currentUser) return;
 
+   // Collect all form data including new enhanced fields
    const hobbiesText = document.getElementById('hobbies').value.trim();
    const booksText = document.getElementById('books').value.trim();
+   
+   // New enhanced fields (if they exist in the form)
+   const gender = document.querySelector('input[name="gender"]:checked')?.value || currentUser.gender || '';
+   const bookCategories = Array.from(document.querySelectorAll('input[name="bookCategories"]:checked') || [])
+       .map(cb => cb.value);
+   const detailedPreferences = document.getElementById('detailedPreferences')?.value.trim() || currentUser.detailedBookPreferences || '';
+   const favoriteBooks = Array.from(document.querySelectorAll('#favoriteBooks input') || [])
+       .map(input => input.value.trim())
+       .filter(book => book);
+   const readingCommitment = document.querySelector('input[name="readingCommitment"]:checked')?.value || currentUser.readingCommitment || '';
+
+   // Basic validation for enhanced fields (if they exist)
+   const enhancedFormData = {
+       gender: gender,
+       bookCategories: bookCategories.length > 0 ? bookCategories : currentUser.bookCategories || [],
+       detailedBookPreferences: detailedPreferences,
+       favoriteBooks: favoriteBooks.length > 0 ? favoriteBooks : currentUser.favoriteBooks || [],
+       readingCommitment: readingCommitment
+   };
+
+   // Only validate enhanced fields if they are being updated (form elements exist)
+   const hasEnhancedFields = document.querySelector('input[name="bookCategories"]') !== null;
+   if (hasEnhancedFields) {
+       const errors = validateEnhancedForm(enhancedFormData);
+       if (errors.length > 0) {
+           alert('请修正以下错误：\n' + errors.join('\n'));
+           return;
+       }
+   }
 
    const userIndex = members.findIndex(m => m.id === currentUser.id);
    if (userIndex > -1) {
+       // Update traditional fields
        members[userIndex].hobbies = hobbiesText ? hobbiesText.split(/[，,]/).map(item => item.trim()).filter(item => item) : [];
        members[userIndex].books = booksText ? booksText.split(/[，,]/).map(item => item.trim()).filter(item => item) : [];
+       
+       // Update enhanced fields if form has them, otherwise preserve existing values
+       if (hasEnhancedFields) {
+           members[userIndex].gender = enhancedFormData.gender;
+           members[userIndex].bookCategories = enhancedFormData.bookCategories;
+           members[userIndex].detailedBookPreferences = enhancedFormData.detailedBookPreferences;
+           members[userIndex].favoriteBooks = enhancedFormData.favoriteBooks;
+           members[userIndex].readingCommitment = enhancedFormData.readingCommitment;
+           
+           // Update questionnaire metadata
+           if (!members[userIndex].questionnaire) {
+               members[userIndex].questionnaire = { version: '2.0' };
+           }
+           members[userIndex].questionnaire.completedAt = new Date().toISOString();
+           members[userIndex].questionnaire.lastUpdated = new Date().toISOString();
+           members[userIndex].questionnaire.version = '2.0';
+       }
        
        await saveMembersToGist();
        // 更新本地 currentUser
