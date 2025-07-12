@@ -289,7 +289,167 @@
             box-shadow: 0 4px 12px rgba(116, 185, 255, 0.4);
         }
         
-        /* 不同类型匹配的标签样式 */
+        /* 单选框样式 */
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .radio-option {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        
+        .radio-option:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .radio-option input[type="radio"] {
+            display: none;
+        }
+        
+        .radio-custom {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ddd;
+            border-radius: 50%;
+            margin-right: 12px;
+            position: relative;
+            flex-shrink: 0;
+        }
+        
+        .radio-option input[type="radio"]:checked + .radio-custom {
+            border-color: #667eea;
+            background: #667eea;
+        }
+        
+        .radio-option input[type="radio"]:checked + .radio-custom::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .radio-option input[type="radio"]:checked ~ .commitment-option {
+            color: #667eea;
+        }
+        
+        /* 复选框样式 */
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+        }
+        
+        .checkbox-option {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        
+        .checkbox-option:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .checkbox-option input[type="checkbox"] {
+            display: none;
+        }
+        
+        .checkbox-custom {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+            position: relative;
+            flex-shrink: 0;
+        }
+        
+        .checkbox-option input[type="checkbox"]:checked + .checkbox-custom {
+            border-color: #667eea;
+            background: #667eea;
+        }
+        
+        .checkbox-option input[type="checkbox"]:checked + .checkbox-custom::after {
+            content: '✓';
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        /* 最爱书籍动态输入 */
+        .book-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .book-input-group input {
+            flex: 1;
+        }
+        
+        .remove-book {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            padding: 6px 12px;
+            font-size: 12px;
+            min-width: 60px;
+        }
+        
+        /* 字符计数器 */
+        .char-count {
+            float: right;
+            font-size: 11px;
+            color: #999;
+        }
+        
+        .char-count.warning {
+            color: #ff6b6b;
+        }
+        
+        /* 阅读预期选项 */
+        .commitment-option {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .commitment-option strong {
+            margin-bottom: 4px;
+        }
+        
+        .commitment-option small {
+            color: #666;
+            line-height: 1.3;
+        }
+        
+        /* 必填字段标识 */
+        .required {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
         .exact-tag {
             background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
             box-shadow: 0 2px 8px rgba(0, 184, 148, 0.3);
@@ -442,20 +602,159 @@
                     <label for="name">姓名</label>
                     <input type="text" id="name" disabled>
                 </div>
-                 <div class="form-group">
+                <div class="form-group">
                     <label for="studentId">学号</label>
                     <input type="text" id="studentId" disabled>
                 </div>
+                
+                <!-- 性别选择 -->
+                <div class="form-group">
+                    <label>性别（可选）</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="gender" value="male">
+                            <span class="radio-custom"></span>
+                            男
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="gender" value="female">
+                            <span class="radio-custom"></span>
+                            女
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="gender" value="other">
+                            <span class="radio-custom"></span>
+                            其他
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="gender" value="prefer_not_to_say">
+                            <span class="radio-custom"></span>
+                            不愿透露
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 书目类型（多选） -->
+                <div class="form-group">
+                    <label>预计匹配书目类型 <span class="required">*</span></label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="bookCategories" value="literature_fiction">
+                            <span class="checkbox-custom"></span>
+                            文学经典/当代小说
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="bookCategories" value="mystery_detective">
+                            <span class="checkbox-custom"></span>
+                            悬疑侦探/推理
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="bookCategories" value="sci_fi_fantasy">
+                            <span class="checkbox-custom"></span>
+                            科幻奇幻
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="bookCategories" value="history_biography">
+                            <span class="checkbox-custom"></span>
+                            历史传记/记实
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="bookCategories" value="social_science_philosophy">
+                            <span class="checkbox-custom"></span>
+                            社科思想/哲学
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="bookCategories" value="psychology_self_help">
+                            <span class="checkbox-custom"></span>
+                            心理成长/自助
+                        </label>
+                        <label class="checkbox-option">
+                            <input type="checkbox" name="bookCategories" value="art_design_lifestyle">
+                            <span class="checkbox-custom"></span>
+                            艺术设计/生活方式
+                        </label>
+                    </div>
+                    <div class="hint">请至少选择一个类型</div>
+                </div>
+
                 <div class="form-group">
                     <label for="hobbies">兴趣爱好</label>
                     <textarea id="hobbies" placeholder="如：文学，历史，心理学，旅行"></textarea>
                     <div class="hint">多个爱好用逗号分隔（中英文逗号均可）</div>
                 </div>
+
                 <div class="form-group">
                     <label for="books">读过的书</label>
                     <textarea id="books" placeholder="如：百年孤独，人类简史，小王子"></textarea>
                     <div class="hint">多本书用逗号分隔（中英文逗号均可）</div>
                 </div>
+
+                <!-- 细分书类偏好 -->
+                <div class="form-group">
+                    <label for="detailedPreferences">细分书类偏好（可选）</label>
+                    <textarea id="detailedPreferences" placeholder="如：爱情小说、现实主义、荒诞主义、浪漫主义、余华、加缪、雨果..." maxlength="500"></textarea>
+                    <div class="hint">
+                        <span>可写上自己更偏好的类目、作家等</span>
+                        <span class="char-count" id="detailedPreferencesCount">0/500字</span>
+                    </div>
+                </div>
+
+                <!-- 最喜欢的书 -->
+                <div class="form-group">
+                    <label>最喜欢的书 <span class="required">*</span></label>
+                    <div id="favoriteBooks">
+                        <div class="book-input-group">
+                            <input type="text" placeholder="请输入书名" maxlength="100">
+                            <button type="button" class="remove-book" onclick="removeFavoriteBook(this)" style="display: none;">删除</button>
+                        </div>
+                        <div class="book-input-group">
+                            <input type="text" placeholder="请输入书名" maxlength="100">
+                            <button type="button" class="remove-book" onclick="removeFavoriteBook(this)" style="display: none;">删除</button>
+                        </div>
+                    </div>
+                    <button type="button" class="secondary" onclick="addFavoriteBook()">+ 添加书籍</button>
+                    <div class="hint">建议填写2本及以上，最多10本</div>
+                </div>
+
+                <!-- 共读预期 -->
+                <div class="form-group">
+                    <label>共读预期 <span class="required">*</span></label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="readingCommitment" value="light">
+                            <span class="radio-custom"></span>
+                            <div class="commitment-option">
+                                <strong>短篇轻量</strong>
+                                <small>5w-10w字，如《小王子》《局外人》，一个周末或几个晚上读完</small>
+                            </div>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="readingCommitment" value="medium">
+                            <span class="radio-custom"></span>
+                            <div class="commitment-option">
+                                <strong>中篇适中</strong>
+                                <small>10w-25w字，如《解忧杂货铺》《挪威的森林》，每周3-5小时，约1-2周完成</small>
+                            </div>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="readingCommitment" value="intensive">
+                            <span class="radio-custom"></span>
+                            <div class="commitment-option">
+                                <strong>长篇投入</strong>
+                                <small>25w-50w字，如《百年孤独》《三体三部曲》单册</small>
+                            </div>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="readingCommitment" value="epic">
+                            <span class="radio-custom"></span>
+                            <div class="commitment-option">
+                                <strong>史诗巨著</strong>
+                                <small>50w+字，如《战争与和平》《追忆似水年华》《克里斯朵夫》</small>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
                 <button type="submit">更新我的信息</button>
                 <button type="button" class="secondary" onclick="logout()">退出登录</button>
             </form>
@@ -495,6 +794,78 @@
         
         <div id="matchResults" class="match-results"></div>
     </div>
+    
+    <script>
+        // 最爱书籍动态输入功能
+        function addFavoriteBook() {
+            const container = document.getElementById('favoriteBooks');
+            const bookInputs = container.querySelectorAll('.book-input-group');
+            
+            if (bookInputs.length >= 10) {
+                alert('最多只能添加10本书籍');
+                return;
+            }
+            
+            const newGroup = document.createElement('div');
+            newGroup.className = 'book-input-group';
+            newGroup.innerHTML = `
+                <input type="text" placeholder="请输入书名" maxlength="100">
+                <button type="button" class="remove-book" onclick="removeFavoriteBook(this)">删除</button>
+            `;
+            
+            container.appendChild(newGroup);
+            updateBookInputsVisibility();
+        }
+        
+        function removeFavoriteBook(button) {
+            const container = document.getElementById('favoriteBooks');
+            const bookInputs = container.querySelectorAll('.book-input-group');
+            
+            if (bookInputs.length <= 2) {
+                alert('至少需要保留2个输入框');
+                return;
+            }
+            
+            button.parentElement.remove();
+            updateBookInputsVisibility();
+        }
+        
+        function updateBookInputsVisibility() {
+            const container = document.getElementById('favoriteBooks');
+            const bookInputs = container.querySelectorAll('.book-input-group');
+            
+            bookInputs.forEach((group, index) => {
+                const removeBtn = group.querySelector('.remove-book');
+                if (bookInputs.length <= 2) {
+                    removeBtn.style.display = 'none';
+                } else {
+                    removeBtn.style.display = 'block';
+                }
+            });
+        }
+        
+        // 字符计数器功能
+        document.addEventListener('DOMContentLoaded', function() {
+            const detailedPreferences = document.getElementById('detailedPreferences');
+            const charCount = document.getElementById('detailedPreferencesCount');
+            
+            if (detailedPreferences && charCount) {
+                detailedPreferences.addEventListener('input', function() {
+                    const length = this.value.length;
+                    charCount.textContent = `${length}/500字`;
+                    
+                    if (length > 450) {
+                        charCount.classList.add('warning');
+                    } else {
+                        charCount.classList.remove('warning');
+                    }
+                });
+            }
+            
+            // 初始化书籍输入框显示状态
+            updateBookInputsVisibility();
+        });
+    </script>
     
     <script src="app.js"></script>
 </body>
