@@ -52,25 +52,28 @@ function migrateUserData(user) {
             // 确保所有现有字段都被保留
             studentId: user.studentId || 'N/A',
             status: user.status || 'approved',
-            hobbies: user.hobbies || [],
-            books: user.books || [],
             
-            // 添加新字段，使用默认值
-            gender: user.gender || '',
-            bookCategories: user.bookCategories || [],
-            detailedBookPreferences: user.detailedBookPreferences || '',
-            favoriteBooks: user.favoriteBooks || (user.books ? [...user.books] : []), // 将旧书籍数据迁移到最爱书籍
-            readingCommitment: user.readingCommitment || '',
-            readingHabits: user.readingHabits || {
-                weeklyHours: '',
-                preferredTimes: [],
-                readingMethods: [],
-                preferredLocations: []
-            },
             questionnaire: {
                 version: '2.0',
                 completedAt: user.questionnaire?.completedAt || '',
-                lastUpdated: new Date().toISOString()
+                lastUpdated: new Date().toISOString(),
+                
+                // 将旧用户的数据迁移到questionnaire对象内
+                hobbies: user.hobbies || [],
+                books: user.books || [],
+                
+                // 新增字段，使用默认值
+                gender: user.gender || '',
+                bookCategories: user.bookCategories || [],
+                detailedBookPreferences: user.detailedBookPreferences || '',
+                favoriteBooks: user.favoriteBooks || (user.books ? [...user.books] : []), // 将旧书籍数据迁移到最爱书籍
+                readingCommitment: user.readingCommitment || '',
+                readingHabits: user.readingHabits || {
+                    weeklyHours: '',
+                    preferredTimes: [],
+                    readingMethods: [],
+                    preferredLocations: []
+                }
             }
         };
     }
@@ -625,12 +628,77 @@ function showLoggedInView() {
    } else {
        document.getElementById('adminSection').style.display = 'none';
        document.getElementById('memberSection').style.display = 'block';
-       // 填充用户信息
+       
+       // 确保用户数据已迁移到最新版本
+       const migratedUser = migrateUserData(currentUser);
+       currentUser = migratedUser;
+       
+       // 填充基本用户信息
        document.getElementById('name').value = currentUser.name;
        document.getElementById('studentId').value = currentUser.studentId;
-       document.getElementById('hobbies').value = currentUser.hobbies.join(', ');
-       document.getElementById('books').value = currentUser.books.join(', ');
+       
+       // 填充问卷信息
+       const questionnaire = currentUser.questionnaire;
+       
+       // 填充性别
+       if (questionnaire.gender) {
+           const genderRadio = document.querySelector(`input[name="gender"][value="${questionnaire.gender}"]`);
+           if (genderRadio) genderRadio.checked = true;
+       }
+       
+       // 填充书目类型（多选）
+       if (questionnaire.bookCategories && questionnaire.bookCategories.length > 0) {
+           questionnaire.bookCategories.forEach(category => {
+               const checkbox = document.querySelector(`input[name="bookCategories"][value="${category}"]`);
+               if (checkbox) checkbox.checked = true;
+           });
+       }
+       
+       // 填充兴趣爱好和读过的书
+       document.getElementById('hobbies').value = (questionnaire.hobbies || []).join(', ');
+       document.getElementById('books').value = (questionnaire.books || []).join(', ');
+       
+       // 填充详细偏好
+       if (questionnaire.detailedBookPreferences) {
+           document.getElementById('detailedPreferences').value = questionnaire.detailedBookPreferences;
+           // 触发字符计数器更新
+           const event = new Event('input');
+           document.getElementById('detailedPreferences').dispatchEvent(event);
+       }
+       
+       // 填充最爱书籍
+       populateFavoriteBooks(questionnaire.favoriteBooks || []);
+       
+       // 填充阅读预期
+       if (questionnaire.readingCommitment) {
+           const commitmentRadio = document.querySelector(`input[name="readingCommitment"][value="${questionnaire.readingCommitment}"]`);
+           if (commitmentRadio) commitmentRadio.checked = true;
+       }
    }
+}
+
+// 填充最爱书籍的辅助函数
+function populateFavoriteBooks(favoriteBooks) {
+   const container = document.getElementById('favoriteBooks');
+   
+   // 清空现有输入框
+   container.innerHTML = '';
+   
+   // 确保至少有2个输入框
+   const booksToShow = Math.max(2, favoriteBooks.length);
+   
+   for (let i = 0; i < booksToShow; i++) {
+       const bookGroup = document.createElement('div');
+       bookGroup.className = 'book-input-group';
+       bookGroup.innerHTML = `
+           <input type="text" placeholder="请输入书名" maxlength="100" value="${favoriteBooks[i] || ''}">
+           <button type="button" class="remove-book" onclick="removeFavoriteBook(this)" style="display: none;">删除</button>
+       `;
+       container.appendChild(bookGroup);
+   }
+   
+   // 更新删除按钮的显示状态
+   updateBookInputsVisibility();
 }
 
 // 兴趣爱好分类和同义词库
