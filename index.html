@@ -498,6 +498,288 @@
             box-shadow: 0 2px 8px rgba(108, 92, 231, 0.3);
         }
         
+        /* 深度分析样式 */
+        .deep-analysis {
+            background: linear-gradient(135deg, #e8e4ff 0%, #f1f0ff 100%);
+            border-left: 5px solid #6c5ce7;
+        }
+        
+        .personality-analysis {
+            background: linear-gradient(135deg, #fff9e6 0%, #fffbeb 100%);
+            border-left: 5px solid #f39c12;
+        }
+        
+        .implicit-analysis {
+            background: linear-gradient(135deg, #e8f6ff 0%, #f0f9ff 100%);
+            border-left: 5px solid #3498db;
+        }
+        
+        .deep-compatibility {
+            background: linear-gradient(135deg, #ffe8f1 0%, #fff0f5 100%);
+            border-left: 5px solid #e84393;
+        }
+        
+        .dimensions-breakdown {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 5px solid #6c757d;
+        }
+        
+        /* 人格维度比较 */
+        .personality-dimension {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 8px;
+        }
+        
+        .dimension-icon {
+            margin-right: 8px;
+            font-size: 16px;
+        }
+        
+        .dimension-name {
+            min-width: 120px;
+            font-size: 13px;
+            color: #555;
+        }
+        
+        .dimension-bars {
+            flex: 1;
+            margin: 0 12px;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .member-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #74b9ff, #0984e3);
+            border-radius: 4px;
+            position: absolute;
+            top: 0;
+            opacity: 0.8;
+        }
+        
+        .member-bar.member2 {
+            background: linear-gradient(90deg, #fd79a8, #e84393);
+            top: 50%;
+            height: 50%;
+            opacity: 0.7;
+        }
+        
+        .similarity-indicator {
+            min-width: 40px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .similarity-indicator.high { color: #00b894; }
+        .similarity-indicator.medium { color: #fdcb6e; }
+        .similarity-indicator.low { color: #e17055; }
+        
+        /* 兼容性维度展示 */
+        .compatibility-dimensions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 10px;
+        }
+        
+        .compat-dimension {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 6px;
+        }
+        
+        .dim-icon {
+            margin-right: 8px;
+        }
+        
+        .dim-label {
+            min-width: 60px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .dim-bar {
+            flex: 1;
+            height: 6px;
+            background: #f0f0f0;
+            border-radius: 3px;
+            margin: 0 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .dim-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #55a3ff, #667eea);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        
+        .dim-value {
+            font-size: 11px;
+            color: #666;
+            min-width: 30px;
+        }
+        
+        /* 维度得分展示 */
+        .dimensions-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 15px;
+        }
+        
+        .dimension-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+        }
+        
+        .dimension-label {
+            min-width: 100px;
+            font-size: 13px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        .score-bar {
+            flex: 1;
+            height: 12px;
+            background: #f0f0f0;
+            border-radius: 6px;
+            margin: 0 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .score-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #74b9ff, #0984e3);
+            border-radius: 6px;
+            transition: width 0.8s ease;
+        }
+        
+        .score-fill.personality { background: linear-gradient(90deg, #fdcb6e, #f39c12); }
+        .score-fill.implicit { background: linear-gradient(90deg, #55a3ff, #3498db); }
+        .score-fill.growth { background: linear-gradient(90deg, #55efc4, #00b894); }
+        .score-fill.chemistry { background: linear-gradient(90deg, #fd79a8, #e84393); }
+        
+        .score-value {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 11px;
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        
+        /* 标签样式扩展 */
+        .surface-element-tag {
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+        }
+        
+        .deep-connection-tag {
+            background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+        }
+        
+        .book-rec-tag {
+            background: linear-gradient(135deg, #00b894 0%, #55efc4 100%);
+        }
+        
+        .theme-tag {
+            background: linear-gradient(135deg, #f39c12 0%, #fdcb6e 100%);
+        }
+        
+        .culture-tag {
+            background: linear-gradient(135deg, #3498db 0%, #74b9ff 100%);
+        }
+        
+        .archetype-tag {
+            background: linear-gradient(135deg, #9b59b6 0%, #bb6bd9 100%);
+        }
+        
+        .cognitive-tag {
+            background: linear-gradient(135deg, #f39c12 0%, #fdcb6e 100%);
+        }
+        
+        .cultural-tag {
+            background: linear-gradient(135deg, #00cec9 0%, #55efc4 100%);
+        }
+        
+        .compatibility-type-tag {
+            background: linear-gradient(135deg, #e84393 0%, #fd79a8 100%);
+        }
+        
+        .chemistry-tag {
+            background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+        }
+        
+        .dynamics-tag {
+            background: linear-gradient(135deg, #00b894 0%, #55efc4 100%);
+        }
+        
+        .depth-tag {
+            background: linear-gradient(135deg, #636e72 0%, #2d3436 100%);
+        }
+        
+        /* 推荐理由和成长潜力 */
+        .recommendation-list, .synergy-list, .growth-list {
+            margin-top: 8px;
+        }
+        
+        .recommendation-item, .synergy-item, .growth-item {
+            font-size: 13px;
+            color: #555;
+            margin: 4px 0;
+            padding-left: 8px;
+        }
+        
+        .growth-potential {
+            margin-top: 12px;
+            padding: 8px;
+            background: rgba(85, 239, 196, 0.1);
+            border-radius: 6px;
+            border-left: 3px solid #00b894;
+            font-size: 13px;
+            color: #00b894;
+        }
+        
+        /* 文化取向和认知风格 */
+        .vs-indicator {
+            margin: 0 8px;
+            font-weight: bold;
+            color: #666;
+        }
+        
+        .implicit-section {
+            margin-bottom: 12px;
+        }
+        
+        .compatibility-overview {
+            margin-bottom: 15px;
+        }
+        
+        .compatibility-type, .relationship-dynamics {
+            margin-bottom: 8px;
+        }
+        
+        .synergy-section, .growth-section {
+            margin-top: 15px;
+        }
+        
         .ai-element-tag {
             background: linear-gradient(135deg, #fd79a8 0%, #e84393 100%);
             box-shadow: 0 2px 8px rgba(253, 121, 168, 0.3);
