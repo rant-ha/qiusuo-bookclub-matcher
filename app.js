@@ -795,27 +795,195 @@ async function getAiSimilarity(word1, word2) {
     }
 }
 
+// AI文本偏好分析 - 分析详细书籍偏好的相似度
+async function getAiTextPreferenceAnalysis(text1, text2) {
+    if (!AI_BASE_URL || !AI_API_KEY || !text1.trim() || !text2.trim()) {
+        return { similarity_score: 0, common_elements: [] };
+    }
+
+    const systemPrompt = `You are an expert in analyzing reading preferences and literary tastes. Analyze two users' detailed book preferences and determine their compatibility.
+
+Your task:
+1. Identify common elements (authors, genres, themes, literary movements, geographic preferences, etc.)
+2. Calculate overall similarity score from 0.0 to 1.0
+3. Respond ONLY with a JSON object containing:
+   - "similarity_score": float (0.0-1.0)
+   - "common_elements": array of strings describing shared preferences
+   - "analysis_details": string explaining the reasoning
+
+Example response:
+{
+  "similarity_score": 0.75,
+  "common_elements": ["东野圭吾", "日本推理小说", "心理悬疑"],
+  "analysis_details": "Both users prefer Japanese mystery novels, especially Keigo Higashino's works"
+}`;
+
+    const userPrompt = JSON.stringify({ 
+        preference1: text1, 
+        preference2: text2 
+    });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI Text Preference API Error:', response.status, await response.text());
+            return { similarity_score: 0, common_elements: [] };
+        }
+
+        const result = await response.json();
+        const analysis = result.choices[0]?.message?.content;
+        
+        if (analysis) {
+            const parsedAnalysis = JSON.parse(analysis);
+            return {
+                similarity_score: parsedAnalysis.similarity_score || 0,
+                common_elements: parsedAnalysis.common_elements || [],
+                analysis_details: parsedAnalysis.analysis_details || ''
+            };
+        }
+        return { similarity_score: 0, common_elements: [] };
+    } catch (error) {
+        console.error('Failed to fetch AI text preference analysis:', error);
+        return { similarity_score: 0, common_elements: [] };
+    }
+}
+
+// 阅读承诺兼容性评分
+function calculateReadingCommitmentCompatibility(commitment1, commitment2) {
+    if (!commitment1 || !commitment2) {
+        return { score: 0, compatibility: 'unknown' };
+    }
+
+    // 阅读承诺等级映射
+    const commitmentLevels = {
+        'light': 1,      // 轻松阅读
+        'medium': 2,     // 适中阅读  
+        'intensive': 3,  // 深度阅读
+        'epic': 4        // 史诗阅读
+    };
+
+    const level1 = commitmentLevels[commitment1];
+    const level2 = commitmentLevels[commitment2];
+    
+    if (!level1 || !level2) {
+        return { score: 0, compatibility: 'unknown' };
+    }
+
+    const difference = Math.abs(level1 - level2);
+    
+    // 基于差异计算兼容性分数和描述
+    switch (difference) {
+        case 0:
+            return { 
+                score: 1.0, 
+                compatibility: 'perfect',
+                description: '完全一致的阅读量期望'
+            };
+        case 1:
+            return { 
+                score: 0.7, 
+                compatibility: 'good',
+                description: '相近的阅读量期望'
+            };
+        case 2:
+            return { 
+                score: 0.4, 
+                compatibility: 'moderate',
+                description: '中等程度的阅读量差异'
+            };
+        case 3:
+            return { 
+                score: 0.1, 
+                compatibility: 'poor',
+                description: '较大的阅读量期望差异'
+            };
+        default:
+            return { score: 0, compatibility: 'incompatible' };
+    }
+}
+
 async function calculateSimilarity(member1, member2) {
     const result = {
         score: 0,
         commonHobbies: [],
         commonBooks: [],
-        detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }
+        detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
+        readingCommitmentCompatibility: null,
+        textPreferenceAnalysis: null
     };
 
-    const hobbyResult = await calculateSmartMatches(member1.hobbies, member2.hobbies, INTEREST_CATEGORIES);
+    // 确保用户数据已迁移到最新版本
+    const migratedMember1 = migrateUserData(member1);
+    const migratedMember2 = migrateUserData(member2);
+
+    // 1. 传统兴趣爱好匹配
+    const hobbyResult = await calculateSmartMatches(
+        migratedMember1.questionnaire.hobbies || migratedMember1.hobbies || [], 
+        migratedMember2.questionnaire.hobbies || migratedMember2.hobbies || [], 
+        INTEREST_CATEGORIES
+    );
     result.commonHobbies = hobbyResult.matches;
     result.score += hobbyResult.score;
     result.detailLevel.exactMatches += hobbyResult.exactMatches;
     result.detailLevel.semanticMatches += hobbyResult.semanticMatches;
     result.detailLevel.categoryMatches += hobbyResult.categoryMatches;
 
-    const bookResult = await calculateSmartMatches(member1.books, member2.books, BOOK_CATEGORIES);
+    // 2. 传统书籍匹配
+    const bookResult = await calculateSmartMatches(
+        migratedMember1.questionnaire.books || migratedMember1.books || [], 
+        migratedMember2.questionnaire.books || migratedMember2.books || [], 
+        BOOK_CATEGORIES
+    );
     result.commonBooks = bookResult.matches;
     result.score += bookResult.score;
     result.detailLevel.exactMatches += bookResult.exactMatches;
     result.detailLevel.semanticMatches += bookResult.semanticMatches;
     result.detailLevel.categoryMatches += bookResult.categoryMatches;
+
+    // 3. 最爱书籍匹配（增强字段）
+    if (migratedMember1.questionnaire.favoriteBooks && migratedMember2.questionnaire.favoriteBooks) {
+        const favoriteBookResult = await calculateSmartMatches(
+            migratedMember1.questionnaire.favoriteBooks,
+            migratedMember2.questionnaire.favoriteBooks,
+            BOOK_CATEGORIES
+        );
+        result.commonBooks.push(...favoriteBookResult.matches.map(m => ({ ...m, source: 'favorite' })));
+        result.score += favoriteBookResult.score * 1.2; // 最爱书籍权重更高
+        result.detailLevel.exactMatches += favoriteBookResult.exactMatches;
+        result.detailLevel.semanticMatches += favoriteBookResult.semanticMatches;
+        result.detailLevel.categoryMatches += favoriteBookResult.categoryMatches;
+    }
+
+    // 4. 阅读承诺兼容性匹配
+    result.readingCommitmentCompatibility = calculateReadingCommitmentCompatibility(
+        migratedMember1.questionnaire.readingCommitment || migratedMember1.readingCommitment,
+        migratedMember2.questionnaire.readingCommitment || migratedMember2.readingCommitment
+    );
+    result.score += result.readingCommitmentCompatibility.score * 0.8; // 阅读承诺权重
+
+    // 5. 详细书籍偏好AI文本分析
+    const text1 = migratedMember1.questionnaire.detailedBookPreferences || migratedMember1.detailedBookPreferences || '';
+    const text2 = migratedMember2.questionnaire.detailedBookPreferences || migratedMember2.detailedBookPreferences || '';
+    
+    if (text1.trim() && text2.trim()) {
+        result.textPreferenceAnalysis = await getAiTextPreferenceAnalysis(text1, text2);
+        result.score += result.textPreferenceAnalysis.similarity_score * 1.5; // AI文本分析权重较高
+    }
 
     return result;
 }
@@ -1066,10 +1234,20 @@ function generateMatchScoreHtml(match) {
 
     if (match.type === 'similar') {
         const breakdown = `(精确${match.detailLevel.exactMatches} + 语义${match.detailLevel.semanticMatches} + 类别${match.detailLevel.categoryMatches})`;
+        
+        // 添加新维度的分数显示
+        let enhancedBreakdown = '';
+        if (match.readingCommitmentCompatibility) {
+            enhancedBreakdown += ` | 阅读承诺: ${(match.readingCommitmentCompatibility.score * 0.8).toFixed(1)}分`;
+        }
+        if (match.textPreferenceAnalysis && match.textPreferenceAnalysis.similarity_score > 0) {
+            enhancedBreakdown += ` | AI文本分析: ${(match.textPreferenceAnalysis.similarity_score * 1.5).toFixed(1)}分`;
+        }
+        
         return `
             <div class="match-score">
                 智能相似度：${scoreText} 分
-                <span class="match-breakdown">${breakdown}</span>
+                <span class="match-breakdown">${breakdown}${enhancedBreakdown}</span>
             </div>`;
     } else { // complementary
         let description = '';
@@ -1114,6 +1292,57 @@ function generateMatchDetails(match) {
             <div class="common-interests">
                 <h4>📚 书籍阅读匹配</h4>
                 ${bookDetails}
+            </div>
+        `;
+    }
+    
+    // 阅读承诺兼容性详情
+    if (match.readingCommitmentCompatibility && match.readingCommitmentCompatibility.score > 0) {
+        const commitment = match.readingCommitmentCompatibility;
+        const compatibilityIcon = {
+            'perfect': '💯',
+            'good': '✨',
+            'moderate': '⚖️',
+            'poor': '⚠️',
+            'unknown': '❓'
+        }[commitment.compatibility] || '❓';
+        
+        detailsHtml += `
+            <div class="common-interests">
+                <h4>${compatibilityIcon} 阅读承诺兼容性</h4>
+                <div class="match-type-group">
+                    <span class="match-type-label">兼容度：</span>
+                    <span class="tag ${commitment.compatibility}-tag">${commitment.description}</span>
+                    <span class="tag score-tag">兼容分数: ${(commitment.score * 0.8).toFixed(1)}</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // AI文本偏好分析详情
+    if (match.textPreferenceAnalysis && match.textPreferenceAnalysis.similarity_score > 0) {
+        const analysis = match.textPreferenceAnalysis;
+        detailsHtml += `
+            <div class="common-interests">
+                <h4>🤖 AI文本偏好分析</h4>
+                <div class="match-type-group">
+                    <span class="match-type-label">AI相似度：</span>
+                    <span class="tag ai-analysis-tag">${(analysis.similarity_score * 100).toFixed(0)}% 相似</span>
+                    <span class="tag score-tag">加权分数: ${(analysis.similarity_score * 1.5).toFixed(1)}</span>
+                </div>
+                ${analysis.common_elements && analysis.common_elements.length > 0 ? `
+                    <div class="match-type-group">
+                        <span class="match-type-label">🔍 共同元素：</span>
+                        ${analysis.common_elements.map(element => `
+                            <span class="tag ai-element-tag">${element}</span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                ${analysis.analysis_details ? `
+                    <div style="margin-top: 8px; font-size: 12px; color: #666; font-style: italic;">
+                        ${analysis.analysis_details}
+                    </div>
+                ` : ''}
             </div>
         `;
     }
