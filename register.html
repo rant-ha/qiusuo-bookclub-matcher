@@ -48,6 +48,7 @@
             font-size: 28px;
             font-weight: 600;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-align: center;
@@ -382,6 +383,29 @@
                             <span>不愿透露</span>
                         </label>
                     </div>
+                </div>
+            </div>
+
+            <!-- Matching Preferences Section -->
+            <div class="form-section">
+                <h3>匹配偏好</h3>
+                <div class="form-group">
+                    <label>希望匹配的对象性别 (可选)</label>
+                    <div class="radio-group">
+                        <label class="radio-item">
+                            <input type="radio" name="matchGenderPreference" value="male">
+                            <span>男生</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="matchGenderPreference" value="female">
+                            <span>女生</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="matchGenderPreference" value="no_preference">
+                            <span>不介意</span>
+                        </label>
+                    </div>
+                    <small style="color: #666; font-size: 12px;">选择您希望匹配的读书伙伴性别偏好</small>
                 </div>
             </div>
 
