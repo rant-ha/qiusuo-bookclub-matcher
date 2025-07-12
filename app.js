@@ -512,18 +512,87 @@ function renderMemberList() {
    }
 
    memberCountSpan.textContent = `(共 ${approvedMembers.length} 人)`;
-   memberListDiv.innerHTML = approvedMembers.map(member => `
-       <div class="member-item">
-           <div class="member-info">
-               <h3>${member.name} (学号: ${member.studentId})</h3>
-               <div class="member-details">
-                   <div>兴趣：${member.hobbies.join('、') || '未填写'}</div>
-                   <div>读过：${member.books.join('、') || '未填写'}</div>
+   memberListDiv.innerHTML = approvedMembers.map(member => {
+       // 确保用户数据已迁移到最新版本
+       const migratedMember = migrateUserData(member);
+       const questionnaire = migratedMember.questionnaire;
+       
+       // 显示信息的辅助函数
+       const formatHobbies = () => {
+           if (questionnaire.hobbies && questionnaire.hobbies.length > 0) {
+               return questionnaire.hobbies.join('、');
+           }
+           return '未填写';
+       };
+       
+       const formatBooks = () => {
+           if (questionnaire.books && questionnaire.books.length > 0) {
+               return questionnaire.books.join('、');
+           }
+           return '未填写';
+       };
+       
+       const formatGender = () => {
+           const genderMap = {
+               'male': '男',
+               'female': '女', 
+               'other': '其他',
+               'prefer_not_to_say': '不愿透露'
+           };
+           return questionnaire.gender ? genderMap[questionnaire.gender] || questionnaire.gender : '未填写';
+       };
+       
+       const formatBookCategories = () => {
+           if (questionnaire.bookCategories && questionnaire.bookCategories.length > 0) {
+               const categoryMap = {
+                   'literature_fiction': '文学/当代小说',
+                   'mystery_detective': '悬疑侦探/推理',
+                   'sci_fi_fantasy': '科幻奇幻',
+                   'history_biography': '历史传记/记实',
+                   'social_science_philosophy': '社科思想/哲学',
+                   'psychology_self_help': '心理成长/自助',
+                   'art_design_lifestyle': '艺术设计/生活方式'
+               };
+               return questionnaire.bookCategories.map(cat => categoryMap[cat] || cat).join('、');
+           }
+           return '未填写';
+       };
+       
+       const formatFavoriteBooks = () => {
+           if (questionnaire.favoriteBooks && questionnaire.favoriteBooks.length > 0) {
+               return questionnaire.favoriteBooks.join('、');
+           }
+           return '未填写';
+       };
+       
+       const formatReadingCommitment = () => {
+           const commitmentMap = {
+               'light': '轻量阅读(5w-10w字)',
+               'medium': '适中阅读(10w-25w字)', 
+               'intensive': '投入阅读(25w-50w字)',
+               'epic': '史诗阅读(50w+字)'
+           };
+           return questionnaire.readingCommitment ? commitmentMap[questionnaire.readingCommitment] || questionnaire.readingCommitment : '未填写';
+       };
+       
+       return `
+           <div class="member-item">
+               <div class="member-info">
+                   <h3>${migratedMember.name} (学号: ${migratedMember.studentId})</h3>
+                   <div class="member-details">
+                       <div><strong>性别：</strong>${formatGender()}</div>
+                       <div><strong>书目类型：</strong>${formatBookCategories()}</div>
+                       <div><strong>兴趣爱好：</strong>${formatHobbies()}</div>
+                       <div><strong>读过的书：</strong>${formatBooks()}</div>
+                       <div><strong>最爱书籍：</strong>${formatFavoriteBooks()}</div>
+                       <div><strong>阅读预期：</strong>${formatReadingCommitment()}</div>
+                       ${questionnaire.detailedBookPreferences ? `<div><strong>详细偏好：</strong>${questionnaire.detailedBookPreferences}</div>` : ''}
+                   </div>
                </div>
+               <button class="delete-btn" onclick="deleteMember('${migratedMember.id}')">删除</button>
            </div>
-           <button class="delete-btn" onclick="deleteMember('${member.id}')">删除</button>
-       </div>
-   `).join('');
+       `;
+   }).join('');
 }
 
 // 删除成员（管理员操作，可删除任何状态的用户）
