@@ -817,32 +817,308 @@ async function getAiSimilarity(word1, word2) {
     }
 }
 
-// AI文本偏好分析 - 分析详细书籍偏好的相似度
+// ===== 深度AI语义分析系统 =====
+
+// 阅读人格画像分析
+async function getReadingPersonalityProfile(userText, favoriteBooks = []) {
+    if (!AI_BASE_URL || !AI_API_KEY || (!userText.trim() && favoriteBooks.length === 0)) {
+        return { 
+            personality_dimensions: {},
+            reading_motivations: [],
+            cognitive_style: 'unknown',
+            confidence_score: 0
+        };
+    }
+
+    const systemPrompt = `You are a reading psychology expert specializing in personality analysis through literary preferences. 
+
+Analyze the user's reading personality based on their book preferences and descriptions. Evaluate these key dimensions:
+
+1. **EXPLORATION vs CERTAINTY** (0.0-1.0): 
+   - 0.0 = Prefers familiar genres/authors, sticks to proven favorites
+   - 1.0 = Constantly seeks new genres, experimental works, diverse perspectives
+
+2. **EMOTIONAL vs RATIONAL** (0.0-1.0):
+   - 0.0 = Logic-driven, prefers factual/analytical content
+   - 1.0 = Emotion-driven, seeks feeling and empathy in literature
+
+3. **INTROSPECTIVE vs SOCIAL** (0.0-1.0):
+   - 0.0 = Focuses on personal growth, inner psychological exploration
+   - 1.0 = Interested in social issues, interpersonal dynamics, community
+
+4. **ESCAPIST vs REALISTIC** (0.0-1.0):
+   - 0.0 = Prefers realistic, contemporary settings
+   - 1.0 = Seeks fantasy, sci-fi, alternative worlds for escape
+
+5. **FAST_PACED vs CONTEMPLATIVE** (0.0-1.0):
+   - 0.0 = Slow, meditative reading, philosophical depth
+   - 1.0 = Action-packed, quick plot progression
+
+Return JSON with:
+{
+  "personality_dimensions": {
+    "exploration_vs_certainty": float,
+    "emotional_vs_rational": float,
+    "introspective_vs_social": float,
+    "escapist_vs_realistic": float,
+    "fast_paced_vs_contemplative": float
+  },
+  "reading_motivations": [array of motivation strings],
+  "cognitive_style": "analytical|intuitive|creative|systematic",
+  "aesthetic_preferences": {
+    "language_style": "classical|modern|experimental",
+    "narrative_structure": "linear|non_linear|fragmented",
+    "emotional_tone": "light|serious|varied"
+  },
+  "cultural_orientation": "eastern|western|global|local",
+  "confidence_score": float (0.0-1.0)
+}`;
+
+    const userPrompt = JSON.stringify({
+        user_description: userText,
+        favorite_books: favoriteBooks,
+        analysis_focus: "deep_personality_profiling"
+    });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI Personality Analysis Error:', response.status, await response.text());
+            return { personality_dimensions: {}, reading_motivations: [], cognitive_style: 'unknown', confidence_score: 0 };
+        }
+
+        const result = await response.json();
+        const analysis = result.choices[0]?.message?.content;
+        
+        if (analysis) {
+            return JSON.parse(analysis);
+        }
+        return { personality_dimensions: {}, reading_motivations: [], cognitive_style: 'unknown', confidence_score: 0 };
+    } catch (error) {
+        console.error('Failed to fetch personality analysis:', error);
+        return { personality_dimensions: {}, reading_motivations: [], cognitive_style: 'unknown', confidence_score: 0 };
+    }
+}
+
+// 隐含偏好挖掘分析
+async function getImplicitPreferenceAnalysis(userText, favoriteBooks = [], bookCategories = []) {
+    if (!AI_BASE_URL || !AI_API_KEY) {
+        return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+    }
+
+    const systemPrompt = `You are a literary data scientist expert in uncovering hidden reading patterns and implicit preferences.
+
+Analyze the user's implicit preferences beyond obvious genre choices. Look for:
+
+1. **HIDDEN THEMATIC PATTERNS**: Underlying themes that connect diverse book choices
+2. **TEMPORAL PREFERENCES**: Historical periods, eras, time settings the user gravitates toward
+3. **GEOGRAPHICAL/CULTURAL AFFINITIES**: Specific regions, cultures, or perspectives
+4. **NARRATIVE ARCHETYPES**: Character types, story structures, conflict patterns
+5. **PHILOSOPHICAL LEANINGS**: Worldviews, value systems reflected in book choices
+6. **SENSORY/AESTHETIC PREFERENCES**: Language texture, pacing, atmospheric qualities
+
+Return JSON with:
+{
+  "implicit_themes": [array of subtle themes user is drawn to],
+  "hidden_patterns": [array of non-obvious connection patterns],
+  "temporal_preferences": {
+    "historical_periods": [preferred time periods],
+    "contemporary_vs_classic": float (0.0=classic, 1.0=contemporary)
+  },
+  "cultural_affinities": [array of cultural/geographic preferences],
+  "narrative_archetypes": [character types, story patterns user prefers],
+  "philosophical_leanings": [underlying worldviews and values],
+  "aesthetic_dna": {
+    "language_texture": "sparse|rich|poetic|conversational",
+    "emotional_register": "subtle|intense|varied|controlled",
+    "complexity_preference": float (0.0=simple, 1.0=complex)
+  },
+  "confidence_score": float (0.0-1.0)
+}`;
+
+    const userPrompt = JSON.stringify({
+        user_description: userText,
+        favorite_books: favoriteBooks,
+        selected_categories: bookCategories,
+        analysis_depth: "implicit_pattern_mining"
+    });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI Implicit Analysis Error:', response.status, await response.text());
+            return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+        }
+
+        const result = await response.json();
+        const analysis = result.choices[0]?.message?.content;
+        
+        if (analysis) {
+            return JSON.parse(analysis);
+        }
+        return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+    } catch (error) {
+        console.error('Failed to fetch implicit analysis:', error);
+        return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+    }
+}
+
+// 深度兼容性匹配分析
+async function getDeepCompatibilityAnalysis(user1Profile, user2Profile, user1Implicit, user2Implicit) {
+    if (!AI_BASE_URL || !AI_API_KEY) {
+        return { 
+            compatibility_score: 0, 
+            compatibility_dimensions: {},
+            synergy_potential: [],
+            growth_opportunities: [],
+            reading_chemistry: 'unknown'
+        };
+    }
+
+    const systemPrompt = `You are an expert in reading compatibility and literary relationship dynamics.
+
+Analyze deep compatibility between two readers based on their personality profiles and implicit preferences. Calculate sophisticated compatibility across multiple dimensions:
+
+1. **COGNITIVE SYNERGY**: How well their thinking styles complement each other
+2. **AESTHETIC HARMONY**: Alignment in literary taste and style preferences  
+3. **INTELLECTUAL GROWTH POTENTIAL**: Capacity to learn from each other
+4. **EMOTIONAL RESONANCE**: Shared emotional wavelengths and empathy
+5. **EXPLORATORY COMPATIBILITY**: Balance between similar interests and complementary differences
+
+Calculate these compatibility types:
+- **MIRROR COMPATIBILITY**: Similar personalities/preferences (comfort zone)
+- **COMPLEMENTARY COMPATIBILITY**: Different but synergistic (growth zone)
+- **BRIDGE COMPATIBILITY**: One can introduce the other to new territories
+
+Return JSON with:
+{
+  "compatibility_score": float (0.0-1.0),
+  "compatibility_dimensions": {
+    "cognitive_synergy": float (0.0-1.0),
+    "aesthetic_harmony": float (0.0-1.0),
+    "growth_potential": float (0.0-1.0),
+    "emotional_resonance": float (0.0-1.0),
+    "exploratory_balance": float (0.0-1.0)
+  },
+  "compatibility_type": "mirror|complementary|bridge|complex",
+  "synergy_potential": [array of potential benefits from this pairing],
+  "growth_opportunities": [array of ways they could expand each other's horizons],
+  "reading_chemistry": "explosive|steady|gentle|challenging|inspiring",
+  "recommendation_confidence": float (0.0-1.0),
+  "relationship_dynamics": "mentor_mentee|equal_explorers|complementary_guides|kindred_spirits"
+}`;
+
+    const userPrompt = JSON.stringify({
+        user1: {
+            personality: user1Profile,
+            implicit_preferences: user1Implicit
+        },
+        user2: {
+            personality: user2Profile,
+            implicit_preferences: user2Implicit
+        },
+        analysis_type: "deep_compatibility_assessment"
+    });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI Deep Compatibility Error:', response.status, await response.text());
+            return { compatibility_score: 0, compatibility_dimensions: {}, synergy_potential: [], growth_opportunities: [], reading_chemistry: 'unknown' };
+        }
+
+        const result = await response.json();
+        const analysis = result.choices[0]?.message?.content;
+        
+        if (analysis) {
+            return JSON.parse(analysis);
+        }
+        return { compatibility_score: 0, compatibility_dimensions: {}, synergy_potential: [], growth_opportunities: [], reading_chemistry: 'unknown' };
+    } catch (error) {
+        console.error('Failed to fetch deep compatibility analysis:', error);
+        return { compatibility_score: 0, compatibility_dimensions: {}, synergy_potential: [], growth_opportunities: [], reading_chemistry: 'unknown' };
+    }
+}
+
+// 智能文本偏好分析（升级版）
 async function getAiTextPreferenceAnalysis(text1, text2) {
     if (!AI_BASE_URL || !AI_API_KEY || !text1.trim() || !text2.trim()) {
         return { similarity_score: 0, common_elements: [] };
     }
 
-    const systemPrompt = `You are an expert in analyzing reading preferences and literary tastes. Analyze two users' detailed book preferences and determine their compatibility.
+    const systemPrompt = `You are an expert in analyzing reading preferences and literary tastes with deep semantic understanding.
 
-Your task:
-1. Identify common elements (authors, genres, themes, literary movements, geographic preferences, etc.)
-2. Calculate overall similarity score from 0.0 to 1.0
-3. Respond ONLY with a JSON object containing:
-   - "similarity_score": float (0.0-1.0)
-   - "common_elements": array of strings describing shared preferences
-   - "analysis_details": string explaining the reasoning
+Analyze two users' detailed book preferences and determine their compatibility using advanced semantic analysis:
 
-Example response:
+1. **SURFACE SIMILARITIES**: Direct matches in authors, genres, themes
+2. **DEEP SEMANTIC CONNECTIONS**: Conceptual relationships, thematic resonances
+3. **STYLISTIC AFFINITIES**: Shared appreciation for narrative techniques, language styles
+4. **PSYCHOLOGICAL RESONANCES**: Similar emotional needs fulfilled by reading
+5. **CULTURAL/TEMPORAL ALIGNMENTS**: Shared historical/geographic interests
+
+Provide both quantitative scores and qualitative insights.
+
+Return JSON with:
 {
-  "similarity_score": 0.75,
-  "common_elements": ["东野圭吾", "日本推理小说", "心理悬疑"],
-  "analysis_details": "Both users prefer Japanese mystery novels, especially Keigo Higashino's works"
+  "similarity_score": float (0.0-1.0),
+  "semantic_depth_score": float (0.0-1.0),
+  "common_elements": [array of shared preferences],
+  "deep_connections": [array of non-obvious thematic/stylistic links],
+  "analysis_details": "detailed explanation of compatibility",
+  "recommendation_reasons": [specific reasons why they'd be good reading partners],
+  "potential_book_recommendations": [books both might enjoy together],
+  "growth_potential": "how they could expand each other's reading horizons"
 }`;
 
     const userPrompt = JSON.stringify({ 
         preference1: text1, 
-        preference2: text2 
+        preference2: text2,
+        analysis_mode: "deep_semantic_compatibility"
     });
 
     try {
@@ -874,8 +1150,13 @@ Example response:
             const parsedAnalysis = JSON.parse(analysis);
             return {
                 similarity_score: parsedAnalysis.similarity_score || 0,
+                semantic_depth_score: parsedAnalysis.semantic_depth_score || 0,
                 common_elements: parsedAnalysis.common_elements || [],
-                analysis_details: parsedAnalysis.analysis_details || ''
+                deep_connections: parsedAnalysis.deep_connections || [],
+                analysis_details: parsedAnalysis.analysis_details || '',
+                recommendation_reasons: parsedAnalysis.recommendation_reasons || [],
+                potential_book_recommendations: parsedAnalysis.potential_book_recommendations || [],
+                growth_potential: parsedAnalysis.growth_potential || ''
             };
         }
         return { similarity_score: 0, common_elements: [] };
@@ -939,6 +1220,7 @@ function calculateReadingCommitmentCompatibility(commitment1, commitment2) {
     }
 }
 
+// 深度智能匹配算法（升级版）
 async function calculateSimilarity(member1, member2) {
     const result = {
         score: 0,
@@ -946,13 +1228,32 @@ async function calculateSimilarity(member1, member2) {
         commonBooks: [],
         detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
         readingCommitmentCompatibility: null,
-        textPreferenceAnalysis: null
+        textPreferenceAnalysis: null,
+        // 新增深度分析结果
+        personalityProfiles: {
+            member1: null,
+            member2: null
+        },
+        implicitAnalysis: {
+            member1: null,
+            member2: null
+        },
+        deepCompatibilityAnalysis: null,
+        matchingDimensions: {
+            traditional_similarity: 0,      // 传统相似度
+            personality_compatibility: 0,   // 人格兼容度
+            implicit_resonance: 0,         // 隐含共鸣
+            growth_potential: 0,           // 成长潜力
+            overall_chemistry: 0           // 整体化学反应
+        }
     };
 
     // 确保用户数据已迁移到最新版本
     const migratedMember1 = migrateUserData(member1);
     const migratedMember2 = migrateUserData(member2);
 
+    // ===== 阶段1: 传统匹配分析 =====
+    
     // 1. 传统兴趣爱好匹配
     const hobbyResult = await calculateSmartMatches(
         migratedMember1.questionnaire.hobbies || migratedMember1.hobbies || [], 
@@ -960,7 +1261,6 @@ async function calculateSimilarity(member1, member2) {
         INTEREST_CATEGORIES
     );
     result.commonHobbies = hobbyResult.matches;
-    result.score += hobbyResult.score;
     result.detailLevel.exactMatches += hobbyResult.exactMatches;
     result.detailLevel.semanticMatches += hobbyResult.semanticMatches;
     result.detailLevel.categoryMatches += hobbyResult.categoryMatches;
@@ -972,7 +1272,6 @@ async function calculateSimilarity(member1, member2) {
         BOOK_CATEGORIES
     );
     result.commonBooks = bookResult.matches;
-    result.score += bookResult.score;
     result.detailLevel.exactMatches += bookResult.exactMatches;
     result.detailLevel.semanticMatches += bookResult.semanticMatches;
     result.detailLevel.categoryMatches += bookResult.categoryMatches;
@@ -985,7 +1284,6 @@ async function calculateSimilarity(member1, member2) {
             BOOK_CATEGORIES
         );
         result.commonBooks.push(...favoriteBookResult.matches.map(m => ({ ...m, source: 'favorite' })));
-        result.score += favoriteBookResult.score * 1.2; // 最爱书籍权重更高
         result.detailLevel.exactMatches += favoriteBookResult.exactMatches;
         result.detailLevel.semanticMatches += favoriteBookResult.semanticMatches;
         result.detailLevel.categoryMatches += favoriteBookResult.categoryMatches;
@@ -996,16 +1294,96 @@ async function calculateSimilarity(member1, member2) {
         migratedMember1.questionnaire.readingCommitment || migratedMember1.readingCommitment,
         migratedMember2.questionnaire.readingCommitment || migratedMember2.readingCommitment
     );
-    result.score += result.readingCommitmentCompatibility.score * 0.8; // 阅读承诺权重
 
-    // 5. 详细书籍偏好AI文本分析
+    // 5. 升级版详细书籍偏好AI文本分析
     const text1 = migratedMember1.questionnaire.detailedBookPreferences || migratedMember1.detailedBookPreferences || '';
     const text2 = migratedMember2.questionnaire.detailedBookPreferences || migratedMember2.detailedBookPreferences || '';
     
     if (text1.trim() && text2.trim()) {
         result.textPreferenceAnalysis = await getAiTextPreferenceAnalysis(text1, text2);
-        result.score += result.textPreferenceAnalysis.similarity_score * 1.5; // AI文本分析权重较高
     }
+
+    // 计算传统维度分数
+    result.matchingDimensions.traditional_similarity = 
+        (hobbyResult.score + bookResult.score + 
+         (result.commonBooks.filter(b => b.source === 'favorite').length * 1.2) +
+         (result.readingCommitmentCompatibility?.score || 0) * 0.8 +
+         (result.textPreferenceAnalysis?.similarity_score || 0) * 1.5);
+
+    // ===== 阶段2: 深度AI人格分析 =====
+    
+    // 构建每个用户的完整阅读档案
+    const getUserReadingProfile = (member) => ({
+        description: member.questionnaire.detailedBookPreferences || member.detailedBookPreferences || '',
+        favoriteBooks: member.questionnaire.favoriteBooks || member.favoriteBooks || [],
+        bookCategories: member.questionnaire.bookCategories || member.bookCategories || [],
+        hobbies: member.questionnaire.hobbies || member.hobbies || []
+    });
+
+    const profile1 = getUserReadingProfile(migratedMember1);
+    const profile2 = getUserReadingProfile(migratedMember2);
+
+    // 并行执行深度AI分析以提高性能
+    const [personality1, personality2, implicit1, implicit2] = await Promise.all([
+        getReadingPersonalityProfile(profile1.description, profile1.favoriteBooks),
+        getReadingPersonalityProfile(profile2.description, profile2.favoriteBooks),
+        getImplicitPreferenceAnalysis(profile1.description, profile1.favoriteBooks, profile1.bookCategories),
+        getImplicitPreferenceAnalysis(profile2.description, profile2.favoriteBooks, profile2.bookCategories)
+    ]);
+
+    result.personalityProfiles.member1 = personality1;
+    result.personalityProfiles.member2 = personality2;
+    result.implicitAnalysis.member1 = implicit1;
+    result.implicitAnalysis.member2 = implicit2;
+
+    // ===== 阶段3: 深度兼容性分析 =====
+    
+    if (personality1.confidence_score > 0.3 && personality2.confidence_score > 0.3) {
+        result.deepCompatibilityAnalysis = await getDeepCompatibilityAnalysis(
+            personality1, personality2, implicit1, implicit2
+        );
+
+        // 计算各个深度维度分数
+        if (result.deepCompatibilityAnalysis.compatibility_score > 0) {
+            const compatDimensions = result.deepCompatibilityAnalysis.compatibility_dimensions || {};
+            
+            result.matchingDimensions.personality_compatibility = 
+                (compatDimensions.cognitive_synergy || 0) * 2 +
+                (compatDimensions.emotional_resonance || 0) * 1.5;
+                
+            result.matchingDimensions.implicit_resonance = 
+                (compatDimensions.aesthetic_harmony || 0) * 2 +
+                (compatDimensions.exploratory_balance || 0) * 1.3;
+                
+            result.matchingDimensions.growth_potential = 
+                (compatDimensions.growth_potential || 0) * 2.5;
+                
+            result.matchingDimensions.overall_chemistry = 
+                result.deepCompatibilityAnalysis.compatibility_score * 3;
+        }
+    }
+
+    // ===== 阶段4: 智能权重计算最终分数 =====
+    
+    // 动态权重分配（基于数据质量和置信度）
+    const weights = {
+        traditional: 1.0,
+        personality: personality1.confidence_score * personality2.confidence_score * 1.5,
+        implicit: (implicit1.confidence_score + implicit2.confidence_score) / 2 * 1.2,
+        growth: result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5,
+        chemistry: result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5
+    };
+
+    // 计算加权总分
+    result.score = 
+        result.matchingDimensions.traditional_similarity * weights.traditional +
+        result.matchingDimensions.personality_compatibility * weights.personality +
+        result.matchingDimensions.implicit_resonance * weights.implicit +
+        result.matchingDimensions.growth_potential * weights.growth +
+        result.matchingDimensions.overall_chemistry * weights.chemistry;
+
+    // 标准化分数到合理范围
+    result.score = Math.min(result.score, 10); // 设置上限
 
     return result;
 }
@@ -1114,7 +1492,7 @@ function checkGenderPreferenceMatch(user1, user2) {
     return user1WantsUser2 && user2WantsUser1;
 }
 
-// 寻找相似搭档（仅管理员）
+// 寻找相似搭档（仅管理员）- 升级版
 async function findSimilarMatches() {
     if (!isAdmin) {
         alert('只有管理员可以进行匹配');
@@ -1146,6 +1524,13 @@ async function findSimilarMatches() {
                             commonHobbies: similarity.commonHobbies,
                             commonBooks: similarity.commonBooks,
                             detailLevel: similarity.detailLevel,
+                            readingCommitmentCompatibility: similarity.readingCommitmentCompatibility,
+                            textPreferenceAnalysis: similarity.textPreferenceAnalysis,
+                            // 新增深度分析数据
+                            personalityProfiles: similarity.personalityProfiles,
+                            implicitAnalysis: similarity.implicitAnalysis,
+                            deepCompatibilityAnalysis: similarity.deepCompatibilityAnalysis,
+                            matchingDimensions: similarity.matchingDimensions,
                             type: 'similar'
                         });
                     }
@@ -1157,10 +1542,10 @@ async function findSimilarMatches() {
     await Promise.all(promises);
     matches.sort((a, b) => b.score - a.score);
     document.getElementById('loadingIndicator').style.display = 'none';
-    displayMatches(matches.slice(0, 10), '相似搭档推荐');
+    displayMatches(matches.slice(0, 10), '🎯 深度智能相似搭档推荐');
 }
 
-// 寻找互补搭档（仅管理员）
+// 寻找互补搭档（仅管理员）- 升级版
 async function findComplementaryMatches() {
     if (!isAdmin) {
         alert('只有管理员可以进行匹配');
@@ -1191,6 +1576,13 @@ async function findComplementaryMatches() {
                         commonHobbies: similarity.commonHobbies,
                         commonBooks: similarity.commonBooks,
                         detailLevel: similarity.detailLevel,
+                        readingCommitmentCompatibility: similarity.readingCommitmentCompatibility,
+                        textPreferenceAnalysis: similarity.textPreferenceAnalysis,
+                        // 新增深度分析数据
+                        personalityProfiles: similarity.personalityProfiles,
+                        implicitAnalysis: similarity.implicitAnalysis,
+                        deepCompatibilityAnalysis: similarity.deepCompatibilityAnalysis,
+                        matchingDimensions: similarity.matchingDimensions,
                         type: 'complementary'
                     });
                 })
@@ -1199,9 +1591,18 @@ async function findComplementaryMatches() {
     }
 
     await Promise.all(promises);
-    matches.sort((a, b) => a.score - b.score);
+    
+    // 互补匹配：寻找分数适中但具有高成长潜力的组合
+    matches.sort((a, b) => {
+        const aGrowthScore = a.matchingDimensions.growth_potential + 
+                           (a.deepCompatibilityAnalysis?.compatibility_dimensions?.growth_potential || 0) * 2;
+        const bGrowthScore = b.matchingDimensions.growth_potential + 
+                           (b.deepCompatibilityAnalysis?.compatibility_dimensions?.growth_potential || 0) * 2;
+        return bGrowthScore - aGrowthScore;
+    });
+    
     document.getElementById('loadingIndicator').style.display = 'none';
-    displayMatches(matches.slice(0, 10), '互补搭档推荐');
+    displayMatches(matches.slice(0, 10), '🌱 深度智能互补搭档推荐');
 }
 
 // 显示匹配结果
@@ -1292,9 +1693,11 @@ function generateMatchIcon(score) {
     return '💫';
 }
 
-// 生成详细匹配信息
+// 生成深度匹配详情（升级版）
 function generateMatchDetails(match) {
     let detailsHtml = '';
+    
+    // ===== 传统匹配结果 =====
     
     // 兴趣爱好匹配详情
     if (match.commonHobbies && match.commonHobbies.length > 0) {
@@ -1341,35 +1744,367 @@ function generateMatchDetails(match) {
         `;
     }
     
-    // AI文本偏好分析详情
+    // ===== 深度AI分析结果 =====
+    
+    // 升级版AI文本偏好分析
     if (match.textPreferenceAnalysis && match.textPreferenceAnalysis.similarity_score > 0) {
         const analysis = match.textPreferenceAnalysis;
         detailsHtml += `
-            <div class="common-interests">
-                <h4>🤖 AI文本偏好分析</h4>
+            <div class="common-interests deep-analysis">
+                <h4>🤖 深度AI文本分析</h4>
                 <div class="match-type-group">
-                    <span class="match-type-label">AI相似度：</span>
+                    <span class="match-type-label">语义相似度：</span>
                     <span class="tag ai-analysis-tag">${(analysis.similarity_score * 100).toFixed(0)}% 相似</span>
-                    <span class="tag score-tag">加权分数: ${(analysis.similarity_score * 1.5).toFixed(1)}</span>
+                    ${analysis.semantic_depth_score ? `<span class="tag depth-tag">深度: ${(analysis.semantic_depth_score * 100).toFixed(0)}%</span>` : ''}
                 </div>
                 ${analysis.common_elements && analysis.common_elements.length > 0 ? `
                     <div class="match-type-group">
-                        <span class="match-type-label">🔍 共同元素：</span>
+                        <span class="match-type-label">🔍 表面共同点：</span>
                         ${analysis.common_elements.map(element => `
-                            <span class="tag ai-element-tag">${element}</span>
+                            <span class="tag surface-element-tag">${element}</span>
                         `).join('')}
                     </div>
                 ` : ''}
-                ${analysis.analysis_details ? `
-                    <div style="margin-top: 8px; font-size: 12px; color: #666; font-style: italic;">
-                        ${analysis.analysis_details}
+                ${analysis.deep_connections && analysis.deep_connections.length > 0 ? `
+                    <div class="match-type-group">
+                        <span class="match-type-label">🧠 深层连接：</span>
+                        ${analysis.deep_connections.map(connection => `
+                            <span class="tag deep-connection-tag">${connection}</span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                ${analysis.recommendation_reasons && analysis.recommendation_reasons.length > 0 ? `
+                    <div class="match-type-group">
+                        <span class="match-type-label">💡 推荐理由：</span>
+                        <div class="recommendation-list">
+                            ${analysis.recommendation_reasons.map(reason => `
+                                <div class="recommendation-item">• ${reason}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                ${analysis.potential_book_recommendations && analysis.potential_book_recommendations.length > 0 ? `
+                    <div class="match-type-group">
+                        <span class="match-type-label">📖 建议共读书籍：</span>
+                        ${analysis.potential_book_recommendations.map(book => `
+                            <span class="tag book-rec-tag">${book}</span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                ${analysis.growth_potential ? `
+                    <div class="growth-potential">
+                        <strong>🌱 成长潜力：</strong> ${analysis.growth_potential}
                     </div>
                 ` : ''}
             </div>
         `;
     }
     
+    // 人格画像分析结果
+    if (match.personalityProfiles && match.personalityProfiles.member1 && match.personalityProfiles.member2) {
+        const p1 = match.personalityProfiles.member1;
+        const p2 = match.personalityProfiles.member2;
+        
+        if (p1.confidence_score > 0.3 && p2.confidence_score > 0.3) {
+            detailsHtml += `
+                <div class="common-interests personality-analysis">
+                    <h4>🧠 阅读人格画像分析</h4>
+                    <div class="personality-comparison">
+                        <div class="personality-dimensions">
+                            ${generatePersonalityComparison(p1, p2)}
+                        </div>
+                        <div class="cognitive-styles">
+                            <span class="match-type-label">认知风格：</span>
+                            <span class="tag cognitive-tag">${p1.cognitive_style}</span>
+                            <span class="vs-indicator">vs</span>
+                            <span class="tag cognitive-tag">${p2.cognitive_style}</span>
+                        </div>
+                        ${generateCulturalOrientation(p1, p2)}
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    // 隐含偏好分析结果
+    if (match.implicitAnalysis && match.implicitAnalysis.member1 && match.implicitAnalysis.member2) {
+        const i1 = match.implicitAnalysis.member1;
+        const i2 = match.implicitAnalysis.member2;
+        
+        if (i1.confidence_score > 0.3 && i2.confidence_score > 0.3) {
+            detailsHtml += `
+                <div class="common-interests implicit-analysis">
+                    <h4>🔍 隐含偏好分析</h4>
+                    ${generateImplicitComparison(i1, i2)}
+                </div>
+            `;
+        }
+    }
+    
+    // 深度兼容性分析结果
+    if (match.deepCompatibilityAnalysis && match.deepCompatibilityAnalysis.compatibility_score > 0) {
+        const compat = match.deepCompatibilityAnalysis;
+        detailsHtml += `
+            <div class="common-interests deep-compatibility">
+                <h4>💫 深度兼容性分析</h4>
+                <div class="compatibility-overview">
+                    <div class="compatibility-type">
+                        <span class="match-type-label">匹配类型：</span>
+                        <span class="tag compatibility-type-tag ${compat.compatibility_type}">${getCompatibilityTypeLabel(compat.compatibility_type)}</span>
+                        <span class="tag chemistry-tag">${getChemistryLabel(compat.reading_chemistry)}</span>
+                    </div>
+                    <div class="relationship-dynamics">
+                        <span class="match-type-label">互动模式：</span>
+                        <span class="tag dynamics-tag">${getRelationshipDynamicsLabel(compat.relationship_dynamics)}</span>
+                    </div>
+                </div>
+                
+                ${compat.compatibility_dimensions ? generateCompatibilityDimensions(compat.compatibility_dimensions) : ''}
+                
+                ${compat.synergy_potential && compat.synergy_potential.length > 0 ? `
+                    <div class="synergy-section">
+                        <span class="match-type-label">✨ 协同效应：</span>
+                        <div class="synergy-list">
+                            ${compat.synergy_potential.map(potential => `
+                                <div class="synergy-item">• ${potential}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${compat.growth_opportunities && compat.growth_opportunities.length > 0 ? `
+                    <div class="growth-section">
+                        <span class="match-type-label">🌱 成长机会：</span>
+                        <div class="growth-list">
+                            ${compat.growth_opportunities.map(opportunity => `
+                                <div class="growth-item">• ${opportunity}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    // 匹配维度得分展示
+    if (match.matchingDimensions) {
+        const dimensions = match.matchingDimensions;
+        detailsHtml += `
+            <div class="common-interests dimensions-breakdown">
+                <h4>📊 匹配维度得分</h4>
+                <div class="dimensions-grid">
+                    <div class="dimension-item">
+                        <span class="dimension-label">传统相似度</span>
+                        <div class="score-bar">
+                            <div class="score-fill" style="width: ${Math.min(dimensions.traditional_similarity * 10, 100)}%"></div>
+                            <span class="score-value">${dimensions.traditional_similarity.toFixed(1)}</span>
+                        </div>
+                    </div>
+                    <div class="dimension-item">
+                        <span class="dimension-label">人格兼容度</span>
+                        <div class="score-bar">
+                            <div class="score-fill personality" style="width: ${Math.min(dimensions.personality_compatibility * 10, 100)}%"></div>
+                            <span class="score-value">${dimensions.personality_compatibility.toFixed(1)}</span>
+                        </div>
+                    </div>
+                    <div class="dimension-item">
+                        <span class="dimension-label">隐含共鸣</span>
+                        <div class="score-bar">
+                            <div class="score-fill implicit" style="width: ${Math.min(dimensions.implicit_resonance * 10, 100)}%"></div>
+                            <span class="score-value">${dimensions.implicit_resonance.toFixed(1)}</span>
+                        </div>
+                    </div>
+                    <div class="dimension-item">
+                        <span class="dimension-label">成长潜力</span>
+                        <div class="score-bar">
+                            <div class="score-fill growth" style="width: ${Math.min(dimensions.growth_potential * 10, 100)}%"></div>
+                            <span class="score-value">${dimensions.growth_potential.toFixed(1)}</span>
+                        </div>
+                    </div>
+                    <div class="dimension-item">
+                        <span class="dimension-label">整体化学反应</span>
+                        <div class="score-bar">
+                            <div class="score-fill chemistry" style="width: ${Math.min(dimensions.overall_chemistry * 10, 100)}%"></div>
+                            <span class="score-value">${dimensions.overall_chemistry.toFixed(1)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
     return detailsHtml;
+}
+
+// ===== 深度分析辅助函数 =====
+
+// 生成人格维度比较
+function generatePersonalityComparison(p1, p2) {
+    const dimensions = [
+        { key: 'exploration_vs_certainty', label: '探索vs确定性', icon: '🔍' },
+        { key: 'emotional_vs_rational', label: '感性vs理性', icon: '❤️🧠' },
+        { key: 'introspective_vs_social', label: '内省vs社交', icon: '🪞👥' },
+        { key: 'escapist_vs_realistic', label: '逃避vs现实', icon: '🌙☀️' },
+        { key: 'fast_paced_vs_contemplative', label: '快节奏vs沉思', icon: '⚡🧘' }
+    ];
+    
+    let html = '';
+    dimensions.forEach(dim => {
+        const val1 = p1.personality_dimensions?.[dim.key] || 0;
+        const val2 = p2.personality_dimensions?.[dim.key] || 0;
+        const similarity = 1 - Math.abs(val1 - val2);
+        const matchLevel = similarity > 0.8 ? 'high' : similarity > 0.5 ? 'medium' : 'low';
+        
+        html += `
+            <div class="personality-dimension">
+                <span class="dimension-icon">${dim.icon}</span>
+                <span class="dimension-name">${dim.label}</span>
+                <div class="dimension-bars">
+                    <div class="member-bar" style="width: ${val1 * 100}%"></div>
+                    <div class="member-bar member2" style="width: ${val2 * 100}%"></div>
+                </div>
+                <span class="similarity-indicator ${matchLevel}">${(similarity * 100).toFixed(0)}%</span>
+            </div>
+        `;
+    });
+    
+    return html;
+}
+
+// 生成文化取向比较
+function generateCulturalOrientation(p1, p2) {
+    if (p1.cultural_orientation && p2.cultural_orientation) {
+        const match = p1.cultural_orientation === p2.cultural_orientation;
+        return `
+            <div class="cultural-orientation">
+                <span class="match-type-label">文化取向：</span>
+                <span class="tag cultural-tag">${getCulturalLabel(p1.cultural_orientation)}</span>
+                <span class="vs-indicator">${match ? '✓' : 'vs'}</span>
+                <span class="tag cultural-tag">${getCulturalLabel(p2.cultural_orientation)}</span>
+            </div>
+        `;
+    }
+    return '';
+}
+
+// 生成隐含偏好比较
+function generateImplicitComparison(i1, i2) {
+    let html = '';
+    
+    // 主题共鸣
+    const commonThemes = findCommonElements(i1.implicit_themes || [], i2.implicit_themes || []);
+    if (commonThemes.length > 0) {
+        html += `
+            <div class="implicit-section">
+                <span class="match-type-label">🎨 共同主题：</span>
+                ${commonThemes.map(theme => `<span class="tag theme-tag">${theme}</span>`).join('')}
+            </div>
+        `;
+    }
+    
+    // 文化亲和力
+    const commonCultures = findCommonElements(i1.cultural_affinities || [], i2.cultural_affinities || []);
+    if (commonCultures.length > 0) {
+        html += `
+            <div class="implicit-section">
+                <span class="match-type-label">🌍 文化共鸣：</span>
+                ${commonCultures.map(culture => `<span class="tag culture-tag">${culture}</span>`).join('')}
+            </div>
+        `;
+    }
+    
+    // 叙事原型
+    const commonArchetypes = findCommonElements(i1.narrative_archetypes || [], i2.narrative_archetypes || []);
+    if (commonArchetypes.length > 0) {
+        html += `
+            <div class="implicit-section">
+                <span class="match-type-label">📖 叙事共性：</span>
+                ${commonArchetypes.map(archetype => `<span class="tag archetype-tag">${archetype}</span>`).join('')}
+            </div>
+        `;
+    }
+    
+    return html;
+}
+
+// 生成兼容性维度展示
+function generateCompatibilityDimensions(dimensions) {
+    const dimList = [
+        { key: 'cognitive_synergy', label: '认知协同', icon: '🧠' },
+        { key: 'aesthetic_harmony', label: '美学和谐', icon: '🎨' },
+        { key: 'growth_potential', label: '成长潜力', icon: '🌱' },
+        { key: 'emotional_resonance', label: '情感共鸣', icon: '💫' },
+        { key: 'exploratory_balance', label: '探索平衡', icon: '⚖️' }
+    ];
+    
+    let html = '<div class="compatibility-dimensions">';
+    dimList.forEach(dim => {
+        const value = dimensions[dim.key] || 0;
+        const percentage = (value * 100).toFixed(0);
+        html += `
+            <div class="compat-dimension">
+                <span class="dim-icon">${dim.icon}</span>
+                <span class="dim-label">${dim.label}</span>
+                <div class="dim-bar">
+                    <div class="dim-fill" style="width: ${percentage}%"></div>
+                    <span class="dim-value">${percentage}%</span>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    return html;
+}
+
+// 辅助函数：获取兼容性类型标签
+function getCompatibilityTypeLabel(type) {
+    const labels = {
+        'mirror': '镜像型',
+        'complementary': '互补型',
+        'bridge': '桥梁型',
+        'complex': '复合型'
+    };
+    return labels[type] || type;
+}
+
+// 辅助函数：获取化学反应标签
+function getChemistryLabel(chemistry) {
+    const labels = {
+        'explosive': '💥 爆发式',
+        'steady': '🔄 稳定式',
+        'gentle': '🌸 温和式',
+        'challenging': '⚡ 挑战式',
+        'inspiring': '✨ 启发式'
+    };
+    return labels[chemistry] || chemistry;
+}
+
+// 辅助函数：获取关系动态标签
+function getRelationshipDynamicsLabel(dynamics) {
+    const labels = {
+        'mentor_mentee': '师生型',
+        'equal_explorers': '共探型',
+        'complementary_guides': '互导型',
+        'kindred_spirits': '知音型'
+    };
+    return labels[dynamics] || dynamics;
+}
+
+// 辅助函数：获取文化标签
+function getCulturalLabel(orientation) {
+    const labels = {
+        'eastern': '东方文化',
+        'western': '西方文化',
+        'global': '全球视野',
+        'local': '本土文化'
+    };
+    return labels[orientation] || orientation;
+}
+
+// 辅助函数：找出共同元素
+function findCommonElements(arr1, arr2) {
+    return arr1.filter(item => arr2.includes(item));
 }
 
 // 分类显示匹配项
