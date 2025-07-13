@@ -1759,56 +1759,98 @@ async function getAIMatchingAnalysis(profile1, profile2) {
     });
 
     try {
-        const response = await fetch(AI_BASE_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${AI_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: AI_MODEL_NAME,
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    { role: "user", content: userPrompt }
-                ],
-                response_format: { type: "json_object" },
-                temperature: 0.7,
-                max_tokens: 2000
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`AI API请求失败: ${response.status}`);
-        }
-
-        const data = await response.json();
-        const content = data.choices[0].message.content;
+        // 添加速率限制处理和重试机制
+        let retryCount = 0;
+        const maxRetries = 3;
+        const baseDelay = 1000; // 1秒基础延迟
         
-        try {
-            const analysis = JSON.parse(content);
-            
-            // 验证和标准化返回结果
-            return {
-                compatibility_score: Math.max(0, Math.min(10, analysis.compatibility_score || 0)),
-                match_type: analysis.match_type || "未知类型",
-                confidence_level: Math.max(0, Math.min(1, analysis.confidence_level || 0.5)),
-                summary: analysis.summary || "AI分析完成",
-                detailed_analysis: analysis.detailed_analysis || {},
-                shared_interests: analysis.shared_interests || [],
-                shared_books: analysis.shared_books || [],
-                potential_challenges: analysis.potential_challenges || [],
-                reading_recommendations: analysis.reading_recommendations || [],
-                activity_suggestions: analysis.activity_suggestions || [],
-                growth_opportunities: analysis.growth_opportunities || [],
-                exact_matches: analysis.exact_matches || 0,
-                semantic_matches: analysis.semantic_matches || 0,
-                category_matches: analysis.category_matches || 0,
-                match_reasoning: analysis.match_reasoning || "AI分析完成"
-            };
-        } catch (parseError) {
-            console.warn('AI返回的JSON解析失败:', parseError, content);
-            throw new Error('AI返回格式错误');
+        while (retryCount <= maxRetries) {
+            try {
+                // 如果是重试，添加延迟
+                if (retryCount > 0) {
+                    const delay = baseDelay * Math.pow(2, retryCount - 1); // 指数退避
+                    console.log(`AI API重试 ${retryCount}/${maxRetries}，等待 ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+                
+                const response = await fetch(AI_BASE_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${AI_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: AI_MODEL_NAME,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: userPrompt }
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.7,
+                        max_tokens: 2000
+                    })
+                });
+
+                if (response.status === 429) {
+                    // 速率限制，尝试重试
+                    retryCount++;
+                    if (retryCount > maxRetries) {
+                        throw new Error('AI API速率限制，请稍后再试');
+                    }
+                    continue;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`AI API请求失败: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const content = data.choices[0].message.content;
+                
+                // 成功获取响应，解析JSON
+                try {
+                    const analysis = JSON.parse(content);
+                    
+                    // 验证和标准化返回结果
+                    return {
+                        compatibility_score: Math.max(0, Math.min(10, analysis.compatibility_score || 0)),
+                        match_type: analysis.match_type || "未知类型",
+                        confidence_level: Math.max(0, Math.min(1, analysis.confidence_level || 0.5)),
+                        summary: analysis.summary || "AI分析完成",
+                        detailed_analysis: analysis.detailed_analysis || {},
+                        shared_interests: analysis.shared_interests || [],
+                        shared_books: analysis.shared_books || [],
+                        potential_challenges: analysis.potential_challenges || [],
+                        reading_recommendations: analysis.reading_recommendations || [],
+                        activity_suggestions: analysis.activity_suggestions || [],
+                        growth_opportunities: analysis.growth_opportunities || [],
+                        exact_matches: analysis.exact_matches || 0,
+                        semantic_matches: analysis.semantic_matches || 0,
+                        category_matches: analysis.category_matches || 0,
+                        match_reasoning: analysis.match_reasoning || "AI分析完成"
+                    };
+                } catch (parseError) {
+                    console.warn('AI返回的JSON解析失败:', parseError, content);
+                    throw new Error('AI返回格式错误');
+                }
+                
+            } catch (requestError) {
+                // 如果是429错误，已经在上面处理了
+                // 其他错误直接抛出
+                if (retryCount === 0) {
+                    throw requestError;
+                }
+                // 如果在重试过程中出现其他错误，也抛出
+                retryCount++;
+                if (retryCount > maxRetries) {
+                    throw requestError;
+                }
+            }
         }
+        
+        // 如果所有重试都失败，抛出最后的错误
+        throw new Error('AI API请求重试次数用尽');
+        
     } catch (error) {
         console.error('AI匹配分析请求失败:', error);
         throw error;
@@ -1828,40 +1870,71 @@ async function findSimilarMatches() {
 
     document.getElementById('loadingIndicator').style.display = 'block';
     const matches = [];
-    const promises = [];
-
+    
+    // 并发控制：限制同时处理的请求数量
+    const MAX_CONCURRENT_REQUESTS = 3; // 最多同时3个请求
+    const pairings = [];
+    
+    // 收集所有需要匹配的配对
     for (let i = 0; i < members.length; i++) {
         for (let j = i + 1; j < members.length; j++) {
             // 首先检查性别偏好匹配
             if (!checkGenderPreferenceMatch(members[i], members[j])) {
                 continue; // 跳过不符合性别偏好的配对
             }
-            
-            promises.push(
-                calculateAICompatibility(members[i], members[j]).then(result => {
-                    if (result.score > 0) {
-                        matches.push({
-                            member1: members[i],
-                            member2: members[j],
-                            score: result.score,
-                            reason: result.reason,
-                            // 保持向后兼容的字段
-                            commonHobbies: result.analysis?.commonHobbies || [],
-                            commonBooks: result.analysis?.commonBooks || [],
-                            detailLevel: result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
-                            // 新增AI分析数据
-                            aiAnalysis: result.analysis?.ai_analysis,
-                            matchType: result.analysis?.ai_analysis?.match_type,
-                            confidenceLevel: result.analysis?.ai_analysis?.confidence_level,
-                            type: 'similar'
-                        });
-                    }
-                })
-            );
+            pairings.push({ user1: members[i], user2: members[j] });
         }
     }
-
-    await Promise.all(promises);
+    
+    console.log(`总共需要处理 ${pairings.length} 个配对，使用并发控制限制同时请求数`);
+    
+    // 显示进度提示
+    const loadingText = document.querySelector('#loadingIndicator');
+    if (loadingText) {
+        loadingText.textContent = `正在分析 ${pairings.length} 个配对，请稍候...`;
+    }
+    
+    // 分批处理，避免API速率限制
+    for (let i = 0; i < pairings.length; i += MAX_CONCURRENT_REQUESTS) {
+        const batch = pairings.slice(i, i + MAX_CONCURRENT_REQUESTS);
+        console.log(`处理第 ${Math.floor(i/MAX_CONCURRENT_REQUESTS) + 1} 批，共 ${batch.length} 个配对`);
+        
+        const batchPromises = batch.map(async (pairing) => {
+            try {
+                const result = await calculateAICompatibility(pairing.user1, pairing.user2);
+                if (result.score > 0) {
+                    return {
+                        member1: pairing.user1,
+                        member2: pairing.user2,
+                        score: result.score,
+                        reason: result.reason,
+                        // 保持向后兼容的字段
+                        commonHobbies: result.analysis?.commonHobbies || [],
+                        commonBooks: result.analysis?.commonBooks || [],
+                        detailLevel: result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
+                        // 新增AI分析数据
+                        aiAnalysis: result.analysis?.ai_analysis,
+                        matchType: result.analysis?.ai_analysis?.match_type,
+                        confidenceLevel: result.analysis?.ai_analysis?.confidence_level,
+                        type: 'similar'
+                    };
+                }
+                return null;
+            } catch (error) {
+                console.warn(`配对失败 ${pairing.user1.name} - ${pairing.user2.name}:`, error);
+                return null;
+            }
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        matches.push(...batchResults.filter(result => result !== null));
+        
+        // 批次间添加延迟，进一步避免速率限制
+        if (i + MAX_CONCURRENT_REQUESTS < pairings.length) {
+            console.log('批次间等待500ms...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
     matches.sort((a, b) => b.score - a.score);
     document.getElementById('loadingIndicator').style.display = 'none';
     displayMatches(matches.slice(0, 10), '🎯 深度智能相似搭档推荐');
@@ -1880,45 +1953,97 @@ async function findComplementaryMatches() {
 
     document.getElementById('loadingIndicator').style.display = 'block';
     const matches = [];
-    const promises = [];
-
+    
+    // 并发控制：限制同时处理的请求数量
+    const MAX_CONCURRENT_REQUESTS = 3; // 最多同时3个请求
+    const pairings = [];
+    
+    // 收集所有需要匹配的配对
     for (let i = 0; i < members.length; i++) {
         for (let j = i + 1; j < members.length; j++) {
             // 首先检查性别偏好匹配
             if (!checkGenderPreferenceMatch(members[i], members[j])) {
                 continue; // 跳过不符合性别偏好的配对
             }
-            
-            promises.push(
-                calculateAICompatibility(members[i], members[j]).then(result => {
-                    matches.push({
-                        member1: members[i],
-                        member2: members[j],
-                        score: result.score,
-                        reason: result.reason,
-                        // 保持向后兼容的字段
-                        commonHobbies: result.analysis?.commonHobbies || [],
-                        commonBooks: result.analysis?.commonBooks || [],
-                        detailLevel: result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
-                        // 新增AI分析数据
-                        aiAnalysis: result.analysis?.ai_analysis,
-                        matchType: result.analysis?.ai_analysis?.match_type,
-                        confidenceLevel: result.analysis?.ai_analysis?.confidence_level,
-                        type: 'complementary'
-                    });
-                })
-            );
+            pairings.push({ user1: members[i], user2: members[j] });
         }
     }
-
-    await Promise.all(promises);
     
-    // 互补匹配：寻找分数适中但具有高成长潜力的组合
+    console.log(`互补匹配：总共需要处理 ${pairings.length} 个配对`);
+    
+    // 显示进度提示
+    const loadingText = document.querySelector('#loadingIndicator');
+    if (loadingText) {
+        loadingText.textContent = `正在分析 ${pairings.length} 个互补配对，请稍候...`;
+    }
+    
+    // 分批处理，避免API速率限制
+    for (let i = 0; i < pairings.length; i += MAX_CONCURRENT_REQUESTS) {
+        const batch = pairings.slice(i, i + MAX_CONCURRENT_REQUESTS);
+        console.log(`处理第 ${Math.floor(i/MAX_CONCURRENT_REQUESTS) + 1} 批，共 ${batch.length} 个配对`);
+        
+        const batchPromises = batch.map(async (pairing) => {
+            try {
+                const result = await calculateAICompatibility(pairing.user1, pairing.user2);
+                return {
+                    member1: pairing.user1,
+                    member2: pairing.user2,
+                    score: result.score,
+                    reason: result.reason,
+                    // 保持向后兼容的字段
+                    commonHobbies: result.analysis?.commonHobbies || [],
+                    commonBooks: result.analysis?.commonBooks || [],
+                    detailLevel: result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
+                    // 新增AI分析数据
+                    aiAnalysis: result.analysis?.ai_analysis,
+                    matchType: result.analysis?.ai_analysis?.match_type,
+                    confidenceLevel: result.analysis?.ai_analysis?.confidence_level,
+                    type: 'complementary'
+                };
+            } catch (error) {
+                console.warn(`配对失败 ${pairing.user1.name} - ${pairing.user2.name}:`, error);
+                // 返回一个低分结果而不是null，确保所有配对都有结果
+                return {
+                    member1: pairing.user1,
+                    member2: pairing.user2,
+                    score: 0.1,
+                    reason: "AI分析失败",
+                    commonHobbies: [],
+                    commonBooks: [],
+                    detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
+                    aiAnalysis: null,
+                    matchType: "未知",
+                    confidenceLevel: 0,
+                    type: 'complementary'
+                };
+            }
+        });
+        
+        const batchResults = await Promise.all(batchPromises);
+        matches.push(...batchResults);
+        
+        // 批次间添加延迟，进一步避免速率限制
+        if (i + MAX_CONCURRENT_REQUESTS < pairings.length) {
+            console.log('批次间等待500ms...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+    
+    // 互补匹配：基于AI分析的匹配类型和成长潜力排序
     matches.sort((a, b) => {
-        const aGrowthScore = a.matchingDimensions.growth_potential + 
-                           (a.deepCompatibilityAnalysis?.compatibility_dimensions?.growth_potential || 0) * 2;
-        const bGrowthScore = b.matchingDimensions.growth_potential + 
-                           (b.deepCompatibilityAnalysis?.compatibility_dimensions?.growth_potential || 0) * 2;
+        // 新AI系统的成长潜力评分
+        const aGrowthScore = (a.aiAnalysis?.growth_opportunities?.length || 0) * 0.5 + 
+                           (a.aiAnalysis?.detailed_analysis?.complementarity_score || 0) * 0.3 +
+                           (a.confidenceLevel || 0) * 0.2;
+        const bGrowthScore = (b.aiAnalysis?.growth_opportunities?.length || 0) * 0.5 + 
+                           (b.aiAnalysis?.detailed_analysis?.complementarity_score || 0) * 0.3 +
+                           (b.confidenceLevel || 0) * 0.2;
+        
+        // 如果都没有AI分析数据，则按基础分数排序
+        if (aGrowthScore === 0 && bGrowthScore === 0) {
+            return b.score - a.score;
+        }
+        
         return bGrowthScore - aGrowthScore;
     });
     
@@ -2121,138 +2246,68 @@ function generateMatchDetails(match) {
         `;
     }
     
-    // 人格画像分析结果
-    if (match.personalityProfiles && match.personalityProfiles.member1 && match.personalityProfiles.member2) {
-        const p1 = match.personalityProfiles.member1;
-        const p2 = match.personalityProfiles.member2;
+    // 新AI分析结果显示
+    if (match.aiAnalysis && match.aiAnalysis.detailed_analysis) {
+        const analysis = match.aiAnalysis;
+        const details = analysis.detailed_analysis;
         
-        if (p1.confidence_score > 0.3 && p2.confidence_score > 0.3) {
-            detailsHtml += `
-                <div class="common-interests personality-analysis">
-                    <h4>🧠 阅读人格画像分析</h4>
-                    <div class="personality-comparison">
-                        <div class="personality-dimensions">
-                            ${generatePersonalityComparison(p1, p2)}
-                        </div>
-                        <div class="cognitive-styles">
-                            <span class="match-type-label">认知风格：</span>
-                            <span class="tag cognitive-tag">${p1.cognitive_style}</span>
-                            <span class="vs-indicator">vs</span>
-                            <span class="tag cognitive-tag">${p2.cognitive_style}</span>
-                        </div>
-                        ${generateCulturalOrientation(p1, p2)}
-                    </div>
-                </div>
-            `;
-        }
-    }
-    
-    // 隐含偏好分析结果
-    if (match.implicitAnalysis && match.implicitAnalysis.member1 && match.implicitAnalysis.member2) {
-        const i1 = match.implicitAnalysis.member1;
-        const i2 = match.implicitAnalysis.member2;
-        
-        if (i1.confidence_score > 0.3 && i2.confidence_score > 0.3) {
-            detailsHtml += `
-                <div class="common-interests implicit-analysis">
-                    <h4>🔍 隐含偏好分析</h4>
-                    ${generateImplicitComparison(i1, i2)}
-                </div>
-            `;
-        }
-    }
-    
-    // 深度兼容性分析结果
-    if (match.deepCompatibilityAnalysis && match.deepCompatibilityAnalysis.compatibility_score > 0) {
-        const compat = match.deepCompatibilityAnalysis;
         detailsHtml += `
-            <div class="common-interests deep-compatibility">
-                <h4>💫 深度兼容性分析</h4>
-                <div class="compatibility-overview">
-                    <div class="compatibility-type">
-                        <span class="match-type-label">匹配类型：</span>
-                        <span class="tag compatibility-type-tag ${compat.compatibility_type}">${getCompatibilityTypeLabel(compat.compatibility_type)}</span>
-                        <span class="tag chemistry-tag">${getChemistryLabel(compat.reading_chemistry)}</span>
+            <div class="common-interests ai-analysis">
+                <h4>🤖 AI深度匹配分析</h4>
+                <div class="match-summary">
+                    <p><strong>匹配类型：</strong>${analysis.match_type}</p>
+                    <p><strong>分析总结：</strong>${analysis.summary}</p>
+                </div>
+                
+                <div class="analysis-dimensions">
+                    <div class="dimension-score">
+                        <span>相似性：</span>
+                        <span class="score">${(details.similarity_score || 0).toFixed(1)}/10</span>
                     </div>
-                    <div class="relationship-dynamics">
-                        <span class="match-type-label">互动模式：</span>
-                        <span class="tag dynamics-tag">${getRelationshipDynamicsLabel(compat.relationship_dynamics)}</span>
+                    <div class="dimension-score">
+                        <span>互补性：</span>
+                        <span class="score">${(details.complementarity_score || 0).toFixed(1)}/10</span>
+                    </div>
+                    <div class="dimension-score">
+                        <span>兼容性：</span>
+                        <span class="score">${(details.compatibility_score || 0).toFixed(1)}/10</span>
                     </div>
                 </div>
                 
-                ${compat.compatibility_dimensions ? generateCompatibilityDimensions(compat.compatibility_dimensions) : ''}
-                
-                ${compat.synergy_potential && compat.synergy_potential.length > 0 ? `
-                    <div class="synergy-section">
-                        <span class="match-type-label">✨ 协同效应：</span>
-                        <div class="synergy-list">
-                            ${compat.synergy_potential.map(potential => `
-                                <div class="synergy-item">• ${potential}</div>
-                            `).join('')}
-                        </div>
+                ${details.similarity_highlights && details.similarity_highlights.length > 0 ? `
+                    <div class="highlights-section">
+                        <h5>🎯 相似点：</h5>
+                        <ul>${details.similarity_highlights.map(h => `<li>${h}</li>`).join('')}</ul>
                     </div>
                 ` : ''}
                 
-                ${compat.growth_opportunities && compat.growth_opportunities.length > 0 ? `
-                    <div class="growth-section">
-                        <span class="match-type-label">🌱 成长机会：</span>
-                        <div class="growth-list">
-                            ${compat.growth_opportunities.map(opportunity => `
-                                <div class="growth-item">• ${opportunity}</div>
-                            `).join('')}
-                        </div>
+                ${details.complementarity_highlights && details.complementarity_highlights.length > 0 ? `
+                    <div class="highlights-section">
+                        <h5>🔄 互补点：</h5>
+                        <ul>${details.complementarity_highlights.map(h => `<li>${h}</li>`).join('')}</ul>
+                    </div>
+                ` : ''}
+                
+                ${analysis.growth_opportunities && analysis.growth_opportunities.length > 0 ? `
+                    <div class="highlights-section">
+                        <h5>🌱 成长机会：</h5>
+                        <ul>${analysis.growth_opportunities.map(o => `<li>${o}</li>`).join('')}</ul>
+                    </div>
+                ` : ''}
+                
+                ${analysis.reading_recommendations && analysis.reading_recommendations.length > 0 ? `
+                    <div class="highlights-section">
+                        <h5>📚 推荐书籍：</h5>
+                        <ul>${analysis.reading_recommendations.map(r => `<li>${r}</li>`).join('')}</ul>
                     </div>
                 ` : ''}
             </div>
         `;
     }
     
-    // 匹配维度得分展示
-    if (match.matchingDimensions) {
-        const dimensions = match.matchingDimensions;
-        detailsHtml += `
-            <div class="common-interests dimensions-breakdown">
-                <h4>📊 匹配维度得分</h4>
-                <div class="dimensions-grid">
-                    <div class="dimension-item">
-                        <span class="dimension-label">传统相似度</span>
-                        <div class="score-bar">
-                            <div class="score-fill" style="width: ${Math.min(dimensions.traditional_similarity * 10, 100)}%"></div>
-                            <span class="score-value">${dimensions.traditional_similarity.toFixed(1)}</span>
-                        </div>
-                    </div>
-                    <div class="dimension-item">
-                        <span class="dimension-label">人格兼容度</span>
-                        <div class="score-bar">
-                            <div class="score-fill personality" style="width: ${Math.min(dimensions.personality_compatibility * 10, 100)}%"></div>
-                            <span class="score-value">${dimensions.personality_compatibility.toFixed(1)}</span>
-                        </div>
-                    </div>
-                    <div class="dimension-item">
-                        <span class="dimension-label">隐含共鸣</span>
-                        <div class="score-bar">
-                            <div class="score-fill implicit" style="width: ${Math.min(dimensions.implicit_resonance * 10, 100)}%"></div>
-                            <span class="score-value">${dimensions.implicit_resonance.toFixed(1)}</span>
-                        </div>
-                    </div>
-                    <div class="dimension-item">
-                        <span class="dimension-label">成长潜力</span>
-                        <div class="score-bar">
-                            <div class="score-fill growth" style="width: ${Math.min(dimensions.growth_potential * 10, 100)}%"></div>
-                            <span class="score-value">${dimensions.growth_potential.toFixed(1)}</span>
-                        </div>
-                    </div>
-                    <div class="dimension-item">
-                        <span class="dimension-label">整体化学反应</span>
-                        <div class="score-bar">
-                            <div class="score-fill chemistry" style="width: ${Math.min(dimensions.overall_chemistry * 10, 100)}%"></div>
-                            <span class="score-value">${dimensions.overall_chemistry.toFixed(1)}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
+    // 原深度兼容性分析已集成到上面的AI分析中，此处不再需要
+    
+    // 原匹配维度得分已集成到上面的AI分析维度中，此处不再需要
     
     return detailsHtml;
 }
