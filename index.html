@@ -1181,7 +1181,10 @@
                 <button class="match-btn" onclick="findSimilarMatches()">🤝 寻找相似搭档</button>
                 <button class="match-btn" onclick="findComplementaryMatches()">🌈 寻找互补搭档</button>
                 <div id="loadingIndicator" style="display: none; margin-top: 15px; color: #007bff; font-weight: bold;">
-                    🧠 正在进行AI智能分析，请稍候...
+                    <span id="loadingText">🧠 正在进行AI智能分析，请稍候...</span>
+                    <div id="progressBarContainer" style="margin-top: 10px; background: #f0f0f0; border-radius: 10px; height: 20px; overflow: hidden;">
+                        <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 10px; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;"></div>
+                    </div>
                 </div>
             </div>
         </div>
