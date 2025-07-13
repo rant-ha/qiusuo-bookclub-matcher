@@ -1389,8 +1389,8 @@ async function calculateSimilarity_deprecated(member1, member2) {
         migratedMember2.questionnaire.readingCommitment || migratedMember2.readingCommitment
     );
 
-    // 5. 升级版详细书籍偏好AI文本分析
-    if (text1.trim() && text2.trim()) {
+    // 5. 升级版详细书籍偏好AI文本分析（仅在AI启用时）
+    if (text1.trim() && text2.trim() && aiAnalysisEnabled) {
         result.textPreferenceAnalysis = await getAiTextPreferenceAnalysis(text1, text2);
     }
 
@@ -1401,56 +1401,58 @@ async function calculateSimilarity_deprecated(member1, member2) {
          (result.readingCommitmentCompatibility?.score || 0) * 0.8 +
          (result.textPreferenceAnalysis?.similarity_score || 0) * 1.5);
 
-    // ===== 阶段2: 深度AI人格分析 =====
+    // ===== 阶段2: 深度AI人格分析（仅在AI启用时） =====
     
-    // 构建每个用户的完整阅读档案
-    const getUserReadingProfile = (member) => ({
-        description: member.questionnaire.detailedBookPreferences || member.detailedBookPreferences || '',
-        favoriteBooks: member.questionnaire.favoriteBooks || member.favoriteBooks || [],
-        bookCategories: member.questionnaire.bookCategories || member.bookCategories || [],
-        hobbies: member.questionnaire.hobbies || member.hobbies || []
-    });
+    if (aiAnalysisEnabled) {
+        // 构建每个用户的完整阅读档案
+        const getUserReadingProfile = (member) => ({
+            description: member.questionnaire.detailedBookPreferences || member.detailedBookPreferences || '',
+            favoriteBooks: member.questionnaire.favoriteBooks || member.favoriteBooks || [],
+            bookCategories: member.questionnaire.bookCategories || member.bookCategories || [],
+            hobbies: member.questionnaire.hobbies || member.hobbies || []
+        });
 
-    const profile1 = getUserReadingProfile(migratedMember1);
-    const profile2 = getUserReadingProfile(migratedMember2);
+        const profile1 = getUserReadingProfile(migratedMember1);
+        const profile2 = getUserReadingProfile(migratedMember2);
 
-    // 并行执行深度AI分析以提高性能
-    const [personality1, personality2, implicit1, implicit2] = await Promise.all([
-        getReadingPersonalityProfile(profile1.description, profile1.favoriteBooks),
-        getReadingPersonalityProfile(profile2.description, profile2.favoriteBooks),
-        getImplicitPreferenceAnalysis(profile1.description, profile1.favoriteBooks, profile1.bookCategories),
-        getImplicitPreferenceAnalysis(profile2.description, profile2.favoriteBooks, profile2.bookCategories)
-    ]);
+        // 并行执行深度AI分析以提高性能
+        const [personality1, personality2, implicit1, implicit2] = await Promise.all([
+            getReadingPersonalityProfile(profile1.description, profile1.favoriteBooks),
+            getReadingPersonalityProfile(profile2.description, profile2.favoriteBooks),
+            getImplicitPreferenceAnalysis(profile1.description, profile1.favoriteBooks, profile1.bookCategories),
+            getImplicitPreferenceAnalysis(profile2.description, profile2.favoriteBooks, profile2.bookCategories)
+        ]);
 
-    result.personalityProfiles.member1 = personality1;
-    result.personalityProfiles.member2 = personality2;
-    result.implicitAnalysis.member1 = implicit1;
-    result.implicitAnalysis.member2 = implicit2;
+        result.personalityProfiles.member1 = personality1;
+        result.personalityProfiles.member2 = personality2;
+        result.implicitAnalysis.member1 = implicit1;
+        result.implicitAnalysis.member2 = implicit2;
 
-    // ===== 阶段3: 深度兼容性分析 =====
-    
-    if (personality1.confidence_score > 0.3 && personality2.confidence_score > 0.3) {
-        result.deepCompatibilityAnalysis = await getDeepCompatibilityAnalysis(
-            personality1, personality2, implicit1, implicit2
-        );
+        // ===== 阶段3: 深度兼容性分析 =====
+        
+        if (personality1.confidence_score > 0.3 && personality2.confidence_score > 0.3) {
+            result.deepCompatibilityAnalysis = await getDeepCompatibilityAnalysis(
+                personality1, personality2, implicit1, implicit2
+            );
 
-        // 计算各个深度维度分数
-        if (result.deepCompatibilityAnalysis.compatibility_score > 0) {
-            const compatDimensions = result.deepCompatibilityAnalysis.compatibility_dimensions || {};
-            
-            result.matchingDimensions.personality_compatibility = 
-                (compatDimensions.cognitive_synergy || 0) * 2 +
-                (compatDimensions.emotional_resonance || 0) * 1.5;
+            // 计算各个深度维度分数
+            if (result.deepCompatibilityAnalysis.compatibility_score > 0) {
+                const compatDimensions = result.deepCompatibilityAnalysis.compatibility_dimensions || {};
                 
-            result.matchingDimensions.implicit_resonance = 
-                (compatDimensions.aesthetic_harmony || 0) * 2 +
-                (compatDimensions.exploratory_balance || 0) * 1.3;
-                
-            result.matchingDimensions.growth_potential = 
-                (compatDimensions.growth_potential || 0) * 2.5;
-                
-            result.matchingDimensions.overall_chemistry = 
-                result.deepCompatibilityAnalysis.compatibility_score * 3;
+                result.matchingDimensions.personality_compatibility = 
+                    (compatDimensions.cognitive_synergy || 0) * 2 +
+                    (compatDimensions.emotional_resonance || 0) * 1.5;
+                    
+                result.matchingDimensions.implicit_resonance = 
+                    (compatDimensions.aesthetic_harmony || 0) * 2 +
+                    (compatDimensions.exploratory_balance || 0) * 1.3;
+                    
+                result.matchingDimensions.growth_potential = 
+                    (compatDimensions.growth_potential || 0) * 2.5;
+                    
+                result.matchingDimensions.overall_chemistry = 
+                    result.deepCompatibilityAnalysis.compatibility_score * 3;
+            }
         }
     }
 
@@ -1506,26 +1508,28 @@ async function calculateSmartMatches(list1, list2, categories) {
         }
     }
 
-    // 2. AI 语义匹配 (权重: AI分数 * 0.8)
-    const SIMILARITY_THRESHOLD = 0.6; // 相似度阈值
-    for (const item1 of list1) {
-        for (const item2 of list2) {
-            const pairKey1 = `${item1}|${item2}`;
-            const pairKey2 = `${item2}|${item1}`;
-            if (item1 !== item2 && !processedPairs.has(pairKey1) && !processedPairs.has(pairKey2)) {
-                const aiScore = await getAiSimilarity(item1, item2);
-                if (aiScore > SIMILARITY_THRESHOLD) {
-                    const weightedScore = aiScore * 0.8;
-                    matches.push({
-                        item: `${item1} ≈ ${item2} (${aiScore.toFixed(2)})`,
-                        type: 'semantic',
-                        weight: weightedScore
-                    });
-                    score += weightedScore;
-                    semanticMatches++;
+    // 2. AI 语义匹配 (权重: AI分数 * 0.8) - 仅在AI启用时执行
+    if (aiAnalysisEnabled) {
+        const SIMILARITY_THRESHOLD = 0.6; // 相似度阈值
+        for (const item1 of list1) {
+            for (const item2 of list2) {
+                const pairKey1 = `${item1}|${item2}`;
+                const pairKey2 = `${item2}|${item1}`;
+                if (item1 !== item2 && !processedPairs.has(pairKey1) && !processedPairs.has(pairKey2)) {
+                    const aiScore = await getAiSimilarity(item1, item2);
+                    if (aiScore > SIMILARITY_THRESHOLD) {
+                        const weightedScore = aiScore * 0.8;
+                        matches.push({
+                            item: `${item1} ≈ ${item2} (${aiScore.toFixed(2)})`,
+                            type: 'semantic',
+                            weight: weightedScore
+                        });
+                        score += weightedScore;
+                        semanticMatches++;
+                    }
+                    processedPairs.add(pairKey1);
+                    processedPairs.add(pairKey2);
                 }
-                processedPairs.add(pairKey1);
-                processedPairs.add(pairKey2);
             }
         }
     }
