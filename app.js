@@ -22,6 +22,10 @@ const VALIDATION_RULES = {
         required: false,
         enum: ['male', 'female', 'no_preference']
     },
+    matchingTypePreference: {
+        required: false,
+        enum: ['similar', 'complementary', 'no_preference']
+    },
     bookCategories: {
         required: true,
         minItems: 1,
@@ -69,6 +73,7 @@ function migrateUserData(user) {
                 // 新增字段，使用默认值
                 gender: user.gender || '',
                 matchGenderPreference: user.matchGenderPreference || '',
+                matchingTypePreference: user.matchingTypePreference || '',
                 bookCategories: user.bookCategories || [],
                 detailedBookPreferences: user.detailedBookPreferences || '',
                 favoriteBooks: user.favoriteBooks || (user.books ? [...user.books] : []), // 将旧书籍数据迁移到最爱书籍
@@ -417,6 +422,8 @@ async function handleUpdateMemberInfo(e) {
    
    // New enhanced fields (if they exist in the form)
    const gender = document.querySelector('input[name="gender"]:checked')?.value || currentUser.gender || '';
+   const matchGenderPreference = document.querySelector('input[name="matchGenderPreference"]:checked')?.value || currentUser.matchGenderPreference || '';
+   const matchingTypePreference = document.querySelector('input[name="matchingTypePreference"]:checked')?.value || currentUser.matchingTypePreference || '';
    const bookCategories = Array.from(document.querySelectorAll('input[name="bookCategories"]:checked') || [])
        .map(cb => cb.value);
    const detailedPreferences = document.getElementById('detailedPreferences')?.value.trim() || currentUser.detailedBookPreferences || '';
@@ -428,6 +435,8 @@ async function handleUpdateMemberInfo(e) {
    // Basic validation for enhanced fields (if they exist)
    const enhancedFormData = {
        gender: gender,
+       matchGenderPreference: matchGenderPreference,
+       matchingTypePreference: matchingTypePreference,
        bookCategories: bookCategories.length > 0 ? bookCategories : currentUser.bookCategories || [],
        detailedBookPreferences: detailedPreferences,
        favoriteBooks: favoriteBooks.length > 0 ? favoriteBooks : currentUser.favoriteBooks || [],
@@ -453,6 +462,8 @@ async function handleUpdateMemberInfo(e) {
        // Update enhanced fields if form has them, otherwise preserve existing values
        if (hasEnhancedFields) {
            members[userIndex].gender = enhancedFormData.gender;
+           members[userIndex].matchGenderPreference = enhancedFormData.matchGenderPreference;
+           members[userIndex].matchingTypePreference = enhancedFormData.matchingTypePreference;
            members[userIndex].bookCategories = enhancedFormData.bookCategories;
            members[userIndex].detailedBookPreferences = enhancedFormData.detailedBookPreferences;
            members[userIndex].favoriteBooks = enhancedFormData.favoriteBooks;
@@ -599,6 +610,17 @@ function renderMemberList() {
            return matchGenderPreference ? preferenceMap[matchGenderPreference] || matchGenderPreference : '未设置';
        };
        
+       const formatMatchingTypePreference = () => {
+           const preferenceMap = {
+               'similar': '🎯 相似型搭档',
+               'complementary': '🌈 互补型搭档', 
+               'no_preference': '✨ 都可以'
+           };
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const matchingTypePreference = questionnaire.matchingTypePreference || migratedMember.matchingTypePreference || '';
+           return matchingTypePreference ? preferenceMap[matchingTypePreference] || matchingTypePreference : '未设置';
+       };
+       
        const formatReadingCommitment = () => {
            const commitmentMap = {
                'light': '轻量阅读(5w-10w字)',
@@ -617,7 +639,8 @@ function renderMemberList() {
                    <h3>${migratedMember.name} (学号: ${migratedMember.studentId})</h3>
                    <div class="member-details">
                        <div><strong>性别：</strong>${formatGender()}</div>
-                       <div><strong>匹配偏好：</strong>${formatMatchGenderPreference()}</div>
+                       <div><strong>性别偏好：</strong>${formatMatchGenderPreference()}</div>
+                       <div><strong>匹配偏好：</strong>${formatMatchingTypePreference()}</div>
                        <div><strong>书目类型：</strong>${formatBookCategories()}</div>
                        <div><strong>兴趣爱好：</strong>${formatHobbies()}</div>
                        <div><strong>读过的书：</strong>${formatBooks()}</div>
@@ -687,6 +710,12 @@ function showLoggedInView() {
        if (questionnaire.matchGenderPreference) {
            const matchGenderRadio = document.querySelector(`input[name="matchGenderPreference"][value="${questionnaire.matchGenderPreference}"]`);
            if (matchGenderRadio) matchGenderRadio.checked = true;
+       }
+       
+       // 填充匹配类型偏好
+       if (questionnaire.matchingTypePreference) {
+           const matchingTypeRadio = document.querySelector(`input[name="matchingTypePreference"][value="${questionnaire.matchingTypePreference}"]`);
+           if (matchingTypeRadio) matchingTypeRadio.checked = true;
        }
        
        // 填充书目类型（多选）
@@ -1587,7 +1616,8 @@ function createUserProfile(user) {
         
         // 匹配偏好
         matching_preferences: {
-            gender_preference: questionnaire.matchGenderPreference || ''
+            gender_preference: questionnaire.matchGenderPreference || '',
+            matching_type_preference: questionnaire.matchingTypePreference || ''
         },
         
         // 数据质量指标
@@ -1678,6 +1708,75 @@ async function calculateAICompatibility(user1, user2) {
 }
 
 /**
+ * 根据用户匹配类型偏好调整AI分析分数
+ * @param {Object} aiResult - AI分析原始结果
+ * @param {Object} profile1 - 用户1的画像
+ * @param {Object} profile2 - 用户2的画像
+ * @returns {Object} 调整后的分析结果
+ */
+function adjustScoreByPreference(aiResult, profile1, profile2) {
+    const pref1 = profile1.matching_preferences.matching_type_preference;
+    const pref2 = profile2.matching_preferences.matching_type_preference;
+    
+    // 创建结果副本，避免修改原对象
+    const adjustedResult = { ...aiResult };
+    let adjustmentFactor = 1.0;
+    let adjustmentNote = '';
+    
+    // 偏好兼容性检查和分数调整
+    if (pref1 && pref2 && pref1 !== '' && pref2 !== '') {
+        if (pref1 !== 'no_preference' && pref2 !== 'no_preference') {
+            if (pref1 !== pref2) {
+                // 偏好不匹配，降低分数
+                adjustmentFactor = 0.7;
+                adjustedResult.preference_mismatch = true;
+                adjustmentNote = `用户偏好不匹配：一方偏好${pref1 === 'similar' ? '相似型' : '互补型'}，另一方偏好${pref2 === 'similar' ? '相似型' : '互补型'}搭档`;
+                
+                // 在潜在挑战中添加偏好差异提醒
+                adjustedResult.potential_challenges = [
+                    ...adjustedResult.potential_challenges,
+                    adjustmentNote
+                ];
+            } else {
+                // 偏好匹配，根据类型调整
+                if (pref1 === 'similar') {
+                    // 双方都要相似型，提升相似性权重
+                    const similarityBonus = (adjustedResult.detailed_analysis.similarity_score || 0) * 0.15;
+                    adjustmentFactor = 1.0 + Math.min(0.3, similarityBonus / 10);
+                    adjustmentNote = '双方都偏好相似型搭档，相似性权重提升';
+                } else if (pref1 === 'complementary') {
+                    // 双方都要互补型，提升互补性权重  
+                    const complementaryBonus = (adjustedResult.detailed_analysis.complementarity_score || 0) * 0.15;
+                    adjustmentFactor = 1.0 + Math.min(0.3, complementaryBonus / 10);
+                    adjustmentNote = '双方都偏好互补型搭档，互补性权重提升';
+                }
+            }
+        } else {
+            // 至少一方选择"都可以"，正常分析
+            adjustmentNote = '至少一方对匹配类型无特殊偏好，按正常权重分析';
+        }
+    } else {
+        // 偏好信息不完整
+        adjustmentNote = '偏好信息不完整，按正常权重分析';
+    }
+    
+    // 应用调整因子
+    adjustedResult.compatibility_score = Math.min(10, adjustedResult.compatibility_score * adjustmentFactor);
+    
+    // 添加偏好分析信息
+    adjustedResult.preference_analysis = {
+        user1_preference: pref1 || 'no_preference',
+        user2_preference: pref2 || 'no_preference',
+        preference_match: pref1 === pref2 || pref1 === 'no_preference' || pref2 === 'no_preference',
+        adjustment_factor: adjustmentFactor,
+        adjustment_note: adjustmentNote,
+        preference_impact: adjustmentFactor > 1.0 ? 'positive' : adjustmentFactor < 1.0 ? 'negative' : 'neutral'
+    };
+    
+    return adjustedResult;
+}
+
+/**
  * 综合性AI匹配分析函数
  * 使用先进的提示词工程，让AI对两个用户进行全面的兼容性分析
  * @param {Object} profile1 - 第一个用户的标准化画像
@@ -1711,6 +1810,19 @@ async function getAIMatchingAnalysis(profile1, profile2) {
 - **时间安排**: 阅读投入度和可用时间的协调性
 - **人格特质**: 从阅读偏好推断的性格特征兼容性
 
+## 用户匹配偏好考虑 ⭐ 重要
+在分析时必须考虑两个用户的匹配类型偏好：
+- **similar**: 用户倾向于寻找相似型搭档（兴趣相近、品味相似）
+- **complementary**: 用户倾向于寻找互补型搭档（不同背景、互相学习）
+- **no_preference**: 对匹配类型没有特殊偏好
+
+### 偏好匹配规则：
+1. **双方都偏好相似型**: 重点突出相似性分析，similarity_score权重增加
+2. **双方都偏好互补型**: 重点突出互补性分析，complementarity_score权重增加
+3. **一方偏好相似型，一方偏好互补型**: 平衡考虑，适度降低整体匹配分数
+4. **至少一方选择"都可以"**: 正常分析，不做特殊调整
+5. **偏好不匹配时**: 在分析中明确指出偏好差异，并在potential_challenges中提及
+
 ## 评分标准
 - **优秀匹配 (8.0-10.0)**: 高度相似 + 良好互补 + 完美兼容
 - **良好匹配 (6.0-7.9)**: 中等相似 + 部分互补 + 基本兼容  
@@ -1724,6 +1836,7 @@ async function getAIMatchingAnalysis(profile1, profile2) {
 3. 提供具体的匹配原因和建议
 4. 识别潜在的挑战和解决方案
 5. 给出具体的读书会活动建议
+6. 重点考虑用户的匹配类型偏好
 
 返回格式必须是JSON:
 {
@@ -1738,6 +1851,13 @@ async function getAIMatchingAnalysis(profile1, profile2) {
         "similarity_highlights": ["相似点1", "相似点2"],
         "complementarity_highlights": ["互补点1", "互补点2"],  
         "compatibility_highlights": ["兼容点1", "兼容点2"]
+    },
+    "preference_compatibility": {
+        "user1_preference": "similar/complementary/no_preference",
+        "user2_preference": "similar/complementary/no_preference", 
+        "preference_match": true/false,
+        "preference_impact": "positive/neutral/negative",
+        "preference_note": "关于偏好匹配的说明"
     },
     "shared_interests": ["共同兴趣1", "共同兴趣2"],
     "shared_books": ["共同书籍1", "共同书籍2"],
@@ -1812,12 +1932,13 @@ async function getAIMatchingAnalysis(profile1, profile2) {
                     const analysis = JSON.parse(content);
                     
                     // 验证和标准化返回结果
-                    return {
+                    const rawAnalysis = {
                         compatibility_score: Math.max(0, Math.min(10, analysis.compatibility_score || 0)),
                         match_type: analysis.match_type || "未知类型",
                         confidence_level: Math.max(0, Math.min(1, analysis.confidence_level || 0.5)),
                         summary: analysis.summary || "AI分析完成",
                         detailed_analysis: analysis.detailed_analysis || {},
+                        preference_compatibility: analysis.preference_compatibility || {},
                         shared_interests: analysis.shared_interests || [],
                         shared_books: analysis.shared_books || [],
                         potential_challenges: analysis.potential_challenges || [],
@@ -1829,6 +1950,9 @@ async function getAIMatchingAnalysis(profile1, profile2) {
                         category_matches: analysis.category_matches || 0,
                         match_reasoning: analysis.match_reasoning || "AI分析完成"
                     };
+                    
+                    // 根据用户偏好调整分数
+                    return adjustScoreByPreference(rawAnalysis, profile1, profile2);
                 } catch (parseError) {
                     console.warn('AI返回的JSON解析失败:', parseError, content);
                     throw new Error('AI返回格式错误');
@@ -2191,6 +2315,52 @@ function generateMatchDetails(match) {
     }
     
     // ===== 深度AI分析结果 =====
+    
+    // 偏好匹配分析显示
+    if (match.aiAnalysis && match.aiAnalysis.preference_analysis) {
+        const prefAnalysis = match.aiAnalysis.preference_analysis;
+        const getPreferenceIcon = (impact) => {
+            const icons = {
+                'positive': '✅',
+                'neutral': '⚖️', 
+                'negative': '⚠️'
+            };
+            return icons[impact] || '❓';
+        };
+        
+        const getPreferenceLabel = (pref) => {
+            const labels = {
+                'similar': '🎯 相似型',
+                'complementary': '🌈 互补型',
+                'no_preference': '✨ 都可以'
+            };
+            return labels[pref] || '未设置';
+        };
+        
+        detailsHtml += `
+            <div class="common-interests preference-analysis">
+                <h4>${getPreferenceIcon(prefAnalysis.preference_impact)} 匹配偏好分析</h4>
+                <div class="match-type-group">
+                    <span class="match-type-label">用户偏好：</span>
+                    <span class="tag preference-tag">${getPreferenceLabel(prefAnalysis.user1_preference)}</span>
+                    <span class="vs-indicator">vs</span>
+                    <span class="tag preference-tag">${getPreferenceLabel(prefAnalysis.user2_preference)}</span>
+                </div>
+                <div class="match-type-group">
+                    <span class="match-type-label">偏好匹配：</span>
+                    <span class="tag ${prefAnalysis.preference_match ? 'exact' : 'poor'}-tag">
+                        ${prefAnalysis.preference_match ? '✓ 匹配' : '✗ 不匹配'}
+                    </span>
+                    <span class="tag score-tag">调整系数: ${prefAnalysis.adjustment_factor.toFixed(2)}</span>
+                </div>
+                ${prefAnalysis.adjustment_note ? `
+                    <div class="preference-note">
+                        <strong>说明：</strong>${prefAnalysis.adjustment_note}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
     
     // 升级版AI文本偏好分析
     if (match.textPreferenceAnalysis && match.textPreferenceAnalysis.similarity_score > 0) {
