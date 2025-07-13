@@ -2036,17 +2036,24 @@ async function findSimilarMatches() {
     }
 
     const loadingIndicator = document.getElementById('loadingIndicator');
+    const loadingText = document.getElementById('loadingText');
+    const progressBar = document.getElementById('progressBar');
+
     loadingIndicator.style.display = 'block';
-    loadingIndicator.textContent = aiAnalysisEnabled ? 
-        '🧠 正在进行AI智能分析，请稍候...' : 
+    loadingText.textContent = aiAnalysisEnabled ?
+        '🧠 正在进行AI智能分析，请稍候...' :
         '📊 正在进行传统匹配分析，请稍候...';
-    
+
+    // 初始化进度条
+    progressBar.style.width = '0%';
+    progressBar.textContent = '0%';
+
     const matches = [];
-    
+
     // 并发控制：限制同时处理的请求数量
     const MAX_CONCURRENT_REQUESTS = 3; // 最多同时3个请求
     const pairings = [];
-    
+
     // 收集所有需要匹配的配对
     for (let i = 0; i < members.length; i++) {
         for (let j = i + 1; j < members.length; j++) {
@@ -2057,11 +2064,10 @@ async function findSimilarMatches() {
             pairings.push({ user1: members[i], user2: members[j] });
         }
     }
-    
+
     console.log(`总共需要处理 ${pairings.length} 个配对，使用并发控制限制同时请求数`);
-    
+
     // 显示进度提示
-    const loadingText = document.querySelector('#loadingIndicator');
     if (loadingText) {
         loadingText.textContent = `正在分析 ${pairings.length} 个配对，请稍候...`;
     }
@@ -2069,8 +2075,17 @@ async function findSimilarMatches() {
     // 分批处理，避免API速率限制
     for (let i = 0; i < pairings.length; i += MAX_CONCURRENT_REQUESTS) {
         const batch = pairings.slice(i, i + MAX_CONCURRENT_REQUESTS);
-        console.log(`处理第 ${Math.floor(i/MAX_CONCURRENT_REQUESTS) + 1} 批，共 ${batch.length} 个配对`);
-        
+        const batchNumber = Math.floor(i/MAX_CONCURRENT_REQUESTS) + 1;
+        const totalBatches = Math.ceil(pairings.length / MAX_CONCURRENT_REQUESTS);
+
+        console.log(`处理第 ${batchNumber} 批，共 ${batch.length} 个配对`);
+
+        // 更新进度条
+        const progress = Math.round((i / pairings.length) * 100);
+        progressBar.style.width = `${progress}%`;
+        progressBar.textContent = `${progress}%`;
+        loadingText.textContent = `正在处理第 ${batchNumber}/${totalBatches} 批配对...`;
+
         const batchPromises = batch.map(async (pairing) => {
             try {
                 // 根据AI开关选择匹配算法
@@ -2118,13 +2133,19 @@ async function findSimilarMatches() {
         
         const batchResults = await Promise.all(batchPromises);
         matches.push(...batchResults.filter(result => result !== null));
-        
+
         // 批次间添加延迟，进一步避免速率限制
         if (i + MAX_CONCURRENT_REQUESTS < pairings.length) {
             console.log('批次间等待500ms...');
             await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
+
+    // 完成时显示100%进度
+    progressBar.style.width = '100%';
+    progressBar.textContent = '100%';
+    loadingText.textContent = '分析完成，正在整理结果...';
+
     matches.sort((a, b) => b.score - a.score);
     document.getElementById('loadingIndicator').style.display = 'none';
     const title = aiAnalysisEnabled ? '🎯 深度智能相似搭档推荐' : '🎯 传统算法相似搭档推荐';
@@ -2143,17 +2164,24 @@ async function findComplementaryMatches() {
     }
 
     const loadingIndicator = document.getElementById('loadingIndicator');
+    const loadingText = document.getElementById('loadingText');
+    const progressBar = document.getElementById('progressBar');
+
     loadingIndicator.style.display = 'block';
-    loadingIndicator.textContent = aiAnalysisEnabled ? 
-        '🧠 正在进行AI智能分析，请稍候...' : 
+    loadingText.textContent = aiAnalysisEnabled ?
+        '🧠 正在进行AI智能分析，请稍候...' :
         '📊 正在进行传统匹配分析，请稍候...';
-    
+
+    // 初始化进度条
+    progressBar.style.width = '0%';
+    progressBar.textContent = '0%';
+
     const matches = [];
-    
+
     // 并发控制：限制同时处理的请求数量
     const MAX_CONCURRENT_REQUESTS = 3; // 最多同时3个请求
     const pairings = [];
-    
+
     // 收集所有需要匹配的配对
     for (let i = 0; i < members.length; i++) {
         for (let j = i + 1; j < members.length; j++) {
@@ -2164,11 +2192,10 @@ async function findComplementaryMatches() {
             pairings.push({ user1: members[i], user2: members[j] });
         }
     }
-    
+
     console.log(`互补匹配：总共需要处理 ${pairings.length} 个配对`);
-    
+
     // 显示进度提示
-    const loadingText = document.querySelector('#loadingIndicator');
     if (loadingText) {
         loadingText.textContent = `正在分析 ${pairings.length} 个互补配对，请稍候...`;
     }
@@ -2176,8 +2203,17 @@ async function findComplementaryMatches() {
     // 分批处理，避免API速率限制
     for (let i = 0; i < pairings.length; i += MAX_CONCURRENT_REQUESTS) {
         const batch = pairings.slice(i, i + MAX_CONCURRENT_REQUESTS);
-        console.log(`处理第 ${Math.floor(i/MAX_CONCURRENT_REQUESTS) + 1} 批，共 ${batch.length} 个配对`);
-        
+        const batchNumber = Math.floor(i/MAX_CONCURRENT_REQUESTS) + 1;
+        const totalBatches = Math.ceil(pairings.length / MAX_CONCURRENT_REQUESTS);
+
+        console.log(`处理第 ${batchNumber} 批，共 ${batch.length} 个配对`);
+
+        // 更新进度条
+        const progress = Math.round((i / pairings.length) * 100);
+        progressBar.style.width = `${progress}%`;
+        progressBar.textContent = `${progress}%`;
+        loadingText.textContent = `正在处理第 ${batchNumber}/${totalBatches} 批互补配对...`;
+
         const batchPromises = batch.map(async (pairing) => {
             try {
                 // 根据AI开关选择匹配算法
@@ -2235,13 +2271,18 @@ async function findComplementaryMatches() {
         
         const batchResults = await Promise.all(batchPromises);
         matches.push(...batchResults);
-        
+
         // 批次间添加延迟，进一步避免速率限制
         if (i + MAX_CONCURRENT_REQUESTS < pairings.length) {
             console.log('批次间等待500ms...');
             await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
+
+    // 完成时显示100%进度
+    progressBar.style.width = '100%';
+    progressBar.textContent = '100%';
+    loadingText.textContent = '分析完成，正在整理结果...';
     
     // 互补匹配排序：根据分析模式使用不同的排序策略
     matches.sort((a, b) => {
