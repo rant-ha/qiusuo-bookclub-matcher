@@ -1454,34 +1454,37 @@ async function calculateSimilarity_deprecated(member1, member2) {
                     result.deepCompatibilityAnalysis.compatibility_score * 3;
             }
         }
+        // ===== 阶段4: 智能权重计算最终分数 =====
+        
+        // 数据完整性调节因子（基于两个用户的平均数据完整性）
+        const avgDataCompleteness = (dataCompleteness1 + dataCompleteness2) / 2;
+        const dataCompletenessMultiplier = Math.min(avgDataCompleteness + 0.2, 1.0); // 最低0.2，最高1.0
+        
+        // 动态权重分配（基于数据质量和置信度）
+        const weights = {
+            traditional: 1.0 * dataCompletenessMultiplier,
+            personality: (result.personalityProfiles.member1?.confidence_score || 0) * (result.personalityProfiles.member2?.confidence_score || 0) * 1.5 * dataCompletenessMultiplier,
+            implicit: ((result.implicitAnalysis.member1?.confidence_score || 0) + (result.implicitAnalysis.member2?.confidence_score || 0)) / 2 * 1.2 * dataCompletenessMultiplier,
+            growth: (result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5) * dataCompletenessMultiplier,
+            chemistry: (result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5) * dataCompletenessMultiplier
+        };
+
+        // 计算加权总分
+        result.score =
+            result.matchingDimensions.traditional_similarity * weights.traditional +
+            result.matchingDimensions.personality_compatibility * weights.personality +
+            result.matchingDimensions.implicit_resonance * weights.implicit +
+            result.matchingDimensions.growth_potential * weights.growth +
+            result.matchingDimensions.overall_chemistry * weights.chemistry;
+
+        // 应用数据完整性最终调节
+        result.score = result.score * dataCompletenessMultiplier;
+        
+    } else {
+        // AI关闭时的传统分数计算
+        result.score = result.matchingDimensions.traditional_similarity;
     }
 
-    // ===== 阶段4: 智能权重计算最终分数 =====
-    
-    // 数据完整性调节因子（基于两个用户的平均数据完整性）
-    const avgDataCompleteness = (dataCompleteness1 + dataCompleteness2) / 2;
-    const dataCompletenessMultiplier = Math.min(avgDataCompleteness + 0.2, 1.0); // 最低0.2，最高1.0
-    
-    // 动态权重分配（基于数据质量和置信度）
-    const weights = {
-        traditional: 1.0 * dataCompletenessMultiplier,
-        personality: personality1.confidence_score * personality2.confidence_score * 1.5 * dataCompletenessMultiplier,
-        implicit: (implicit1.confidence_score + implicit2.confidence_score) / 2 * 1.2 * dataCompletenessMultiplier,
-        growth: (result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5) * dataCompletenessMultiplier,
-        chemistry: (result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5) * dataCompletenessMultiplier
-    };
-
-    // 计算加权总分
-    result.score = 
-        result.matchingDimensions.traditional_similarity * weights.traditional +
-        result.matchingDimensions.personality_compatibility * weights.personality +
-        result.matchingDimensions.implicit_resonance * weights.implicit +
-        result.matchingDimensions.growth_potential * weights.growth +
-        result.matchingDimensions.overall_chemistry * weights.chemistry;
-
-    // 应用数据完整性最终调节
-    result.score = result.score * dataCompletenessMultiplier;
-    
     // 标准化分数到合理范围
     result.score = Math.min(result.score, 10); // 设置上限
 
