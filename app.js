@@ -1252,12 +1252,39 @@ async function calculateSimilarity(member1, member2) {
     const migratedMember1 = migrateUserData(member1);
     const migratedMember2 = migrateUserData(member2);
 
+    // ===== 数据完整性检查 =====
+    const hobbies1 = migratedMember1.questionnaire.hobbies || migratedMember1.hobbies || [];
+    const hobbies2 = migratedMember2.questionnaire.hobbies || migratedMember2.hobbies || [];
+    const books1 = migratedMember1.questionnaire.books || migratedMember1.books || [];
+    const books2 = migratedMember2.questionnaire.books || migratedMember2.books || [];
+    const text1 = migratedMember1.questionnaire.detailedBookPreferences || migratedMember1.detailedBookPreferences || '';
+    const text2 = migratedMember2.questionnaire.detailedBookPreferences || migratedMember2.detailedBookPreferences || '';
+    
+    // 计算数据完整性分数（0-1之间）
+    const dataCompleteness1 = (
+        (hobbies1.length > 0 ? 0.3 : 0) +
+        (books1.length > 0 ? 0.3 : 0) + 
+        (text1.trim().length > 0 ? 0.4 : 0)
+    );
+    const dataCompleteness2 = (
+        (hobbies2.length > 0 ? 0.3 : 0) +
+        (books2.length > 0 ? 0.3 : 0) + 
+        (text2.trim().length > 0 ? 0.4 : 0)
+    );
+    
+    // 如果两个用户的数据完整性都很低，直接返回低分
+    const minDataCompleteness = Math.min(dataCompleteness1, dataCompleteness2);
+    if (minDataCompleteness < 0.3) {
+        result.score = minDataCompleteness * 2; // 最多给0.6分
+        return result;
+    }
+
     // ===== 阶段1: 传统匹配分析 =====
     
     // 1. 传统兴趣爱好匹配
     const hobbyResult = await calculateSmartMatches(
-        migratedMember1.questionnaire.hobbies || migratedMember1.hobbies || [], 
-        migratedMember2.questionnaire.hobbies || migratedMember2.hobbies || [], 
+        hobbies1,
+        hobbies2, 
         INTEREST_CATEGORIES
     );
     result.commonHobbies = hobbyResult.matches;
@@ -1267,8 +1294,8 @@ async function calculateSimilarity(member1, member2) {
 
     // 2. 传统书籍匹配
     const bookResult = await calculateSmartMatches(
-        migratedMember1.questionnaire.books || migratedMember1.books || [], 
-        migratedMember2.questionnaire.books || migratedMember2.books || [], 
+        books1,
+        books2, 
         BOOK_CATEGORIES
     );
     result.commonBooks = bookResult.matches;
@@ -1296,9 +1323,6 @@ async function calculateSimilarity(member1, member2) {
     );
 
     // 5. 升级版详细书籍偏好AI文本分析
-    const text1 = migratedMember1.questionnaire.detailedBookPreferences || migratedMember1.detailedBookPreferences || '';
-    const text2 = migratedMember2.questionnaire.detailedBookPreferences || migratedMember2.detailedBookPreferences || '';
-    
     if (text1.trim() && text2.trim()) {
         result.textPreferenceAnalysis = await getAiTextPreferenceAnalysis(text1, text2);
     }
@@ -1365,13 +1389,17 @@ async function calculateSimilarity(member1, member2) {
 
     // ===== 阶段4: 智能权重计算最终分数 =====
     
+    // 数据完整性调节因子（基于两个用户的平均数据完整性）
+    const avgDataCompleteness = (dataCompleteness1 + dataCompleteness2) / 2;
+    const dataCompletenessMultiplier = Math.min(avgDataCompleteness + 0.2, 1.0); // 最低0.2，最高1.0
+    
     // 动态权重分配（基于数据质量和置信度）
     const weights = {
-        traditional: 1.0,
-        personality: personality1.confidence_score * personality2.confidence_score * 1.5,
-        implicit: (implicit1.confidence_score + implicit2.confidence_score) / 2 * 1.2,
-        growth: result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5,
-        chemistry: result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5
+        traditional: 1.0 * dataCompletenessMultiplier,
+        personality: personality1.confidence_score * personality2.confidence_score * 1.5 * dataCompletenessMultiplier,
+        implicit: (implicit1.confidence_score + implicit2.confidence_score) / 2 * 1.2 * dataCompletenessMultiplier,
+        growth: (result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5) * dataCompletenessMultiplier,
+        chemistry: (result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5) * dataCompletenessMultiplier
     };
 
     // 计算加权总分
@@ -1382,6 +1410,9 @@ async function calculateSimilarity(member1, member2) {
         result.matchingDimensions.growth_potential * weights.growth +
         result.matchingDimensions.overall_chemistry * weights.chemistry;
 
+    // 应用数据完整性最终调节
+    result.score = result.score * dataCompletenessMultiplier;
+    
     // 标准化分数到合理范围
     result.score = Math.min(result.score, 10); // 设置上限
 
