@@ -920,6 +920,66 @@
                 transform: scale(1.02);
             }
         }
+        
+        /* 降级状态动画 */
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+        
+        /* 降级状态指示器 */
+        .degradation-indicator {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+            animation: pulse 2s infinite;
+        }
+        
+        .degradation-indicator.success {
+            background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+            box-shadow: 0 4px 12px rgba(0, 184, 148, 0.3);
+        }
+        
+        /* 降级匹配结果样式 */
+        .degraded-match {
+            border-left: 5px solid #f39c12;
+            background: linear-gradient(135deg, #fef5e7 0%, #fdebd0 100%);
+        }
+        
+        .degraded-tag {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            box-shadow: 0 2px 8px rgba(243, 156, 18, 0.3);
+        }
+        
+        .traditional-degraded-tag {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+            box-shadow: 0 2px 8px rgba(149, 165, 166, 0.3);
+        }
     </style>
 </head>
 <body>
@@ -1193,7 +1253,66 @@
                 <h2>管理员面板</h2>
                 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                     <button class="secondary" onclick="loadMembersFromGist()">🔄 刷新数据</button>
+                    <button class="secondary" onclick="showApiHealthStatus()">📊 API状态</button>
+                    <button class="secondary" onclick="resetApiHealth()">🔧 重置API</button>
                     <button class="secondary" onclick="adminLogout()">📤 退出登录</button>
+                </div>
+            </div>
+            
+            <!-- 实时监控仪表板 -->
+            <div class="section" id="monitoringPanel">
+                <h2>🔍 系统实时监控</h2>
+                <div class="monitoring-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div class="metric-card" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding: 15px; border-radius: 12px; text-align: center;">
+                        <h4 style="margin: 0 0 8px 0; color: #2e7d32;">API状态</h4>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span id="apiStatus" class="status-indicator" style="font-size: 18px; color: #28a745;">●</span>
+                            <span id="apiStatusText" style="font-weight: bold; color: #2e7d32;">正常</span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); padding: 15px; border-radius: 12px; text-align: center;">
+                        <h4 style="margin: 0 0 8px 0; color: #ef6c00;">5分钟错误率</h4>
+                        <span id="errorRate" style="font-size: 20px; font-weight: bold; color: #ef6c00;">0%</span>
+                    </div>
+                    
+                    <div class="metric-card" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding: 15px; border-radius: 12px; text-align: center;">
+                        <h4 style="margin: 0 0 8px 0; color: #1976d2;">缓存命中率</h4>
+                        <span id="cacheHitRate" style="font-size: 20px; font-weight: bold; color: #1976d2;">--</span>
+                    </div>
+                    
+                    <div class="metric-card" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); padding: 15px; border-radius: 12px; text-align: center;">
+                        <h4 style="margin: 0 0 8px 0; color: #c2185b;">系统健康</h4>
+                        <span id="systemHealth" style="font-size: 20px; font-weight: bold; color: #c2185b;">良好</span>
+                    </div>
+                </div>
+                
+                <!-- 详细监控信息 -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="monitoring-detail" style="background: rgba(255, 255, 255, 0.8); padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                        <h5 style="margin: 0 0 10px 0; color: #424242;">错误统计</h5>
+                        <div id="errorStats" style="font-size: 13px; color: #666;">
+                            <div>总错误: <span id="totalErrors">0</span></div>
+                            <div>最近1小时: <span id="hourlyErrors">0</span></div>
+                            <div>最近5分钟: <span id="recentErrors">0</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="monitoring-detail" style="background: rgba(255, 255, 255, 0.8); padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
+                        <h5 style="margin: 0 0 10px 0; color: #424242;">性能指标</h5>
+                        <div id="performanceStats" style="font-size: 13px; color: #666;">
+                            <div>总请求: <span id="totalRequests">0</span></div>
+                            <div>成功率: <span id="successRate">100%</span></div>
+                            <div>平均响应: <span id="avgResponseTime">--</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 监控操作按钮 -->
+                <div style="margin-top: 15px; text-align: center;">
+                    <button class="secondary" onclick="refreshMonitoringData()" style="margin-right: 10px;">🔄 刷新监控</button>
+                    <button class="secondary" onclick="showDetailedHealthReport()" style="margin-right: 10px;">📋 详细报告</button>
+                    <button class="secondary" onclick="resetMonitoringData()">🗑️ 重置数据</button>
                 </div>
             </div>
             
