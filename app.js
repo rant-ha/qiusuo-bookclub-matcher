@@ -1221,7 +1221,9 @@ function calculateReadingCommitmentCompatibility(commitment1, commitment2) {
 }
 
 // 深度智能匹配算法（升级版）
-async function calculateSimilarity(member1, member2) {
+// ===== 已弃用的匹配算法 (保留用于向后兼容) =====
+// 注意：此函数已被 calculateAICompatibility 替代，不建议使用
+async function calculateSimilarity_deprecated(member1, member2) {
     const result = {
         score: 0,
         commonHobbies: [],
@@ -1523,6 +1525,296 @@ function checkGenderPreferenceMatch(user1, user2) {
     return user1WantsUser2 && user2WantsUser1;
 }
 
+// ===== 新一代AI驱动匹配系统 =====
+
+/**
+ * 创建标准化的用户画像，用于AI匹配分析
+ * @param {Object} user - 用户数据
+ * @returns {Object} 标准化的用户画像
+ */
+function createUserProfile(user) {
+    const migratedUser = migrateUserData(user);
+    const questionnaire = migratedUser.questionnaire || {};
+    
+    // 数据完整性评估
+    const hasBasicInfo = !!(migratedUser.name && migratedUser.studentId);
+    const hasInterests = !!(questionnaire.hobbies && questionnaire.hobbies.length > 0) || 
+                        !!(migratedUser.hobbies && migratedUser.hobbies.length > 0);
+    const hasBooks = !!(questionnaire.books && questionnaire.books.length > 0) || 
+                    !!(migratedUser.books && migratedUser.books.length > 0);
+    const hasFavoriteBooks = !!(questionnaire.favoriteBooks && questionnaire.favoriteBooks.length > 0);
+    const hasDetailedPrefs = !!(questionnaire.detailedBookPreferences && questionnaire.detailedBookPreferences.trim());
+    const hasReadingCommitment = !!questionnaire.readingCommitment;
+    const hasGender = !!questionnaire.gender;
+    const hasBookCategories = !!(questionnaire.bookCategories && questionnaire.bookCategories.length > 0);
+    
+    // 计算数据完整性分数 (0-1)
+    const completenessScore = (
+        (hasBasicInfo ? 0.1 : 0) +
+        (hasInterests ? 0.15 : 0) +
+        (hasBooks ? 0.15 : 0) +
+        (hasFavoriteBooks ? 0.2 : 0) +
+        (hasDetailedPrefs ? 0.2 : 0) +
+        (hasReadingCommitment ? 0.1 : 0) +
+        (hasGender ? 0.05 : 0) +
+        (hasBookCategories ? 0.05 : 0)
+    );
+    
+    return {
+        // 基本信息
+        basic_info: {
+            name: migratedUser.name || '',
+            student_id: migratedUser.studentId || '',
+            gender: questionnaire.gender || '',
+            join_date: migratedUser.joinDate || ''
+        },
+        
+        // 兴趣爱好
+        interests: {
+            hobbies: questionnaire.hobbies || migratedUser.hobbies || [],
+            count: (questionnaire.hobbies || migratedUser.hobbies || []).length
+        },
+        
+        // 阅读偏好
+        reading_preferences: {
+            book_categories: questionnaire.bookCategories || [],
+            favorite_books: questionnaire.favoriteBooks || [],
+            general_books: questionnaire.books || migratedUser.books || [],
+            detailed_preferences: questionnaire.detailedBookPreferences || '',
+            reading_commitment: questionnaire.readingCommitment || '',
+            reading_habits: questionnaire.readingHabits || {}
+        },
+        
+        // 匹配偏好
+        matching_preferences: {
+            gender_preference: questionnaire.matchGenderPreference || ''
+        },
+        
+        // 数据质量指标
+        data_quality: {
+            completeness_score: completenessScore,
+            has_basic_info: hasBasicInfo,
+            has_interests: hasInterests,
+            has_reading_data: hasBooks || hasFavoriteBooks,
+            has_detailed_preferences: hasDetailedPrefs,
+            data_version: questionnaire.version || '1.0'
+        }
+    };
+}
+
+/**
+ * 新一代AI驱动的用户匹配引擎
+ * 使用单次AI调用完成全面的匹配分析，替代原有的多层次计算
+ * @param {Object} user1 - 第一个用户
+ * @param {Object} user2 - 第二个用户  
+ * @returns {Object} 详细的匹配分析结果
+ */
+async function calculateAICompatibility(user1, user2) {
+    // 首先检查性别偏好匹配
+    if (!checkGenderPreferenceMatch(user1, user2)) {
+        return {
+            score: 0,
+            reason: "性别偏好不匹配",
+            gender_preference_compatible: false,
+            analysis: null
+        };
+    }
+    
+    // 创建标准化用户画像
+    const profile1 = createUserProfile(user1);
+    const profile2 = createUserProfile(user2);
+    
+    // 数据质量检查 - 如果两个用户的数据都很少，返回低分
+    const minCompleteness = Math.min(profile1.data_quality.completeness_score, profile2.data_quality.completeness_score);
+    if (minCompleteness < 0.2) {
+        return {
+            score: minCompleteness * 2, // 最多0.4分
+            reason: "用户数据不足，无法进行有效匹配",
+            gender_preference_compatible: true,
+            data_completeness_issue: true,
+            analysis: {
+                user1_completeness: profile1.data_quality.completeness_score,
+                user2_completeness: profile2.data_quality.completeness_score
+            }
+        };
+    }
+    
+    // 调用AI进行全面匹配分析
+    try {
+        const aiAnalysis = await getAIMatchingAnalysis(profile1, profile2);
+        
+        // 根据数据完整性调整最终分数
+        const dataQualityMultiplier = (profile1.data_quality.completeness_score + profile2.data_quality.completeness_score) / 2;
+        const adjustedScore = aiAnalysis.compatibility_score * Math.min(dataQualityMultiplier + 0.3, 1.0);
+        
+        return {
+            score: adjustedScore,
+            reason: aiAnalysis.summary || "AI全面分析完成",
+            gender_preference_compatible: true,
+            data_completeness_issue: false,
+            analysis: {
+                ai_analysis: aiAnalysis,
+                data_quality_multiplier: dataQualityMultiplier,
+                user1_completeness: profile1.data_quality.completeness_score,
+                user2_completeness: profile2.data_quality.completeness_score,
+                // 保持向后兼容的字段
+                commonHobbies: aiAnalysis.shared_interests || [],
+                commonBooks: aiAnalysis.shared_books || [],
+                detailLevel: {
+                    exactMatches: aiAnalysis.exact_matches || 0,
+                    semanticMatches: aiAnalysis.semantic_matches || 0,
+                    categoryMatches: aiAnalysis.category_matches || 0
+                }
+            }
+        };
+    } catch (error) {
+        console.warn('AI匹配分析失败，返回低分:', error);
+        return {
+            score: 0.1,
+            reason: "AI分析失败",
+            gender_preference_compatible: true,
+        };
+    }
+}
+
+/**
+ * 综合性AI匹配分析函数
+ * 使用先进的提示词工程，让AI对两个用户进行全面的兼容性分析
+ * @param {Object} profile1 - 第一个用户的标准化画像
+ * @param {Object} profile2 - 第二个用户的标准化画像
+ * @returns {Object} AI分析结果
+ */
+async function getAIMatchingAnalysis(profile1, profile2) {
+    if (!AI_BASE_URL || !AI_API_KEY) {
+        throw new Error('AI服务未配置');
+    }
+
+    const systemPrompt = `你是一位专业的读书会配对专家，具有深厚的心理学和社会学背景。你的任务是分析两个用户的全面信息，判断他们作为读书会伙伴的兼容性。
+
+## 分析维度框架
+
+### 1. 相似性分析 (Similarity Analysis)
+- **兴趣重叠度**: 共同爱好、相似偏好的程度
+- **阅读品味**: 喜欢的书籍类型、作者、主题的重叠
+- **阅读节奏**: 阅读速度、投入时间的匹配程度
+- **价值观共鸣**: 从阅读偏好中体现的价值观相似性
+
+### 2. 互补性分析 (Complementarity Analysis)  
+- **知识互补**: 不同领域的知识可以互相补充
+- **技能互补**: 分析能力、表达能力等技能的互补
+- **视角多样性**: 不同背景带来的多元视角
+- **成长潜力**: 互相促进学习和成长的可能性
+
+### 3. 兼容性分析 (Compatibility Analysis)
+- **沟通风格**: 基于偏好推断的沟通方式兼容性  
+- **学习方式**: 阅读习惯和学习偏好的匹配
+- **时间安排**: 阅读投入度和可用时间的协调性
+- **人格特质**: 从阅读偏好推断的性格特征兼容性
+
+## 评分标准
+- **优秀匹配 (8.0-10.0)**: 高度相似 + 良好互补 + 完美兼容
+- **良好匹配 (6.0-7.9)**: 中等相似 + 部分互补 + 基本兼容  
+- **一般匹配 (4.0-5.9)**: 少量共同点 + 有限互补 + 可接受兼容
+- **较差匹配 (2.0-3.9)**: 很少共同点 + 互补不足 + 兼容性问题
+- **不匹配 (0.0-1.9)**: 几乎无共同点 + 冲突倾向 + 严重不兼容
+
+## 分析要求
+1. 深度分析两个用户的所有可用信息
+2. 考虑显性和隐性的匹配因素
+3. 提供具体的匹配原因和建议
+4. 识别潜在的挑战和解决方案
+5. 给出具体的读书会活动建议
+
+返回格式必须是JSON:
+{
+    "compatibility_score": 0.0到10.0的数字,
+    "match_type": "相似型/互补型/混合型",
+    "confidence_level": 0.0到1.0的置信度,
+    "summary": "简洁的匹配总结(1-2句话)",
+    "detailed_analysis": {
+        "similarity_score": 0.0到10.0,
+        "complementarity_score": 0.0到10.0,
+        "compatibility_score": 0.0到10.0,
+        "similarity_highlights": ["相似点1", "相似点2"],
+        "complementarity_highlights": ["互补点1", "互补点2"],  
+        "compatibility_highlights": ["兼容点1", "兼容点2"]
+    },
+    "shared_interests": ["共同兴趣1", "共同兴趣2"],
+    "shared_books": ["共同书籍1", "共同书籍2"],
+    "potential_challenges": ["潜在挑战1", "潜在挑战2"],
+    "reading_recommendations": ["推荐书籍1", "推荐书籍2"],
+    "activity_suggestions": ["活动建议1", "活动建议2"],
+    "growth_opportunities": ["成长机会1", "成长机会2"],
+    "exact_matches": 精确匹配数量,
+    "semantic_matches": 语义匹配数量,
+    "category_matches": 类别匹配数量,
+    "match_reasoning": "详细的匹配逻辑说明(3-5句话)"
+}`;
+
+    const userPrompt = JSON.stringify({
+        user1_profile: profile1,
+        user2_profile: profile2,
+        analysis_request: "进行全面的读书会伙伴兼容性分析",
+        focus_areas: ["相似性", "互补性", "兼容性", "成长潜力"]
+    });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" },
+                temperature: 0.7,
+                max_tokens: 2000
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`AI API请求失败: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const content = data.choices[0].message.content;
+        
+        try {
+            const analysis = JSON.parse(content);
+            
+            // 验证和标准化返回结果
+            return {
+                compatibility_score: Math.max(0, Math.min(10, analysis.compatibility_score || 0)),
+                match_type: analysis.match_type || "未知类型",
+                confidence_level: Math.max(0, Math.min(1, analysis.confidence_level || 0.5)),
+                summary: analysis.summary || "AI分析完成",
+                detailed_analysis: analysis.detailed_analysis || {},
+                shared_interests: analysis.shared_interests || [],
+                shared_books: analysis.shared_books || [],
+                potential_challenges: analysis.potential_challenges || [],
+                reading_recommendations: analysis.reading_recommendations || [],
+                activity_suggestions: analysis.activity_suggestions || [],
+                growth_opportunities: analysis.growth_opportunities || [],
+                exact_matches: analysis.exact_matches || 0,
+                semantic_matches: analysis.semantic_matches || 0,
+                category_matches: analysis.category_matches || 0,
+                match_reasoning: analysis.match_reasoning || "AI分析完成"
+            };
+        } catch (parseError) {
+            console.warn('AI返回的JSON解析失败:', parseError, content);
+            throw new Error('AI返回格式错误');
+        }
+    } catch (error) {
+        console.error('AI匹配分析请求失败:', error);
+        throw error;
+    }
+}
+
 // 寻找相似搭档（仅管理员）- 升级版
 async function findSimilarMatches() {
     if (!isAdmin) {
@@ -1546,22 +1838,21 @@ async function findSimilarMatches() {
             }
             
             promises.push(
-                calculateSimilarity(members[i], members[j]).then(similarity => {
-                    if (similarity.score > 0) {
+                calculateAICompatibility(members[i], members[j]).then(result => {
+                    if (result.score > 0) {
                         matches.push({
                             member1: members[i],
                             member2: members[j],
-                            score: similarity.score,
-                            commonHobbies: similarity.commonHobbies,
-                            commonBooks: similarity.commonBooks,
-                            detailLevel: similarity.detailLevel,
-                            readingCommitmentCompatibility: similarity.readingCommitmentCompatibility,
-                            textPreferenceAnalysis: similarity.textPreferenceAnalysis,
-                            // 新增深度分析数据
-                            personalityProfiles: similarity.personalityProfiles,
-                            implicitAnalysis: similarity.implicitAnalysis,
-                            deepCompatibilityAnalysis: similarity.deepCompatibilityAnalysis,
-                            matchingDimensions: similarity.matchingDimensions,
+                            score: result.score,
+                            reason: result.reason,
+                            // 保持向后兼容的字段
+                            commonHobbies: result.analysis?.commonHobbies || [],
+                            commonBooks: result.analysis?.commonBooks || [],
+                            detailLevel: result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
+                            // 新增AI分析数据
+                            aiAnalysis: result.analysis?.ai_analysis,
+                            matchType: result.analysis?.ai_analysis?.match_type,
+                            confidenceLevel: result.analysis?.ai_analysis?.confidence_level,
                             type: 'similar'
                         });
                     }
@@ -1599,21 +1890,20 @@ async function findComplementaryMatches() {
             }
             
             promises.push(
-                calculateSimilarity(members[i], members[j]).then(similarity => {
+                calculateAICompatibility(members[i], members[j]).then(result => {
                     matches.push({
                         member1: members[i],
                         member2: members[j],
-                        score: similarity.score,
-                        commonHobbies: similarity.commonHobbies,
-                        commonBooks: similarity.commonBooks,
-                        detailLevel: similarity.detailLevel,
-                        readingCommitmentCompatibility: similarity.readingCommitmentCompatibility,
-                        textPreferenceAnalysis: similarity.textPreferenceAnalysis,
-                        // 新增深度分析数据
-                        personalityProfiles: similarity.personalityProfiles,
-                        implicitAnalysis: similarity.implicitAnalysis,
-                        deepCompatibilityAnalysis: similarity.deepCompatibilityAnalysis,
-                        matchingDimensions: similarity.matchingDimensions,
+                        score: result.score,
+                        reason: result.reason,
+                        // 保持向后兼容的字段
+                        commonHobbies: result.analysis?.commonHobbies || [],
+                        commonBooks: result.analysis?.commonBooks || [],
+                        detailLevel: result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
+                        // 新增AI分析数据
+                        aiAnalysis: result.analysis?.ai_analysis,
+                        matchType: result.analysis?.ai_analysis?.match_type,
+                        confidenceLevel: result.analysis?.ai_analysis?.confidence_level,
                         type: 'complementary'
                     });
                 })
