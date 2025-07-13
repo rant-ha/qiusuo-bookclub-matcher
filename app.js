@@ -265,6 +265,99 @@ function updateAiToggleUI() {
     }
 }
 
+// 进度条管理函数
+function showProgress() {
+    const progressContainer = document.getElementById('progressContainer');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        progressContainer.classList.add('progress-pulse');
+    }
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+    }
+    
+    // 重置进度条
+    updateProgress(0, 0, 0, '准备开始匹配分析...');
+}
+
+function hideProgress() {
+    const progressContainer = document.getElementById('progressContainer');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    
+    if (progressContainer) {
+        progressContainer.style.display = 'none';
+        progressContainer.classList.remove('progress-pulse');
+    }
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+    }
+}
+
+function updateProgress(currentBatch, totalBatches, completedPairs, statusText, startTime = null) {
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const progressDetails = document.getElementById('progressDetails');
+    const estimatedTime = document.getElementById('estimatedTime');
+    
+    if (!progressBar || !progressText || !progressPercentage || !progressDetails || !estimatedTime) {
+        return; // 如果元素不存在，直接返回
+    }
+    
+    // 计算进度百分比
+    const percentage = totalBatches > 0 ? Math.round((currentBatch / totalBatches) * 100) : 0;
+    
+    // 更新进度条
+    progressBar.style.width = `${percentage}%`;
+    
+    // 更新文本信息
+    progressText.textContent = statusText;
+    progressPercentage.textContent = `${percentage}%`;
+    progressDetails.textContent = `第 ${currentBatch}/${totalBatches} 批 (已完成 ${completedPairs} 个配对)`;
+    
+    // 计算预估时间
+    if (startTime && currentBatch > 0) {
+        const elapsed = (Date.now() - startTime) / 1000; // 已耗时（秒）
+        const avgTimePerBatch = elapsed / currentBatch; // 每批平均时间
+        const remainingBatches = totalBatches - currentBatch;
+        const estimatedRemaining = Math.round(remainingBatches * avgTimePerBatch);
+        
+        if (estimatedRemaining > 0) {
+            if (estimatedRemaining < 60) {
+                estimatedTime.textContent = `预估剩余: ${estimatedRemaining}秒`;
+            } else {
+                const minutes = Math.floor(estimatedRemaining / 60);
+                const seconds = estimatedRemaining % 60;
+                estimatedTime.textContent = `预估剩余: ${minutes}分${seconds}秒`;
+            }
+        } else {
+            estimatedTime.textContent = '即将完成...';
+        }
+    } else {
+        estimatedTime.textContent = '计算中...';
+    }
+    
+    // 当完成时，添加完成效果
+    if (percentage >= 100) {
+        progressText.textContent = '🎉 匹配分析完成！';
+        progressDetails.textContent = `共完成 ${completedPairs} 个配对分析`;
+        estimatedTime.textContent = '已完成';
+        
+        // 移除脉冲效果
+        const progressContainer = document.getElementById('progressContainer');
+        if (progressContainer) {
+            progressContainer.classList.remove('progress-pulse');
+        }
+        
+        // 3秒后自动隐藏进度条
+        setTimeout(() => {
+            hideProgress();
+        }, 3000);
+    }
+}
+
 // 处理注册
 async function handleRegistration(name, studentId) {
    await loadMembersFromGist(); // 确保数据最新
@@ -2035,11 +2128,8 @@ async function findSimilarMatches() {
         return;
     }
 
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    loadingIndicator.style.display = 'block';
-    loadingIndicator.textContent = aiAnalysisEnabled ? 
-        '🧠 正在进行AI智能分析，请稍候...' : 
-        '📊 正在进行传统匹配分析，请稍候...';
+    // 显示进度条
+    showProgress();
     
     const matches = [];
     
@@ -2060,16 +2150,28 @@ async function findSimilarMatches() {
     
     console.log(`总共需要处理 ${pairings.length} 个配对，使用并发控制限制同时请求数`);
     
-    // 显示进度提示
-    const loadingText = document.querySelector('#loadingIndicator');
-    if (loadingText) {
-        loadingText.textContent = `正在分析 ${pairings.length} 个配对，请稍候...`;
-    }
+    // 计算总批次数
+    const totalBatches = Math.ceil(pairings.length / MAX_CONCURRENT_REQUESTS);
+    const startTime = Date.now();
+    
+    // 初始化进度
+    updateProgress(0, totalBatches, 0, `准备分析 ${pairings.length} 个配对...`, startTime);
     
     // 分批处理，避免API速率限制
     for (let i = 0; i < pairings.length; i += MAX_CONCURRENT_REQUESTS) {
         const batch = pairings.slice(i, i + MAX_CONCURRENT_REQUESTS);
-        console.log(`处理第 ${Math.floor(i/MAX_CONCURRENT_REQUESTS) + 1} 批，共 ${batch.length} 个配对`);
+        const currentBatch = Math.floor(i / MAX_CONCURRENT_REQUESTS) + 1;
+        
+        console.log(`处理第 ${currentBatch} 批，共 ${batch.length} 个配对`);
+        
+        // 更新进度
+        updateProgress(
+            currentBatch - 1, 
+            totalBatches, 
+            matches.length, 
+            `正在处理第 ${currentBatch} 批配对...`,
+            startTime
+        );
         
         const batchPromises = batch.map(async (pairing) => {
             try {
@@ -2119,14 +2221,34 @@ async function findSimilarMatches() {
         const batchResults = await Promise.all(batchPromises);
         matches.push(...batchResults.filter(result => result !== null));
         
+        // 更新批次完成进度
+        updateProgress(
+            currentBatch, 
+            totalBatches, 
+            matches.length, 
+            `第 ${currentBatch} 批完成，已找到 ${matches.length} 个匹配`,
+            startTime
+        );
+        
         // 批次间添加延迟，进一步避免速率限制
         if (i + MAX_CONCURRENT_REQUESTS < pairings.length) {
             console.log('批次间等待500ms...');
             await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
+    
+    // 完成所有匹配
     matches.sort((a, b) => b.score - a.score);
-    document.getElementById('loadingIndicator').style.display = 'none';
+    
+    // 显示完成进度
+    updateProgress(
+        totalBatches, 
+        totalBatches, 
+        matches.length, 
+        '匹配分析完成！',
+        startTime
+    );
+    
     const title = aiAnalysisEnabled ? '🎯 深度智能相似搭档推荐' : '🎯 传统算法相似搭档推荐';
     displayMatches(matches.slice(0, 10), title);
 }
@@ -2142,11 +2264,8 @@ async function findComplementaryMatches() {
         return;
     }
 
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    loadingIndicator.style.display = 'block';
-    loadingIndicator.textContent = aiAnalysisEnabled ? 
-        '🧠 正在进行AI智能分析，请稍候...' : 
-        '📊 正在进行传统匹配分析，请稍候...';
+    // 显示进度条
+    showProgress();
     
     const matches = [];
     
@@ -2167,16 +2286,28 @@ async function findComplementaryMatches() {
     
     console.log(`互补匹配：总共需要处理 ${pairings.length} 个配对`);
     
-    // 显示进度提示
-    const loadingText = document.querySelector('#loadingIndicator');
-    if (loadingText) {
-        loadingText.textContent = `正在分析 ${pairings.length} 个互补配对，请稍候...`;
-    }
+    // 计算总批次数
+    const totalBatches = Math.ceil(pairings.length / MAX_CONCURRENT_REQUESTS);
+    const startTime = Date.now();
+    
+    // 初始化进度
+    updateProgress(0, totalBatches, 0, `准备分析 ${pairings.length} 个互补配对...`, startTime);
     
     // 分批处理，避免API速率限制
     for (let i = 0; i < pairings.length; i += MAX_CONCURRENT_REQUESTS) {
         const batch = pairings.slice(i, i + MAX_CONCURRENT_REQUESTS);
-        console.log(`处理第 ${Math.floor(i/MAX_CONCURRENT_REQUESTS) + 1} 批，共 ${batch.length} 个配对`);
+        const currentBatch = Math.floor(i / MAX_CONCURRENT_REQUESTS) + 1;
+        
+        console.log(`处理第 ${currentBatch} 批，共 ${batch.length} 个配对`);
+        
+        // 更新进度
+        updateProgress(
+            currentBatch - 1, 
+            totalBatches, 
+            matches.length, 
+            `正在处理第 ${currentBatch} 批互补配对...`,
+            startTime
+        );
         
         const batchPromises = batch.map(async (pairing) => {
             try {
@@ -2236,6 +2367,15 @@ async function findComplementaryMatches() {
         const batchResults = await Promise.all(batchPromises);
         matches.push(...batchResults);
         
+        // 更新批次完成进度
+        updateProgress(
+            currentBatch, 
+            totalBatches, 
+            matches.length, 
+            `第 ${currentBatch} 批完成，已分析 ${matches.length} 个配对`,
+            startTime
+        );
+        
         // 批次间添加延迟，进一步避免速率限制
         if (i + MAX_CONCURRENT_REQUESTS < pairings.length) {
             console.log('批次间等待500ms...');
@@ -2275,7 +2415,15 @@ async function findComplementaryMatches() {
         }
     });
     
-    document.getElementById('loadingIndicator').style.display = 'none';
+    // 显示完成进度
+    updateProgress(
+        totalBatches, 
+        totalBatches, 
+        matches.length, 
+        '互补匹配分析完成！',
+        startTime
+    );
+    
     const title = aiAnalysisEnabled ? '🌱 深度智能互补搭档推荐' : '🌱 传统算法互补搭档推荐';
     displayMatches(matches.slice(0, 10), title);
 }
