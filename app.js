@@ -13,6 +13,46 @@ let currentUser = null; // 当前登录用户
 let isAdmin = false;
 let aiAnalysisEnabled = true; // AI分析开关状态
 
+// 日志级别配置
+const LOG_LEVELS = {
+    ERROR: 0,
+    WARN: 1,
+    INFO: 2,
+    DEBUG: 3
+};
+
+let currentLogLevel = LOG_LEVELS.INFO; // 默认日志级别
+
+// 智能日志记录系统
+const Logger = {
+    error: (message, ...args) => {
+        if (currentLogLevel >= LOG_LEVELS.ERROR) {
+            console.error('❌', message, ...args);
+        }
+    },
+    warn: (message, ...args) => {
+        if (currentLogLevel >= LOG_LEVELS.WARN) {
+            console.warn('⚠️', message, ...args);
+        }
+    },
+    info: (message, ...args) => {
+        if (currentLogLevel >= LOG_LEVELS.INFO) {
+            console.log('ℹ️', message, ...args);
+        }
+    },
+    debug: (message, ...args) => {
+        if (currentLogLevel >= LOG_LEVELS.DEBUG) {
+            console.log('🔍', message, ...args);
+        }
+    },
+    monitoring: (message, ...args) => {
+        // 监控日志只在调试模式下显示
+        if (currentLogLevel >= LOG_LEVELS.DEBUG) {
+            console.log('📊', message, ...args);
+        }
+    }
+};
+
 // 验证规则配置
 const VALIDATION_RULES = {
     gender: {
@@ -244,7 +284,37 @@ function toggleAiAnalysis() {
     aiAnalysisEnabled = !aiAnalysisEnabled;
     localStorage.setItem('ai_analysis_enabled', aiAnalysisEnabled.toString());
     updateAiToggleUI();
-    console.log(`AI分析已${aiAnalysisEnabled ? '启用' : '禁用'}`);
+    Logger.info(`AI分析已${aiAnalysisEnabled ? '启用' : '禁用'}`);
+}
+
+// 日志级别控制管理函数
+function toggleLogLevel() {
+    const levels = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
+    const currentIndex = levels.findIndex(level => LOG_LEVELS[level] === currentLogLevel);
+    const nextIndex = (currentIndex + 1) % levels.length;
+    currentLogLevel = LOG_LEVELS[levels[nextIndex]];
+    
+    localStorage.setItem('log_level', levels[nextIndex]);
+    updateLogLevelUI();
+    Logger.info(`日志级别已切换到: ${levels[nextIndex]}`);
+}
+
+// 更新日志级别UI状态
+function updateLogLevelUI() {
+    const logLevelBtn = document.getElementById('logLevelBtn');
+    if (logLevelBtn) {
+        const levelNames = { 0: 'ERROR', 1: 'WARN', 2: 'INFO', 3: 'DEBUG' };
+        const currentLevelName = levelNames[currentLogLevel];
+        logLevelBtn.textContent = `📝 日志级别：${currentLevelName}`;
+        
+        const levelColors = {
+            'ERROR': 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)',
+            'WARN': 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)',
+            'INFO': 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)',
+            'DEBUG': 'linear-gradient(135deg, #6f42c1 0%, #59359a 100%)'
+        };
+        logLevelBtn.style.background = levelColors[currentLevelName];
+    }
 }
 
 // 更新AI开关UI状态
@@ -2058,9 +2128,9 @@ const memoryMonitor = {
             console.log(`垃圾回收：清理了 ${expiredCount} 个过期缓存条目`);
         }
         
-        // 强制垃圾回收（如果可用）
-        if (global.gc) {
-            global.gc();
+        // 强制垃圾回收（如果可用），移除对Node.js `global` 的引用以修复浏览器错误
+        if (typeof window !== 'undefined' && typeof window.gc === 'function') {
+            window.gc();
         }
     },
     
@@ -2236,7 +2306,7 @@ const errorMonitoringSystem = {
     
     // 监控配置
     config: {
-        HEALTH_CHECK_INTERVAL: 30 * 1000,     // 30秒健康检查
+        HEALTH_CHECK_INTERVAL: 2 * 60 * 1000,     // 2分钟健康检查
         ERROR_WINDOW_SIZE: 100,               // 错误率计算窗口
         CRITICAL_ERROR_THRESHOLD: 10,         // 严重错误阈值
         RECOVERY_SUCCESS_THRESHOLD: 5,        // 恢复成功阈值
@@ -4832,7 +4902,7 @@ function categorizeMatches(matches) {
  * 刷新监控数据显示
  */
 function refreshMonitoringData() {
-    console.log('🔄 刷新监控数据...');
+    Logger.monitoring('刷新监控数据...');
     
     // 更新系统健康状态
     errorMonitoringSystem.updateSystemHealth();
@@ -4864,7 +4934,7 @@ function refreshMonitoringData() {
     healthElement.textContent = healthInfo.text;
     healthElement.style.color = healthInfo.color;
     
-    console.log('✅ 监控数据刷新完成');
+    Logger.monitoring('监控数据刷新完成');
 }
 
 /**
@@ -5061,9 +5131,36 @@ showLoggedInView = function() {
         setTimeout(() => {
             refreshMonitoringData();
             
+            // 智能监控刷新策略
+            let monitoringConfig = {
+                refreshInterval: 2 * 60 * 1000, // 2分钟
+                isMonitoringVisible: false,
+                pauseWhenHidden: true
+            };
+
+            // 检测监控面板是否可见
+            function isMonitoringPanelVisible() {
+                const monitoringElements = [
+                    document.getElementById('totalErrors'),
+                    document.getElementById('systemHealth')
+                ];
+                return monitoringElements.some(el => el && el.offsetParent !== null);
+            }
+
+            // 智能刷新监控数据
+            function smartRefreshMonitoring() {
+                // 检查是否应该刷新
+                if (monitoringConfig.pauseWhenHidden && !isMonitoringPanelVisible()) {
+                    Logger.debug('监控面板不可见，跳过刷新');
+                    return;
+                }
+                
+                refreshMonitoringData();
+            }
+
             // 设置定期刷新监控数据
             if (!window.monitoringInterval) {
-                window.monitoringInterval = setInterval(refreshMonitoringData, 30000); // 每30秒刷新
+                window.monitoringInterval = setInterval(smartRefreshMonitoring, monitoringConfig.refreshInterval);
             }
         }, 1000);
     }
