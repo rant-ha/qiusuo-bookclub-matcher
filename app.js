@@ -1690,7 +1690,207 @@ function checkGenderPreferenceMatch(user1, user2) {
     return user1WantsUser2 && user2WantsUser1;
 }
 
-// ===== 新一代AI驱动匹配系统 =====
+// ===== 降级策略辅助函数 =====
+
+/**
+ * 获取分析模式标签
+ */
+function getAnalysisModeLabel(result) {
+    if (result.degraded) {
+        return `AI降级→传统`;
+    } else if (result.traditionalMode) {
+        return '传统';
+    } else if (result.healthDegraded) {
+        return '传统(降级)';
+    } else if (result.analysis?.ai_analysis) {
+        return 'AI智能';
+    }
+    return '传统';
+}
+
+/**
+ * 获取分析模式
+ */
+function getAnalysisMode(result) {
+    if (result.analysis?.ai_analysis && !result.degraded) {
+        return 'ai';
+    } else if (result.degraded) {
+        return 'ai_degraded';
+    } else if (result.healthDegraded) {
+        return 'traditional_degraded';
+    }
+    return 'traditional';
+}
+
+/**
+ * 从结果中获取字段（兼容AI和传统模式）
+ */
+function getFieldFromResult(result, fieldName) {
+    if (result.analysis?.[fieldName]) {
+        return result.analysis[fieldName];
+    } else if (result[fieldName]) {
+        return result[fieldName];
+    }
+    
+    // 默认值
+    const defaults = {
+        'commonHobbies': [],
+        'commonBooks': [],
+        'detailLevel': { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }
+    };
+    
+    return defaults[fieldName] || null;
+}
+
+/**
+ * 获取匹配类型
+ */
+function getMatchTypeFromResult(result) {
+    if (result.analysis?.ai_analysis?.match_type) {
+        return result.analysis.ai_analysis.match_type;
+    } else if (result.degraded) {
+        return '降级匹配';
+    } else if (result.traditionalMode) {
+        return '传统匹配';
+    }
+    return '未知类型';
+}
+
+/**
+ * 手动重置API健康状态（管理员功能）
+ */
+function resetApiHealth() {
+    if (!isAdmin) {
+        alert('只有管理员可以重置API状态');
+        return;
+    }
+    
+    const confirmed = confirm('确定要重置API健康状态吗？这将清除所有错误记录并退出降级模式。');
+    if (confirmed) {
+        apiHealthMonitor.forceReset();
+        alert('API健康状态已重置');
+    }
+}
+
+/**
+ * 检查和显示API健康状态（管理员功能）
+ */
+function showApiHealthStatus() {
+    if (!isAdmin) {
+        alert('只有管理员可以查看API状态');
+        return;
+    }
+    
+    const status = apiHealthMonitor.getDegradationStatus();
+    const healthInfo = `
+📊 API健康状态报告
+================
+🔧 总体状态: ${status.degraded ? '⚠️ 降级模式' : '✅ 正常'}
+🎯 AI分析开关: ${aiAnalysisEnabled ? '🟢 开启' : '🔴 关闭'}
+📈 成功请求: ${apiHealthMonitor.successCount}
+❌ 失败请求: ${apiHealthMonitor.errorCount}
+🔄 连续错误: ${status.consecutiveErrors}
+📊 错误率: ${(status.errorRate * 100).toFixed(1)}%
+⏱️ 当前批次大小: ${apiHealthMonitor.currentBatchSize}
+
+${status.degraded ? `
+⚠️ 降级模式详情:
+📅 开始时间: ${new Date(status.startTime).toLocaleString()}
+⏰ 持续时间: ${Math.round(status.duration / 1000)}秒
+🔄 可恢复: ${status.canRecover ? '是' : '否'}
+` : ''}
+================
+    `.trim();
+    
+    alert(healthInfo);
+}
+
+// ===== 匹配标题和状态生成函数 =====
+
+/**
+ * 生成智能匹配标题（考虑降级状态）
+ */
+function getMatchingTitle(matches, type) {
+    const status = apiHealthMonitor.getDegradationStatus();
+    const degradedCount = matches.filter(m => m.degraded).length;
+    const traditionalCount = matches.filter(m => m.traditionalMode || m.healthDegraded).length;
+    
+    let baseTitle = type === 'similar' ? '🎯 相似搭档推荐' : '🌱 互补搭档推荐';
+    let subtitle = '';
+    
+    if (status.degraded) {
+        baseTitle = `⚠️ ${baseTitle} (降级模式)`;
+        subtitle = `系统已切换到传统算法 | 降级时长: ${Math.round(status.duration/1000)}秒`;
+    } else if (!aiAnalysisEnabled) {
+        baseTitle = `📊 传统算法${baseTitle.substring(2)}`;
+        subtitle = 'AI分析已关闭，使用传统匹配算法';
+    } else if (degradedCount > 0) {
+        baseTitle = `🔀 混合模式${baseTitle.substring(2)}`;
+        subtitle = `智能AI分析 + 传统算法降级 | ${degradedCount}/${matches.length} 个配对降级`;
+    } else {
+        baseTitle = `🧠 深度智能${baseTitle.substring(2)}`;
+        subtitle = 'AI驱动的高级语义分析匹配';
+    }
+    
+    return { title: baseTitle, subtitle };
+}
+
+/**
+ * 获取匹配项的样式类
+ */
+function getMatchItemClass(match) {
+    let classes = ['match-item'];
+    
+    if (match.degraded) {
+        classes.push('degraded-match');
+    } else if (match.traditionalMode || match.healthDegraded) {
+        classes.push('traditional-match');
+    }
+    
+    return classes.join(' ');
+}
+
+/**
+ * 生成匹配状态标签
+ */
+function generateMatchStatusTags(match) {
+    let tags = [];
+    
+    if (match.degraded) {
+        tags.push(`<span class="tag degraded-tag">AI降级→传统</span>`);
+    } else if (match.healthDegraded) {
+        tags.push(`<span class="tag traditional-degraded-tag">传统(降级)</span>`);
+    } else if (match.traditionalMode) {
+        tags.push(`<span class="tag category-tag">传统算法</span>`);
+    } else if (match.aiAnalysis) {
+        tags.push(`<span class="tag ai-analysis-tag">AI智能</span>`);
+        if (match.confidenceLevel) {
+            tags.push(`<span class="tag score-tag">置信度: ${(match.confidenceLevel * 100).toFixed(0)}%</span>`);
+        }
+    }
+    
+    if (match.analysisMode) {
+        const modeLabels = {
+            'ai': '🧠 AI模式',
+            'ai_degraded': '🔀 AI降级',
+            'traditional_degraded': '📊 传统降级',
+            'traditional': '📊 传统模式',
+            'error': '❌ 分析错误'
+        };
+        const modeLabel = modeLabels[match.analysisMode] || match.analysisMode;
+        // 只在没有其他状态标签时显示模式标签
+        if (tags.length === 0) {
+            tags.push(`<span class="tag ai-element-tag">${modeLabel}</span>`);
+        }
+    }
+    
+    return tags.join(' ');
+}
+
+// ===== 用户匹配类型偏好调整AI分析分数 =====
+
+// 用户画像缓存
+const userProfileCache = new Map();
 
 /**
  * 创建标准化的用户画像，用于AI匹配分析
@@ -1698,6 +1898,12 @@ function checkGenderPreferenceMatch(user1, user2) {
  * @returns {Object} 标准化的用户画像
  */
 function createUserProfile(user) {
+    // 检查缓存
+    const userId = user.id || user.name;
+    if (userProfileCache.has(userId)) {
+        return userProfileCache.get(userId);
+    }
+    
     const migratedUser = migrateUserData(user);
     const questionnaire = migratedUser.questionnaire || {};
     
@@ -1725,7 +1931,7 @@ function createUserProfile(user) {
         (hasBookCategories ? 0.05 : 0)
     );
     
-    return {
+    const profile = {
         // 基本信息
         basic_info: {
             name: migratedUser.name || '',
@@ -1766,6 +1972,1437 @@ function createUserProfile(user) {
             data_version: questionnaire.version || '1.0'
         }
     };
+    
+    // 缓存用户画像
+    userProfileCache.set(userId, profile);
+    
+    return profile;
+}
+
+// ===== API优化工具函数 =====
+
+// 请求缓存管理
+const requestCache = new Map();
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24小时缓存
+
+// ===== 内存使用优化配置 =====
+const MEMORY_CONFIG = {
+    MAX_CACHE_SIZE: 1000,        // 最大缓存条目数
+    MAX_PROFILE_CACHE_SIZE: 500, // 最大用户画像缓存数
+    CHUNK_SIZE: 50,              // 每个处理块的大小
+    GC_INTERVAL: 10 * 60 * 1000, // 垃圾回收间隔（10分钟）
+    MEMORY_WARNING_THRESHOLD: 0.8 // 内存警告阈值（80%）
+};
+
+// 内存使用监控
+const memoryMonitor = {
+    lastGCTime: Date.now(),
+    cacheHits: 0,
+    cacheMisses: 0,
+    
+    checkMemoryUsage() {
+        // 检查缓存大小
+        if (requestCache.size > MEMORY_CONFIG.MAX_CACHE_SIZE) {
+            this.cleanupOldestEntries(requestCache, MEMORY_CONFIG.MAX_CACHE_SIZE * 0.7);
+        }
+        
+        if (userProfileCache.size > MEMORY_CONFIG.MAX_PROFILE_CACHE_SIZE) {
+            this.cleanupOldestEntries(userProfileCache, MEMORY_CONFIG.MAX_PROFILE_CACHE_SIZE * 0.7);
+        }
+        
+        // 定期垃圾回收
+        if (Date.now() - this.lastGCTime > MEMORY_CONFIG.GC_INTERVAL) {
+            this.performGarbageCollection();
+            this.lastGCTime = Date.now();
+        }
+    },
+    
+    cleanupOldestEntries(cache, targetSize) {
+        const entries = Array.from(cache.entries());
+        // 如果是requestCache，按时间戳排序
+        if (cache === requestCache) {
+            entries.sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+        }
+        
+        // 删除最旧的条目
+        const deleteCount = cache.size - targetSize;
+        for (let i = 0; i < deleteCount; i++) {
+            cache.delete(entries[i][0]);
+        }
+        
+        console.log(`清理缓存：删除了 ${deleteCount} 个旧条目`);
+        
+        // 如果删除的条目过多，记录内存警告
+        if (deleteCount > targetSize * 0.5) {
+            errorMonitoringSystem.logError('MEMORY_WARNING', {
+                deletedItems: deleteCount,
+                targetSize,
+                cacheType: cache === requestCache ? 'requestCache' : 'profileCache'
+            });
+        }
+    },
+    
+    performGarbageCollection() {
+        // 清理过期的请求缓存
+        const now = Date.now();
+        let expiredCount = 0;
+        
+        for (const [key, value] of requestCache.entries()) {
+            if (!isValidCache(value)) {
+                requestCache.delete(key);
+                expiredCount++;
+            }
+        }
+        
+        if (expiredCount > 0) {
+            console.log(`垃圾回收：清理了 ${expiredCount} 个过期缓存条目`);
+        }
+        
+        // 强制垃圾回收（如果可用）
+        if (global.gc) {
+            global.gc();
+        }
+    },
+    
+    getCacheStats() {
+        const hitRate = this.cacheHits + this.cacheMisses > 0 
+            ? (this.cacheHits / (this.cacheHits + this.cacheMisses) * 100).toFixed(2)
+            : 0;
+            
+        return {
+            requestCacheSize: requestCache.size,
+            profileCacheSize: userProfileCache.size,
+            cacheHitRate: `${hitRate}%`,
+            cacheHits: this.cacheHits,
+            cacheMisses: this.cacheMisses
+        };
+    }
+};
+
+// ===== 高级错误监控与恢复系统 =====
+
+// 错误类型分类
+const ERROR_TYPES = {
+    NETWORK_ERROR: 'network_error',
+    RATE_LIMIT: 'rate_limit', 
+    API_UNAVAILABLE: 'api_unavailable',
+    TIMEOUT: 'timeout',
+    AUTHENTICATION: 'authentication',
+    QUOTA_EXCEEDED: 'quota_exceeded',
+    SERVER_ERROR: 'server_error',
+    PARSING_ERROR: 'parsing_error',
+    UNKNOWN: 'unknown'
+};
+
+// 错误恢复策略配置
+const RECOVERY_STRATEGIES = {
+    [ERROR_TYPES.NETWORK_ERROR]: {
+        maxRetries: 3,
+        baseDelay: 2000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'medium'
+    },
+    [ERROR_TYPES.RATE_LIMIT]: {
+        maxRetries: 5,
+        baseDelay: 5000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'high'
+    },
+    [ERROR_TYPES.API_UNAVAILABLE]: {
+        maxRetries: 2,
+        baseDelay: 10000,
+        backoffMultiplier: 3,
+        canRecover: false,
+        criticalLevel: 'critical'
+    },
+    [ERROR_TYPES.TIMEOUT]: {
+        maxRetries: 2,
+        baseDelay: 3000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'medium'
+    },
+    [ERROR_TYPES.AUTHENTICATION]: {
+        maxRetries: 1,
+        baseDelay: 1000,
+        backoffMultiplier: 1,
+        canRecover: false,
+        criticalLevel: 'critical'
+    },
+    [ERROR_TYPES.QUOTA_EXCEEDED]: {
+        maxRetries: 0,
+        baseDelay: 30000,
+        backoffMultiplier: 1,
+        canRecover: false,
+        criticalLevel: 'critical'
+    },
+    [ERROR_TYPES.SERVER_ERROR]: {
+        maxRetries: 2,
+        baseDelay: 5000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'high'
+    },
+    [ERROR_TYPES.PARSING_ERROR]: {
+        maxRetries: 1,
+        baseDelay: 1000,
+        backoffMultiplier: 1,
+        canRecover: true,
+        criticalLevel: 'low'
+    },
+    [ERROR_TYPES.UNKNOWN]: {
+        maxRetries: 2,
+        baseDelay: 2000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'medium'
+    }
+};
+
+
+// ===== 全面错误监控与恢复系统 =====
+
+/**
+ * 增强型错误监控系统 - 阶段3.2
+ * 提供全面的错误分类、健康监控、自动恢复和实时统计
+ */
+const errorMonitoringSystem = {
+    // 错误分类与计数
+    errorCategories: {
+        API_RATE_LIMIT: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'high',
+            description: 'API速率限制',
+            recoveryAction: 'exponential_backoff'
+        },
+        API_NETWORK_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'medium',
+            description: 'API网络错误',
+            recoveryAction: 'retry_with_delay'
+        },
+        AI_PARSING_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'medium',
+            description: 'AI返回解析错误',
+            recoveryAction: 'fallback_traditional'
+        },
+        AI_TIMEOUT_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'high',
+            description: 'AI请求超时',
+            recoveryAction: 'reduce_batch_size'
+        },
+        CACHE_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'low',
+            description: '缓存系统错误',
+            recoveryAction: 'cache_cleanup'
+        },
+        MEMORY_WARNING: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'medium',
+            description: '内存使用警告',
+            recoveryAction: 'garbage_collection'
+        },
+        USER_DATA_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'low',
+            description: '用户数据不完整',
+            recoveryAction: 'skip_processing'
+        }
+    },
+    
+    // 实时系统健康状态
+    systemHealth: {
+        overall: 'healthy',        // healthy, degraded, critical, maintenance
+        api: 'operational',        // operational, degraded, down
+        cache: 'operational',      // operational, degraded, disabled
+        memory: 'optimal',         // optimal, warning, critical
+        lastHealthCheck: Date.now(),
+        consecutiveHealthChecks: 0,
+        isRecovering: false,
+        recoveryStartTime: null
+    },
+    
+    // 监控配置
+    config: {
+        HEALTH_CHECK_INTERVAL: 30 * 1000,     // 30秒健康检查
+        ERROR_WINDOW_SIZE: 100,               // 错误率计算窗口
+        CRITICAL_ERROR_THRESHOLD: 10,         // 严重错误阈值
+        RECOVERY_SUCCESS_THRESHOLD: 5,        // 恢复成功阈值
+        MEMORY_WARNING_THRESHOLD: 0.8,        // 内存警告阈值
+        CACHE_HIT_RATE_WARNING: 0.3,          // 缓存命中率警告线
+        MAX_ERROR_LOG_SIZE: 1000              // 错误日志最大条目
+    },
+    
+    // 错误日志存储
+    errorLog: [],
+    performanceMetrics: {
+        totalRequests: 0,
+        successfulRequests: 0,
+        averageResponseTime: 0,
+        responseTimeHistory: [],
+        lastMetricsReset: Date.now()
+    },
+    
+    // 自动恢复策略配置
+    recoveryStrategies: {
+        exponential_backoff: {
+            name: '指数退避',
+            execute: async (errorDetails) => {
+                const delay = Math.min(1000 * Math.pow(2, errorDetails.retryCount || 0), 30000);
+                console.log(`执行指数退避策略，延迟 ${delay}ms`);
+                await sleep(delay);
+                return { success: true, nextRetryDelay: delay * 2 };
+            }
+        },
+        fallback_traditional: {
+            name: '降级到传统算法',
+            execute: async (errorDetails) => {
+                console.log('AI不可用，自动切换到传统匹配算法');
+                aiAnalysisEnabled = false;
+                return { success: true, switchedMode: 'traditional' };
+            }
+        },
+        cache_cleanup: {
+            name: '缓存清理',
+            execute: async (errorDetails) => {
+                console.log('执行缓存清理恢复策略');
+                memoryMonitor.performGarbageCollection();
+                advancedCacheSystem.cleanupCache(advancedCacheSystem.aiAnalysisCache, 
+                    advancedCacheSystem.config.MAX_AI_CACHE_SIZE * 0.5);
+                return { success: true, cleanedItems: 'cache' };
+            }
+        },
+        reduce_batch_size: {
+            name: '减少批处理大小',
+            execute: async (errorDetails) => {
+                const oldSize = apiHealthMonitor.currentBatchSize;
+                apiHealthMonitor.currentBatchSize = Math.max(1, Math.floor(oldSize / 2));
+                console.log(`降低批处理大小: ${oldSize} -> ${apiHealthMonitor.currentBatchSize}`);
+                return { success: true, oldSize, newSize: apiHealthMonitor.currentBatchSize };
+            }
+        },
+        garbage_collection: {
+            name: '强制垃圾回收',
+            execute: async (errorDetails) => {
+                console.log('执行内存垃圾回收');
+                memoryMonitor.performGarbageCollection();
+                return { success: true, action: 'gc_performed' };
+            }
+        }
+    },
+    
+    // 记录错误的核心方法
+    logError(errorType, errorDetails = {}) {
+        const timestamp = Date.now();
+        const errorCategory = this.errorCategories[errorType];
+        
+        if (errorCategory) {
+            errorCategory.count++;
+            errorCategory.lastOccurred = timestamp;
+        }
+        
+        // 添加到错误日志
+        const logEntry = {
+            timestamp,
+            type: errorType,
+            severity: errorCategory?.severity || 'unknown',
+            details: errorDetails,
+            userAgent: navigator?.userAgent || 'unknown',
+            url: window?.location?.href || 'unknown'
+        };
+        
+        this.errorLog.push(logEntry);
+        
+        // 限制日志大小
+        if (this.errorLog.length > this.config.MAX_ERROR_LOG_SIZE) {
+            this.errorLog = this.errorLog.slice(-this.config.MAX_ERROR_LOG_SIZE);
+        }
+        
+        // 更新系统健康状态
+        this.updateSystemHealth();
+        
+        // 输出到控制台（带颜色标识）
+        const severityColors = {
+            'high': 'color: #dc3545; font-weight: bold;',
+            'medium': 'color: #fd7e14; font-weight: bold;',
+            'low': 'color: #6c757d;'
+        };
+        
+        console.log(
+            `%c[ERROR-MONITOR] ${errorType}: ${errorCategory?.description || 'Unknown error'}`,
+            severityColors[errorCategory?.severity] || '',
+            errorDetails
+        );
+        
+        // 触发自动恢复机制
+        this.handleAutoRecovery(errorType, errorDetails);
+    },
+    
+    // 自动恢复处理
+    async handleAutoRecovery(errorType, errorDetails) {
+        const errorCategory = this.errorCategories[errorType];
+        if (!errorCategory || !errorCategory.recoveryAction) {
+            return;
+        }
+        
+        const strategy = this.recoveryStrategies[errorCategory.recoveryAction];
+        if (strategy) {
+            try {
+                console.log(`🔧 开始执行自动恢复策略: ${strategy.name}`);
+                const result = await strategy.execute({ 
+                    ...errorDetails, 
+                    errorType, 
+                    timestamp: Date.now() 
+                });
+                
+                console.log(`✅ 恢复策略执行成功:`, result);
+                
+                // 记录恢复成功
+                this.logRecoveryAction(errorType, strategy.name, result, true);
+            } catch (recoveryError) {
+                console.error(`❌ 恢复策略执行失败:`, recoveryError);
+                this.logRecoveryAction(errorType, strategy.name, recoveryError, false);
+            }
+        }
+    },
+    
+    // 记录恢复操作
+    logRecoveryAction(errorType, strategyName, result, success) {
+        this.errorLog.push({
+            timestamp: Date.now(),
+            type: 'RECOVERY_ACTION',
+            severity: 'info',
+            details: {
+                originalError: errorType,
+                strategy: strategyName,
+                result: result,
+                success: success
+            }
+        });
+    },
+    
+    // 更新系统健康状态
+    updateSystemHealth() {
+        const now = Date.now();
+        const recentErrors = this.getRecentErrors(5 * 60 * 1000); // 5分钟内的错误
+        
+        // 计算整体健康状态
+        const highSeverityErrors = recentErrors.filter(e => 
+            this.errorCategories[e.type]?.severity === 'high').length;
+        const totalRecentErrors = recentErrors.length;
+        
+        let overallHealth = 'healthy';
+        if (highSeverityErrors >= 3 || totalRecentErrors >= 10) {
+            overallHealth = 'critical';
+        } else if (highSeverityErrors >= 1 || totalRecentErrors >= 5) {
+            overallHealth = 'degraded';
+        }
+        
+        // 更新API状态
+        const apiErrors = recentErrors.filter(e => 
+            e.type.startsWith('API_') || e.type.startsWith('AI_')).length;
+        let apiStatus = 'operational';
+        if (apiErrors >= 5) {
+            apiStatus = 'down';
+        } else if (apiErrors >= 2) {
+            apiStatus = 'degraded';
+        }
+        
+        // 更新缓存状态
+        const cacheErrors = recentErrors.filter(e => e.type === 'CACHE_ERROR').length;
+        let cacheStatus = 'operational';
+        if (cacheErrors >= 3) {
+            cacheStatus = 'disabled';
+        } else if (cacheErrors >= 1) {
+            cacheStatus = 'degraded';
+        }
+        
+        // 更新内存状态
+        const memoryErrors = recentErrors.filter(e => e.type === 'MEMORY_WARNING').length;
+        let memoryStatus = 'optimal';
+        if (memoryErrors >= 3) {
+            memoryStatus = 'critical';
+        } else if (memoryErrors >= 1) {
+            memoryStatus = 'warning';
+        }
+        
+        // 保存旧状态用于比较
+        const oldHealth = { ...this.systemHealth };
+        
+        // 更新健康状态
+        this.systemHealth = {
+            overall: overallHealth,
+            api: apiStatus,
+            cache: cacheStatus,
+            memory: memoryStatus,
+            lastHealthCheck: now,
+            consecutiveHealthChecks: this.systemHealth.consecutiveHealthChecks + 1,
+            isRecovering: this.systemHealth.isRecovering,
+            recoveryStartTime: this.systemHealth.recoveryStartTime
+        };
+        
+        // 检查状态变化
+        if (oldHealth.overall !== overallHealth) {
+            console.log(`🏥 系统健康状态变化: ${oldHealth.overall} -> ${overallHealth}`);
+        }
+        
+        // 更新UI显示（如果存在）
+        this.updateMonitoringUI();
+    },
+    
+    // 获取最近的错误
+    getRecentErrors(timeWindow = 5 * 60 * 1000) {
+        const cutoff = Date.now() - timeWindow;
+        return this.errorLog.filter(entry => entry.timestamp > cutoff);
+    },
+    
+    // 获取错误统计
+    getErrorStats() {
+        const now = Date.now();
+        const last24h = now - 24 * 60 * 60 * 1000;
+        const lastHour = now - 60 * 60 * 1000;
+        const last5min = now - 5 * 60 * 1000;
+        
+        const recent24h = this.errorLog.filter(e => e.timestamp > last24h);
+        const recentHour = this.errorLog.filter(e => e.timestamp > lastHour);
+        const recent5min = this.errorLog.filter(e => e.timestamp > last5min);
+        
+        return {
+            total: this.errorLog.length,
+            last24h: recent24h.length,
+            lastHour: recentHour.length,
+            last5min: recent5min.length,
+            errorRate5min: recent5min.length / 5, // 每分钟错误数
+            byCategory: Object.fromEntries(
+                Object.entries(this.errorCategories).map(([key, value]) => [
+                    key, 
+                    { count: value.count, lastOccurred: value.lastOccurred }
+                ])
+            ),
+            bySeverity: {
+                high: recent24h.filter(e => this.errorCategories[e.type]?.severity === 'high').length,
+                medium: recent24h.filter(e => this.errorCategories[e.type]?.severity === 'medium').length,
+                low: recent24h.filter(e => this.errorCategories[e.type]?.severity === 'low').length
+            }
+        };
+    },
+    
+    // 更新监控UI（如果存在监控面板）
+    updateMonitoringUI() {
+        // 更新API状态指示器
+        const apiStatusElement = document.getElementById('apiStatus');
+        const apiStatusText = document.getElementById('apiStatusText');
+        
+        if (apiStatusElement && apiStatusText) {
+            const statusStyles = {
+                'operational': { color: '#28a745', text: '正常' },
+                'degraded': { color: '#ffc107', text: '降级' },
+                'down': { color: '#dc3545', text: '故障' }
+            };
+            
+            const style = statusStyles[this.systemHealth.api] || statusStyles['down'];
+            apiStatusElement.style.color = style.color;
+            apiStatusText.textContent = style.text;
+        }
+        
+        // 更新错误率显示
+        const errorRateElement = document.getElementById('errorRate');
+        if (errorRateElement) {
+            const stats = this.getErrorStats();
+            const errorRate = ((stats.errorRate5min || 0) * 100).toFixed(1);
+            errorRateElement.textContent = `${errorRate}%`;
+            
+            // 根据错误率设置颜色
+            if (stats.errorRate5min > 2) {
+                errorRateElement.style.color = '#dc3545';
+            } else if (stats.errorRate5min > 0.5) {
+                errorRateElement.style.color = '#ffc107';
+            } else {
+                errorRateElement.style.color = '#28a745';
+            }
+        }
+        
+        // 更新缓存命中率
+        const cacheHitRateElement = document.getElementById('cacheHitRate');
+        if (cacheHitRateElement) {
+            const cacheStats = advancedCacheSystem.getCacheStats();
+            const hitRate = cacheStats.aiAnalysis?.hitRate || '0%';
+            cacheHitRateElement.textContent = hitRate;
+            
+            // 根据命中率设置颜色
+            const hitRateNum = parseFloat(hitRate);
+            if (hitRateNum < 30) {
+                cacheHitRateElement.style.color = '#dc3545';
+            } else if (hitRateNum < 60) {
+                cacheHitRateElement.style.color = '#ffc107';
+            } else {
+                cacheHitRateElement.style.color = '#28a745';
+            }
+        }
+    },
+    
+    // 获取系统健康报告
+    getHealthReport() {
+        const stats = this.getErrorStats();
+        const cacheStats = advancedCacheSystem.getCacheStats();
+        const memoryStats = memoryMonitor.getCacheStats();
+        
+        return {
+            timestamp: Date.now(),
+            systemHealth: this.systemHealth,
+            errorStats: stats,
+            performance: {
+                totalRequests: this.performanceMetrics.totalRequests,
+                successRate: this.performanceMetrics.totalRequests > 0 ? 
+                    (this.performanceMetrics.successfulRequests / this.performanceMetrics.totalRequests * 100).toFixed(2) + '%' : '0%',
+                averageResponseTime: this.performanceMetrics.averageResponseTime + 'ms'
+            },
+            cacheHealth: {
+                aiCacheSize: cacheStats.aiAnalysis?.size || 0,
+                aiCacheHitRate: cacheStats.aiAnalysis?.hitRate || '0%',
+                userProfilesSize: cacheStats.userProfiles?.size || 0,
+                requestCacheSize: cacheStats.requestCache?.size || 0
+            },
+            memoryHealth: {
+                requestCacheSize: memoryStats.requestCacheSize,
+                profileCacheSize: memoryStats.profileCacheSize,
+                cacheHitRate: memoryStats.cacheHitRate
+            },
+            recommendations: this.generateRecommendations()
+        };
+    },
+    
+    // 生成优化建议
+    generateRecommendations() {
+        const recommendations = [];
+        const stats = this.getErrorStats();
+        
+        if (stats.errorRate5min > 1) {
+            recommendations.push({
+                priority: 'high',
+                message: '错误率过高，建议检查API配置和网络连接',
+                action: 'check_api_config'
+            });
+        }
+        
+        if (this.systemHealth.cache === 'degraded') {
+            recommendations.push({
+                priority: 'medium',
+                message: '缓存系统性能下降，建议清理缓存',
+                action: 'cleanup_cache'
+            });
+        }
+        
+        if (this.systemHealth.memory === 'warning') {
+            recommendations.push({
+                priority: 'medium',
+                message: '内存使用过高，建议执行垃圾回收',
+                action: 'garbage_collection'
+            });
+        }
+        
+        const cacheStats = advancedCacheSystem.getCacheStats();
+        const aiHitRate = parseFloat(cacheStats.aiAnalysis?.hitRate) || 0;
+        if (aiHitRate < 30) {
+            recommendations.push({
+                priority: 'low',
+                message: 'AI分析缓存命中率较低，建议优化缓存策略',
+                action: 'optimize_cache_strategy'
+            });
+        }
+        
+        return recommendations;
+    },
+    
+    // 手动触发健康检查
+    performHealthCheck() {
+        console.log('🏥 执行手动健康检查...');
+        this.updateSystemHealth();
+        const report = this.getHealthReport();
+        console.log('健康检查报告:', report);
+        return report;
+    },
+    
+    // 重置监控数据
+    resetMonitoring() {
+        console.log('🔄 重置监控数据...');
+        
+        // 重置错误计数器
+        Object.keys(this.errorCategories).forEach(key => {
+            this.errorCategories[key].count = 0;
+            this.errorCategories[key].lastOccurred = null;
+        });
+        
+        // 清空错误日志
+        this.errorLog = [];
+        
+        // 重置性能指标
+        this.performanceMetrics = {
+            totalRequests: 0,
+            successfulRequests: 0,
+            averageResponseTime: 0,
+            responseTimeHistory: [],
+            lastMetricsReset: Date.now()
+        };
+        
+        // 重置健康状态
+        this.systemHealth = {
+            overall: 'healthy',
+            api: 'operational',
+            cache: 'operational',
+            memory: 'optimal',
+            lastHealthCheck: Date.now(),
+            consecutiveHealthChecks: 0,
+            isRecovering: false,
+            recoveryStartTime: null
+        };
+        
+        console.log('✅ 监控数据重置完成');
+    }
+};
+
+// 定期健康检查
+setInterval(() => {
+    errorMonitoringSystem.updateSystemHealth();
+}, errorMonitoringSystem.config.HEALTH_CHECK_INTERVAL);
+
+// ===== API健康监控和降级管理 =====
+const apiHealthMonitor = {
+    errorCount: 0,
+    successCount: 0,
+    consecutiveErrors: 0,
+    lastErrorTime: null,
+    currentBatchSize: 3,
+    degradedMode: false,
+    degradationStartTime: null,
+    degradationThreshold: 5,          // 连续错误阈值
+    recoveryThreshold: 3,             // 恢复检测阈值
+    degradationCooldown: 5 * 60 * 1000, // 5分钟冷却期
+    
+    recordSuccess() {
+        this.successCount++;
+        this.consecutiveErrors = 0;
+        
+        // 集成错误监控系统
+        if (this.systemHealth?.isRecovering) {
+            errorMonitoringSystem.systemHealth.consecutiveHealthChecks++;
+        }
+        
+        // 检查是否可以从降级模式恢复
+        if (this.degradedMode) {
+            this.checkRecovery();
+        }
+    },
+    
+    recordError() {
+        this.errorCount++;
+        this.consecutiveErrors++;
+        this.lastErrorTime = Date.now();
+        
+        // 检查是否需要进入降级模式
+        if (!this.degradedMode && this.consecutiveErrors >= this.degradationThreshold) {
+            this.enterDegradedMode();
+        }
+    },
+    
+    getErrorRate() {
+        const total = this.errorCount + this.successCount;
+        return total > 0 ? this.errorCount / total : 0;
+    },
+    
+    shouldUseAI() {
+        // 检查AI分析总开关
+        if (!aiAnalysisEnabled) {
+            return false;
+        }
+        
+        // 检查是否在降级模式
+        if (this.degradedMode) {
+            return false;
+        }
+        
+        // 检查连续错误数
+        return this.consecutiveErrors < this.degradationThreshold;
+    },
+    
+    getDynamicBatchSize() {
+        const errorRate = this.getErrorRate();
+        if (errorRate > 0.3) {
+            this.currentBatchSize = Math.max(1, this.currentBatchSize - 1);
+        } else if (errorRate < 0.1 && this.consecutiveErrors === 0) {
+            this.currentBatchSize = Math.min(5, this.currentBatchSize + 1);
+        }
+        return this.currentBatchSize;
+    },
+    
+    // 进入降级模式
+    enterDegradedMode() {
+        this.degradedMode = true;
+        this.degradationStartTime = Date.now();
+        
+        console.warn(`⚠️ AI服务降级：连续${this.consecutiveErrors}次错误，切换到传统匹配算法`);
+        
+        // 更新UI提示
+        this.updateDegradationUI(true);
+        
+        // 发送通知
+        this.notifyDegradation('进入降级模式', 'warning');
+    },
+    
+    // 检查恢复条件
+    checkRecovery() {
+        if (!this.degradedMode) return;
+        
+        const now = Date.now();
+        const timeSinceDegradation = now - this.degradationStartTime;
+        
+        // 必须满足时间冷却期和连续成功条件
+        if (timeSinceDegradation >= this.degradationCooldown && this.consecutiveErrors === 0) {
+            this.exitDegradedMode();
+        }
+    },
+    
+    // 退出降级模式
+    exitDegradedMode() {
+        this.degradedMode = false;
+        this.degradationStartTime = null;
+        
+        console.log(`✅ AI服务恢复：退出降级模式，重新启用AI智能匹配`);
+        
+        // 更新UI提示
+        this.updateDegradationUI(false);
+        
+        // 发送通知
+        this.notifyDegradation('AI服务已恢复', 'success');
+    },
+    
+    // 手动重置降级状态
+    forceReset() {
+        this.degradedMode = false;
+        this.degradationStartTime = null;
+        this.consecutiveErrors = 0;
+        this.errorCount = 0;
+        this.successCount = 0;
+        this.currentBatchSize = 3;
+        
+        console.log('🔄 API健康监控已手动重置');
+        this.updateDegradationUI(false);
+    },
+    
+    // 更新降级状态UI
+    updateDegradationUI(isDegraded) {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const aiToggleBtn = document.getElementById('aiToggleBtn');
+        
+        if (loadingIndicator) {
+            if (isDegraded) {
+                loadingIndicator.style.background = '#fff3cd';
+                loadingIndicator.style.color = '#856404';
+                loadingIndicator.style.border = '1px solid #ffeaa7';
+                loadingIndicator.innerHTML = '⚠️ AI服务暂时不可用，已切换到传统匹配算法';
+            } else {
+                loadingIndicator.style.background = '';
+                loadingIndicator.style.color = '#007bff';
+                loadingIndicator.style.border = '';
+                const baseText = aiAnalysisEnabled ? '🧠 正在进行AI智能分析，请稍候...' : '📊 正在进行传统匹配分析，请稍候...';
+                loadingIndicator.innerHTML = baseText;
+            }
+        }
+        
+        if (aiToggleBtn && isDegraded) {
+            // 在AI开关按钮上显示降级状态
+            const originalText = aiToggleBtn.textContent;
+            if (!originalText.includes('(降级)')) {
+                aiToggleBtn.textContent = originalText + ' (降级中)';
+                aiToggleBtn.style.background = 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)';
+            }
+        } else if (aiToggleBtn && !isDegraded) {
+            // 恢复正常状态
+            aiToggleBtn.textContent = aiToggleBtn.textContent.replace(' (降级中)', '');
+            updateAiToggleUI(); // 恢复正常样式
+        }
+    },
+    
+    // 发送降级通知
+    notifyDegradation(message, type = 'info') {
+        // 创建临时通知元素
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            z-index: 10000;
+            animation: slideInRight 0.3s ease-out;
+            min-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        `;
+        
+        switch (type) {
+            case 'warning':
+                notification.style.background = 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)';
+                break;
+            case 'success':
+                notification.style.background = 'linear-gradient(135deg, #00b894 0%, #00a085 100%)';
+                break;
+            default:
+                notification.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        }
+        
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        // 3秒后自动移除
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }, 3000);
+    },
+    
+    // 获取降级状态信息
+    getDegradationStatus() {
+        return {
+            degraded: this.degradedMode,
+            startTime: this.degradationStartTime,
+            duration: this.degradedMode ? Date.now() - this.degradationStartTime : 0,
+            consecutiveErrors: this.consecutiveErrors,
+            errorRate: this.getErrorRate(),
+            canRecover: this.degradedMode && 
+                       (Date.now() - this.degradationStartTime) >= this.degradationCooldown
+        };
+    }
+};
+
+// 智能重试配置
+const RETRY_CONFIG = {
+    maxRetries: 3,
+    baseDelay: 1000,      // 1秒基础延迟
+    maxDelay: 30000,      // 最大30秒延迟
+    backoffMultiplier: 2, // 指数增长倍数
+    jitterRange: 0.1      // 10%的随机抖动
+};
+
+/**
+ * 生成缓存键
+ */
+function generateCacheKey(user1, user2) {
+    const id1 = user1.id || user1.name;
+    const id2 = user2.id || user2.name;
+    // 确保键的一致性，无论用户顺序
+    return id1 < id2 ? `${id1}-${id2}` : `${id2}-${id1}`;
+}
+
+/**
+ * 分块处理函数 - 将大数组分成小块处理，避免内存峰值
+ * @param {Array} array - 要处理的数组
+ * @param {number} chunkSize - 每块的大小
+ * @returns {Array} 分块后的数组
+ */
+function chunkArray(array, chunkSize = MEMORY_CONFIG.CHUNK_SIZE) {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+        chunks.push(array.slice(i, i + chunkSize));
+    }
+    return chunks;
+}
+
+/**
+ * 异步分块处理器 - 逐块处理数据，释放内存压力
+ * @param {Array} items - 要处理的项目
+ * @param {Function} processor - 处理函数
+ * @param {Object} options - 配置选项
+ * @returns {Array} 处理结果
+ */
+async function processInChunks(items, processor, options = {}) {
+    const {
+        chunkSize = MEMORY_CONFIG.CHUNK_SIZE,
+        onProgress = null,
+        delayBetweenChunks = 100
+    } = options;
+    
+    const chunks = chunkArray(items, chunkSize);
+    const results = [];
+    let processedCount = 0;
+    
+    for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const chunkResults = await Promise.all(
+            chunk.map(item => processor(item))
+        );
+        
+        results.push(...chunkResults);
+        processedCount += chunk.length;
+        
+        // 进度回调
+        if (onProgress) {
+            onProgress(processedCount, items.length, i + 1, chunks.length);
+        }
+        
+        // 检查内存使用
+        memoryMonitor.checkMemoryUsage();
+        
+        // 块间延迟，让出CPU时间
+        if (i < chunks.length - 1 && delayBetweenChunks > 0) {
+            await sleep(delayBetweenChunks);
+        }
+    }
+    
+    return results;
+}
+
+// ===== 用户预过滤优化 =====
+
+/**
+ * 快速预过滤函数 - 在AI分析前过滤明显不合适的配对
+ * @param {Object} user1 - 第一个用户
+ * @param {Object} user2 - 第二个用户
+ * @returns {Object} 过滤结果 {shouldMatch: boolean, reason: string}
+ */
+function preFilterPair(user1, user2) {
+    // 1. 性别偏好检查（已存在，但这里明确列出）
+    if (!checkGenderPreferenceMatch(user1, user2)) {
+        return {
+            shouldMatch: false,
+            reason: "性别偏好不匹配"
+        };
+    }
+    
+    // 2. 数据完整性检查 - 如果两个用户数据都极其不完整，直接过滤
+    const profile1 = createUserProfile(user1);
+    const profile2 = createUserProfile(user2);
+    
+    // 如果两个用户的数据完整性都低于10%，直接跳过
+    if (profile1.data_quality.completeness_score < 0.1 && 
+        profile2.data_quality.completeness_score < 0.1) {
+        return {
+            shouldMatch: false,
+            reason: "用户数据过于缺失"
+        };
+    }
+    
+    // 3. 阅读承诺差异检查 - 如果阅读量期望差异太大（3级以上），直接过滤
+    const commitment1 = user1.questionnaire?.readingCommitment || user1.readingCommitment;
+    const commitment2 = user2.questionnaire?.readingCommitment || user2.readingCommitment;
+    
+    if (commitment1 && commitment2) {
+        const commitmentLevels = {
+            'light': 1,
+            'medium': 2,
+            'intensive': 3,
+            'epic': 4
+        };
+        const level1 = commitmentLevels[commitment1];
+        const level2 = commitmentLevels[commitment2];
+        
+        if (level1 && level2 && Math.abs(level1 - level2) >= 3) {
+            return {
+                shouldMatch: false,
+                reason: "阅读量期望差异过大"
+            };
+        }
+    }
+    
+    // 4. 匹配类型偏好冲突检查 - 如果双方偏好明确冲突，提前过滤
+    const pref1 = user1.questionnaire?.matchingTypePreference || user1.matchingTypePreference;
+    const pref2 = user2.questionnaire?.matchingTypePreference || user2.matchingTypePreference;
+    
+    if (pref1 && pref2 && 
+        pref1 !== 'no_preference' && pref2 !== 'no_preference' && 
+        pref1 !== pref2) {
+        // 如果一方要相似型，另一方要互补型，可能不太合适
+        // 但这里只是降低优先级，不是完全过滤
+        return {
+            shouldMatch: true,
+            priority: 0.7,  // 降低优先级
+            reason: "匹配类型偏好不同"
+        };
+    }
+    
+    // 5. 书籍类别兼容性检查 - 如果完全没有交集，降低优先级
+    const categories1 = user1.questionnaire?.bookCategories || user1.bookCategories || [];
+    const categories2 = user2.questionnaire?.bookCategories || user2.bookCategories || [];
+    
+    if (categories1.length > 0 && categories2.length > 0) {
+        const hasCommonCategory = categories1.some(cat => categories2.includes(cat));
+        if (!hasCommonCategory) {
+            // 没有共同的书籍类别，但不完全过滤（可能是互补型匹配）
+            return {
+                shouldMatch: true,
+                priority: 0.8,  // 略微降低优先级
+                reason: "书籍类别无交集"
+            };
+        }
+    }
+    
+    // 6. 活跃度检查 - 如果用户状态不是approved，过滤
+    if (user1.status !== 'approved' || user2.status !== 'approved') {
+        return {
+            shouldMatch: false,
+            reason: "用户状态未审核"
+        };
+    }
+    
+    // 通过所有过滤条件
+    return {
+        shouldMatch: true,
+        priority: 1.0,
+        reason: "通过预过滤"
+    };
+}
+
+/**
+ * 批量预过滤函数 - 对所有配对进行预过滤和优先级排序
+ * @param {Array} members - 所有成员
+ * @returns {Array} 过滤并排序后的配对列表
+ */
+function preFilterAndPrioritizePairs(members) {
+    const pairings = [];
+    
+    // 收集所有可能的配对并进行预过滤
+    for (let i = 0; i < members.length; i++) {
+        for (let j = i + 1; j < members.length; j++) {
+            const filterResult = preFilterPair(members[i], members[j]);
+            
+            if (filterResult.shouldMatch) {
+                pairings.push({
+                    user1: members[i],
+                    user2: members[j],
+                    priority: filterResult.priority || 1.0,
+                    filterReason: filterResult.reason
+                });
+            }
+        }
+    }
+    
+    // 按优先级排序，高优先级的先处理
+    pairings.sort((a, b) => b.priority - a.priority);
+    
+    console.log(`预过滤完成：从 ${members.length * (members.length - 1) / 2} 个可能配对中筛选出 ${pairings.length} 个有效配对`);
+    
+    return pairings;
+}
+
+// ===== 轻量级数据结构优化 =====
+
+/**
+ * 创建用户的轻量级引用，减少内存使用
+ * @param {Object} user - 原始用户对象
+ * @returns {Object} 轻量级用户引用
+ */
+function createLightweightUserRef(user) {
+    return {
+        id: user.id,
+        name: user.name,
+        studentId: user.studentId,
+        status: user.status,
+        // 只保留必要的问卷数据引用
+        questionnaire: user.questionnaire ? {
+            gender: user.questionnaire.gender,
+            matchGenderPreference: user.questionnaire.matchGenderPreference,
+            matchingTypePreference: user.questionnaire.matchingTypePreference,
+            readingCommitment: user.questionnaire.readingCommitment,
+            bookCategories: user.questionnaire.bookCategories,
+            version: user.questionnaire.version
+        } : null,
+        // 保留传统字段的引用
+        hobbies: user.hobbies,
+        books: user.books,
+        gender: user.gender,
+        readingCommitment: user.readingCommitment,
+        bookCategories: user.bookCategories,
+        matchGenderPreference: user.matchGenderPreference,
+        matchingTypePreference: user.matchingTypePreference
+    };
+}
+
+/**
+ * 优化的预过滤函数 - 使用轻量级数据结构
+ */
+function optimizedPreFilterPair(lightUser1, lightUser2) {
+    // 1. 性别偏好检查（简化版）
+    const genderPrefMatch = checkGenderPreferenceMatch(lightUser1, lightUser2);
+    if (!genderPrefMatch) {
+        return { shouldMatch: false, reason: "性别偏好不匹配" };
+    }
+    
+    // 2. 状态检查
+    if (lightUser1.status !== 'approved' || lightUser2.status !== 'approved') {
+        return { shouldMatch: false, reason: "用户状态未审核" };
+    }
+    
+    // 3. 阅读承诺差异检查
+    const commitment1 = lightUser1.questionnaire?.readingCommitment || lightUser1.readingCommitment;
+    const commitment2 = lightUser2.questionnaire?.readingCommitment || lightUser2.readingCommitment;
+    
+    if (commitment1 && commitment2) {
+        const commitmentLevels = { 'light': 1, 'medium': 2, 'intensive': 3, 'epic': 4 };
+        const level1 = commitmentLevels[commitment1];
+        const level2 = commitmentLevels[commitment2];
+        
+        if (level1 && level2 && Math.abs(level1 - level2) >= 3) {
+            return { shouldMatch: false, reason: "阅读量期望差异过大" };
+        }
+    }
+    
+    return { shouldMatch: true, priority: 1.0, reason: "通过预过滤" };
+}
+
+// ===== 高级缓存策略系统 =====
+
+// 多层缓存架构
+const advancedCacheSystem = {
+    // 第1层：用户画像缓存（已存在）
+    userProfiles: userProfileCache,
+    
+    // 第2层：AI分析结果缓存
+    aiAnalysisCache: new Map(),
+    
+    // 第3层：匹配结果缓存
+    matchResultsCache: new Map(),
+    
+    // 第4层：批次结果缓存
+    batchResultsCache: new Map(),
+    
+    // 缓存配置
+    config: {
+        AI_ANALYSIS_TTL: 7 * 24 * 60 * 60 * 1000,    // AI分析缓存7天
+        MATCH_RESULTS_TTL: 24 * 60 * 60 * 1000,      // 匹配结果缓存24小时
+        BATCH_RESULTS_TTL: 60 * 60 * 1000,           // 批次结果缓存1小时
+        MAX_AI_CACHE_SIZE: 2000,                     // AI分析缓存最大条目
+        MAX_MATCH_CACHE_SIZE: 1000,                  // 匹配结果缓存最大条目
+        MAX_BATCH_CACHE_SIZE: 100,                   // 批次缓存最大条目
+    },
+    
+    // 缓存统计
+    stats: {
+        aiCacheHits: 0,
+        aiCacheMisses: 0,
+        matchCacheHits: 0,
+        matchCacheMisses: 0,
+        batchCacheHits: 0,
+        batchCacheMisses: 0
+    },
+    
+    // 智能缓存键生成
+    generateAIAnalysisKey(profile1, profile2) {
+        // 基于用户画像内容生成哈希键
+        const content1 = JSON.stringify({
+            interests: profile1.interests,
+            reading: profile1.reading_preferences,
+            matching: profile1.matching_preferences
+        });
+        const content2 = JSON.stringify({
+            interests: profile2.interests,
+            reading: profile2.reading_preferences,
+            matching: profile2.matching_preferences
+        });
+        
+        // 确保键的一致性
+        const sortedContents = [content1, content2].sort();
+        return `ai_${this.simpleHash(sortedContents.join('|'))}`;
+    },
+    
+    generateMatchKey(userIds, matchType) {
+        const sortedIds = userIds.sort();
+        return `match_${matchType}_${sortedIds.join('-')}`;
+    },
+    
+    generateBatchKey(userIdsList, matchType) {
+        const signature = userIdsList
+            .map(ids => ids.sort().join('-'))
+            .sort()
+            .join('|');
+        return `batch_${matchType}_${this.simpleHash(signature)}`;
+    },
+    
+    // 简单哈希函数
+    simpleHash(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // 转为32位整数
+        }
+        return Math.abs(hash).toString(36);
+    },
+    
+    // AI分析结果缓存操作
+    setAIAnalysis(profile1, profile2, result) {
+        const key = this.generateAIAnalysisKey(profile1, profile2);
+        this.aiAnalysisCache.set(key, {
+            data: result,
+            timestamp: Date.now(),
+            profiles: [profile1.basic_info, profile2.basic_info] // 仅存储基本信息用于调试
+        });
+        
+        // 检查缓存大小
+        if (this.aiAnalysisCache.size > this.config.MAX_AI_CACHE_SIZE) {
+            this.cleanupCache(this.aiAnalysisCache, this.config.MAX_AI_CACHE_SIZE * 0.8);
+        }
+    },
+    
+    getAIAnalysis(profile1, profile2) {
+        const key = this.generateAIAnalysisKey(profile1, profile2);
+        const cached = this.aiAnalysisCache.get(key);
+        
+        if (cached && this.isValidCache(cached, this.config.AI_ANALYSIS_TTL)) {
+            this.stats.aiCacheHits++;
+            console.log(`AI分析缓存命中: ${key}`);
+            return cached.data;
+        }
+        
+        if (cached) {
+            this.aiAnalysisCache.delete(key); // 删除过期缓存
+        }
+        
+        this.stats.aiCacheMisses++;
+        return null;
+    },
+    
+    // 通用缓存管理
+    isValidCache(cacheEntry, ttl) {
+        return cacheEntry && (Date.now() - cacheEntry.timestamp) < ttl;
+    },
+    
+    cleanupCache(cache, targetSize) {
+        const entries = Array.from(cache.entries());
+        entries.sort((a, b) => a[1].timestamp - b[1].timestamp); // 按时间排序
+        
+        const deleteCount = cache.size - targetSize;
+        for (let i = 0; i < deleteCount; i++) {
+            cache.delete(entries[i][0]);
+        }
+        
+        console.log(`缓存清理: 删除了 ${deleteCount} 个旧条目`);
+    },
+    
+    // 缓存预热
+    async preheatUserProfiles(users) {
+        console.log(`开始预热 ${users.length} 个用户画像...`);
+        const startTime = Date.now();
+        
+        for (const user of users) {
+            createUserProfile(user); // 这会自动缓存到userProfileCache
+        }
+        
+        const duration = Date.now() - startTime;
+        console.log(`用户画像预热完成，耗时 ${duration}ms`);
+    },
+    
+    // 获取缓存统计信息
+    getCacheStats() {
+        const aiHitRate = this.stats.aiCacheHits + this.stats.aiCacheMisses > 0 
+            ? (this.stats.aiCacheHits / (this.stats.aiCacheHits + this.stats.aiCacheMisses) * 100).toFixed(2)
+            : 0;
+        
+        return {
+            userProfiles: {
+                size: userProfileCache.size,
+                maxSize: MEMORY_CONFIG.MAX_PROFILE_CACHE_SIZE
+            },
+            aiAnalysis: {
+                size: this.aiAnalysisCache.size,
+                maxSize: this.config.MAX_AI_CACHE_SIZE,
+                hitRate: `${aiHitRate}%`,
+                hits: this.stats.aiCacheHits,
+                misses: this.stats.aiCacheMisses
+            },
+            requestCache: {
+                size: requestCache.size,
+                maxSize: MEMORY_CONFIG.MAX_CACHE_SIZE
+            }
+        };
+    },
+    
+    // 智能缓存失效
+    invalidateUserCaches(userId) {
+        // 清理相关的用户画像缓存
+        userProfileCache.delete(userId);
+        
+        // 清理包含该用户的AI分析缓存
+        for (const [key, value] of this.aiAnalysisCache.entries()) {
+            if (value.profiles && value.profiles.some(p => p.student_id === userId || p.name === userId)) {
+                this.aiAnalysisCache.delete(key);
+            }
+        }
+        
+        // 清理匹配结果缓存（如果有的话）
+        for (const [key] of requestCache.entries()) {
+            if (key.includes(userId)) {
+                requestCache.delete(key);
+            }
+        }
+        
+        console.log(`已清理用户 ${userId} 相关的所有缓存`);
+    },
+    
+    // 全面缓存清理
+    clearAllCaches() {
+        userProfileCache.clear();
+        this.aiAnalysisCache.clear();
+        requestCache.clear();
+        
+        // 重置统计
+        this.stats = {
+            aiCacheHits: 0,
+            aiCacheMisses: 0,
+            matchCacheHits: 0,
+            matchCacheMisses: 0,
+            batchCacheHits: 0,
+            batchCacheMisses: 0
+        };
+        
+        console.log('所有缓存已清理');
+    }
+};
+
+/**
+ * 检查缓存是否有效
+ */
+function isValidCache(cacheEntry) {
+    return cacheEntry && (Date.now() - cacheEntry.timestamp) < CACHE_TTL;
+}
+
+/**
+ * 智能延迟函数 - 指数退避 + 随机抖动
+ */
+function calculateDelay(retryCount) {
+    const exponentialDelay = Math.min(
+        RETRY_CONFIG.baseDelay * Math.pow(RETRY_CONFIG.backoffMultiplier, retryCount),
+        RETRY_CONFIG.maxDelay
+    );
+    
+    // 添加随机抖动，避免请求同时发送
+    const jitter = exponentialDelay * RETRY_CONFIG.jitterRange * (Math.random() - 0.5);
+    return Math.max(0, Math.round(exponentialDelay + jitter));
+}
+
+/**
+ * 睡眠函数
+ */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
@@ -1776,24 +3413,61 @@ function createUserProfile(user) {
  * @returns {Object} 详细的匹配分析结果
  */
 async function calculateAICompatibility(user1, user2) {
+    // 检查缓存
+    const cacheKey = generateCacheKey(user1, user2);
+    const cachedResult = requestCache.get(cacheKey);
+    if (isValidCache(cachedResult)) {
+        console.log(`使用缓存结果: ${cacheKey}`);
+        memoryMonitor.cacheHits++;
+        return cachedResult.data;
+    }
+    memoryMonitor.cacheMisses++;
+    
     // 首先检查性别偏好匹配
     if (!checkGenderPreferenceMatch(user1, user2)) {
-        return {
+        const result = {
             score: 0,
             reason: "性别偏好不匹配",
             gender_preference_compatible: false,
             analysis: null
         };
+        // 缓存不匹配结果
+        requestCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
     }
     
     // 创建标准化用户画像
     const profile1 = createUserProfile(user1);
     const profile2 = createUserProfile(user2);
     
+    // 检查高级AI分析缓存
+    const cachedAIAnalysis = advancedCacheSystem.getAIAnalysis(profile1, profile2);
+    if (cachedAIAnalysis) {
+        console.log(`使用AI分析缓存结果: ${user1.name} - ${user2.name}`);
+        return {
+            score: cachedAIAnalysis.compatibility_score,
+            reason: cachedAIAnalysis.summary || "AI缓存分析完成",
+            gender_preference_compatible: true,
+            data_completeness_issue: false,
+            analysis: {
+                ai_analysis: cachedAIAnalysis,
+                user1_completeness: profile1.data_quality.completeness_score,
+                user2_completeness: profile2.data_quality.completeness_score,
+                commonHobbies: cachedAIAnalysis.shared_interests || [],
+                commonBooks: cachedAIAnalysis.shared_books || [],
+                detailLevel: {
+                    exactMatches: cachedAIAnalysis.exact_matches || 0,
+                    semanticMatches: cachedAIAnalysis.semantic_matches || 0,
+                    categoryMatches: cachedAIAnalysis.category_matches || 0
+                }
+            }
+        };
+    }
+    
     // 数据质量检查 - 如果两个用户的数据都很少，返回低分
     const minCompleteness = Math.min(profile1.data_quality.completeness_score, profile2.data_quality.completeness_score);
     if (minCompleteness < 0.2) {
-        return {
+        const result = {
             score: minCompleteness * 2, // 最多0.4分
             reason: "用户数据不足，无法进行有效匹配",
             gender_preference_compatible: true,
@@ -1803,6 +3477,9 @@ async function calculateAICompatibility(user1, user2) {
                 user2_completeness: profile2.data_quality.completeness_score
             }
         };
+        // 缓存数据不足结果
+        requestCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
     }
     
     // 调用AI进行全面匹配分析
@@ -1813,7 +3490,10 @@ async function calculateAICompatibility(user1, user2) {
         const dataQualityMultiplier = (profile1.data_quality.completeness_score + profile2.data_quality.completeness_score) / 2;
         const adjustedScore = aiAnalysis.compatibility_score * Math.min(dataQualityMultiplier + 0.3, 1.0);
         
-        return {
+        // 缓存AI分析结果到高级缓存系统
+        advancedCacheSystem.setAIAnalysis(profile1, profile2, aiAnalysis);
+        
+        const result = {
             score: adjustedScore,
             reason: aiAnalysis.summary || "AI全面分析完成",
             gender_preference_compatible: true,
@@ -1833,13 +3513,20 @@ async function calculateAICompatibility(user1, user2) {
                 }
             }
         };
+        
+        // 缓存成功结果
+        requestCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
     } catch (error) {
         console.warn('AI匹配分析失败，返回低分:', error);
-        return {
+        const fallbackResult = {
             score: 0.1,
             reason: "AI分析失败",
             gender_preference_compatible: true,
         };
+        
+        // 不缓存失败结果，下次重试
+        return fallbackResult;
     }
 }
 
@@ -2015,18 +3702,28 @@ async function getAIMatchingAnalysis(profile1, profile2) {
     });
 
     try {
-        // 添加速率限制处理和重试机制
-        let retryCount = 0;
-        const maxRetries = 3;
-        const baseDelay = 1000; // 1秒基础延迟
+        // 检查AI是否可用
+        if (!apiHealthMonitor.shouldUseAI()) {
+            const status = apiHealthMonitor.getDegradationStatus();
+            if (status.degraded) {
+                console.warn(`AI服务降级中：连续${status.consecutiveErrors}次错误，降级时长${Math.round(status.duration/1000)}秒`);
+                throw new Error('AI服务降级中，使用传统算法');
+            } else {
+                console.warn('AI暂时不可用，连续错误过多');
+                throw new Error('AI服务暂时不可用');
+            }
+        }
         
-        while (retryCount <= maxRetries) {
+        // 添加速率限制处理和智能重试机制
+        let retryCount = 0;
+        
+        while (retryCount <= RETRY_CONFIG.maxRetries) {
             try {
-                // 如果是重试，添加延迟
+                // 如果是重试，添加智能延迟
                 if (retryCount > 0) {
-                    const delay = baseDelay * Math.pow(2, retryCount - 1); // 指数退避
-                    console.log(`AI API重试 ${retryCount}/${maxRetries}，等待 ${delay}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
+                    const delay = calculateDelay(retryCount);
+                    console.log(`AI API重试 ${retryCount}/${RETRY_CONFIG.maxRetries}，等待 ${delay}ms...`);
+                    await sleep(delay);
                 }
                 
                 const response = await fetch(AI_BASE_URL, {
@@ -2048,22 +3745,38 @@ async function getAIMatchingAnalysis(profile1, profile2) {
                 });
 
                 if (response.status === 429) {
-                    // 速率限制，尝试重试
+                    // 速率限制，记录错误并重试
+                    apiHealthMonitor.recordError();
+                    errorMonitoringSystem.logError('API_RATE_LIMIT', {
+                        retryCount,
+                        endpoint: AI_BASE_URL,
+                        responseStatus: 429
+                    });
                     retryCount++;
-                    if (retryCount > maxRetries) {
+                    if (retryCount > RETRY_CONFIG.maxRetries) {
                         throw new Error('AI API速率限制，请稍后再试');
                     }
                     continue;
                 }
 
                 if (!response.ok) {
+                    apiHealthMonitor.recordError();
+                    errorMonitoringSystem.logError('API_NETWORK_ERROR', {
+                        retryCount,
+                        endpoint: AI_BASE_URL,
+                        responseStatus: response.status,
+                        responseText: await response.text()
+                    });
                     throw new Error(`AI API请求失败: ${response.status}`);
                 }
 
                 const data = await response.json();
                 const content = data.choices[0].message.content;
                 
-                // 成功获取响应，解析JSON
+                // 成功获取响应，记录成功
+                apiHealthMonitor.recordSuccess();
+                
+                // 解析JSON
                 try {
                     const analysis = JSON.parse(content);
                     
@@ -2091,18 +3804,31 @@ async function getAIMatchingAnalysis(profile1, profile2) {
                     return adjustScoreByPreference(rawAnalysis, profile1, profile2);
                 } catch (parseError) {
                     console.warn('AI返回的JSON解析失败:', parseError, content);
+                    errorMonitoringSystem.logError('AI_PARSING_ERROR', {
+                        content: content?.substring(0, 500) + '...',
+                        parseError: parseError.message,
+                        retryCount
+                    });
                     throw new Error('AI返回格式错误');
                 }
                 
             } catch (requestError) {
-                // 如果是429错误，已经在上面处理了
-                // 其他错误直接抛出
-                if (retryCount === 0) {
-                    throw requestError;
+                console.warn(`AI请求失败 (尝试 ${retryCount + 1}/${RETRY_CONFIG.maxRetries + 1}):`, requestError.message);
+                
+                // 记录错误
+                if (requestError.message.includes('429') || requestError.message.includes('速率限制')) {
+                    // 速率限制错误已经在上面处理
+                } else {
+                    apiHealthMonitor.recordError();
+                    errorMonitoringSystem.logError('AI_NETWORK_ERROR', {
+                        retryCount,
+                        errorMessage: requestError.message,
+                        endpoint: AI_BASE_URL
+                    });
                 }
-                // 如果在重试过程中出现其他错误，也抛出
+                
                 retryCount++;
-                if (retryCount > maxRetries) {
+                if (retryCount > RETRY_CONFIG.maxRetries) {
                     throw requestError;
                 }
             }
@@ -2113,6 +3839,12 @@ async function getAIMatchingAnalysis(profile1, profile2) {
         
     } catch (error) {
         console.error('AI匹配分析请求失败:', error);
+        apiHealthMonitor.recordError();
+        errorMonitoringSystem.logError('AI_TIMEOUT_ERROR', {
+            errorMessage: error.message,
+            endpoint: AI_BASE_URL,
+            totalRetries: RETRY_CONFIG.maxRetries
+        });
         throw error;
     }
 }
@@ -2133,124 +3865,165 @@ async function findSimilarMatches() {
     
     const matches = [];
     
-    // 并发控制：限制同时处理的请求数量
-    const MAX_CONCURRENT_REQUESTS = 3; // 最多同时3个请求
-    const pairings = [];
+    // 使用预过滤函数获取优先级排序后的配对
+    const pairings = preFilterAndPrioritizePairs(members);
     
-    // 收集所有需要匹配的配对
-    for (let i = 0; i < members.length; i++) {
-        for (let j = i + 1; j < members.length; j++) {
-            // 首先检查性别偏好匹配
-            if (!checkGenderPreferenceMatch(members[i], members[j])) {
-                continue; // 跳过不符合性别偏好的配对
-            }
-            pairings.push({ user1: members[i], user2: members[j] });
-        }
-    }
+    console.log(`总共需要处理 ${pairings.length} 个配对，使用动态并发控制`);
     
-    console.log(`总共需要处理 ${pairings.length} 个配对，使用并发控制限制同时请求数`);
+    // 用户画像预热 - 提前创建所有用户画像缓存
+    await advancedCacheSystem.preheatUserProfiles(members);
     
-    // 计算总批次数
-    const totalBatches = Math.ceil(pairings.length / MAX_CONCURRENT_REQUESTS);
+    // 内存使用优化：清理缓存
+    memoryMonitor.checkMemoryUsage();
+    
+    // 显示所有缓存统计
+    const cacheStats = advancedCacheSystem.getCacheStats();
+    console.log('全面缓存统计:', cacheStats);
+    console.log('内存监控统计:', memoryMonitor.getCacheStats());
+    
+    // 重置API健康监控状态
+    apiHealthMonitor.consecutiveErrors = 0;
+    
     const startTime = Date.now();
+    let processedCount = 0;
     
     // 初始化进度
-    updateProgress(0, totalBatches, 0, `准备分析 ${pairings.length} 个配对...`, startTime);
+    updateProgress(0, pairings.length, 0, `准备分析 ${pairings.length} 个配对...`, startTime);
     
-    // 分批处理，避免API速率限制
-    for (let i = 0; i < pairings.length; i += MAX_CONCURRENT_REQUESTS) {
-        const batch = pairings.slice(i, i + MAX_CONCURRENT_REQUESTS);
-        const currentBatch = Math.floor(i / MAX_CONCURRENT_REQUESTS) + 1;
-        
-        console.log(`处理第 ${currentBatch} 批，共 ${batch.length} 个配对`);
-        
-        // 更新进度
-        updateProgress(
-            currentBatch - 1, 
-            totalBatches, 
-            matches.length, 
-            `正在处理第 ${currentBatch} 批配对...`,
-            startTime
-        );
-        
-        const batchPromises = batch.map(async (pairing) => {
-            try {
-                // 根据AI开关选择匹配算法
-                const result = aiAnalysisEnabled ? 
-                    await calculateAICompatibility(pairing.user1, pairing.user2) :
-                    await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+    // 使用分块处理优化内存使用
+    const processChunk = async (pairing) => {
+        try {
+            let result;
+            
+            // 智能算法选择：优先AI，降级时使用传统算法
+            if (apiHealthMonitor.shouldUseAI() && aiAnalysisEnabled) {
+                try {
+                    result = await calculateAICompatibility(pairing.user1, pairing.user2);
+                } catch (aiError) {
+                    console.warn(`AI匹配失败，降级到传统算法: ${pairing.user1.name} - ${pairing.user2.name}`, aiError.message);
                     
-                if (result.score > 0) {
-                    return {
-                        member1: pairing.user1,
-                        member2: pairing.user2,
-                        score: result.score,
-                        reason: result.reason || `${aiAnalysisEnabled ? 'AI智能' : '传统'}匹配分析完成`,
-                        // 向后兼容的字段
-                        commonHobbies: aiAnalysisEnabled ? 
-                            (result.analysis?.commonHobbies || []) : 
-                            (result.commonHobbies || []),
-                        commonBooks: aiAnalysisEnabled ? 
-                            (result.analysis?.commonBooks || []) : 
-                            (result.commonBooks || []),
-                        detailLevel: aiAnalysisEnabled ? 
-                            (result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }) : 
-                            (result.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }),
-                        // AI特有字段（仅在AI模式下有效）
-                        aiAnalysis: aiAnalysisEnabled ? result.analysis?.ai_analysis : null,
-                        matchType: aiAnalysisEnabled ? result.analysis?.ai_analysis?.match_type : '传统匹配',
-                        confidenceLevel: aiAnalysisEnabled ? result.analysis?.ai_analysis?.confidence_level : null,
-                        // 传统模式特有字段
-                        readingCommitmentCompatibility: aiAnalysisEnabled ? null : result.readingCommitmentCompatibility,
-                        textPreferenceAnalysis: aiAnalysisEnabled ? null : result.textPreferenceAnalysis,
-                        personalityProfiles: aiAnalysisEnabled ? null : result.personalityProfiles,
-                        implicitAnalysis: aiAnalysisEnabled ? null : result.implicitAnalysis,
-                        deepCompatibilityAnalysis: aiAnalysisEnabled ? null : result.deepCompatibilityAnalysis,
-                        matchingDimensions: aiAnalysisEnabled ? null : result.matchingDimensions,
-                        type: 'similar',
-                        analysisMode: aiAnalysisEnabled ? 'ai' : 'traditional'
-                    };
+                    // 使用传统算法作为降级策略
+                    result = await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                    
+                    // 标记为降级结果
+                    result.degraded = true;
+                    result.degradationReason = aiError.message;
                 }
-                return null;
-            } catch (error) {
-                console.warn(`配对失败 ${pairing.user1.name} - ${pairing.user2.name}:`, error);
-                return null;
+            } else {
+                // 直接使用传统算法
+                result = await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                result.traditionalMode = !aiAnalysisEnabled;
+                result.healthDegraded = apiHealthMonitor.degradedMode;
             }
-        });
+                
+            if (result.score > 0) {
+                return {
+                    member1: pairing.user1,
+                    member2: pairing.user2,
+                    score: result.score,
+                    reason: result.reason || `${getAnalysisModeLabel(result)}匹配分析完成`,
+                    // 向后兼容的字段
+                    commonHobbies: getFieldFromResult(result, 'commonHobbies'),
+                    commonBooks: getFieldFromResult(result, 'commonBooks'),
+                    detailLevel: getFieldFromResult(result, 'detailLevel'),
+                    // AI特有字段（仅在AI模式下有效）
+                    aiAnalysis: result.analysis?.ai_analysis || null,
+                    matchType: result.analysis?.ai_analysis?.match_type || getMatchTypeFromResult(result),
+                    confidenceLevel: result.analysis?.ai_analysis?.confidence_level || null,
+                    // 传统模式特有字段
+                    readingCommitmentCompatibility: result.readingCommitmentCompatibility || null,
+                    textPreferenceAnalysis: result.textPreferenceAnalysis || null,
+                    personalityProfiles: result.personalityProfiles || null,
+                    implicitAnalysis: result.implicitAnalysis || null,
+                    deepCompatibilityAnalysis: result.deepCompatibilityAnalysis || null,
+                    matchingDimensions: result.matchingDimensions || null,
+                    // 降级状态标记
+                    degraded: result.degraded || false,
+                    degradationReason: result.degradationReason || null,
+                    traditionalMode: result.traditionalMode || false,
+                    healthDegraded: result.healthDegraded || false,
+                    type: 'similar',
+                    analysisMode: getAnalysisMode(result)
+                };
+            }
+            return null;
+        } catch (error) {
+            console.warn(`配对失败 ${pairing.user1.name} - ${pairing.user2.name}:`, error);
+            return null;
+        }
+    };
+    
+    // 使用分块处理器处理配对
+    const chunks = chunkArray(pairings, MEMORY_CONFIG.CHUNK_SIZE);
+    let allMatches = [];
+    
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        const chunk = chunks[chunkIndex];
+        const startIdx = chunkIndex * MEMORY_CONFIG.CHUNK_SIZE;
+        const endIdx = Math.min(startIdx + chunk.length, pairings.length);
         
-        const batchResults = await Promise.all(batchPromises);
-        matches.push(...batchResults.filter(result => result !== null));
+        console.log(`处理块 ${chunkIndex + 1}/${chunks.length}，包含 ${chunk.length} 个配对`);
         
-        // 更新批次完成进度
-        updateProgress(
-            currentBatch, 
-            totalBatches, 
-            matches.length, 
-            `第 ${currentBatch} 批完成，已找到 ${matches.length} 个匹配`,
-            startTime
-        );
+        // 在每个块内使用动态并发
+        let i = 0;
+        while (i < chunk.length) {
+            const currentBatchSize = apiHealthMonitor.getDynamicBatchSize();
+            const batch = chunk.slice(i, Math.min(i + currentBatchSize, chunk.length));
+            
+            // 更新进度
+            const currentProcessed = startIdx + i;
+            updateProgress(
+                currentProcessed, 
+                pairings.length, 
+                allMatches.length, 
+                `正在处理配对 ${currentProcessed + 1}-${currentProcessed + batch.length}...`,
+                startTime
+            );
+            
+            // 并发处理批次
+            const batchResults = await Promise.all(batch.map(processChunk));
+            const validResults = batchResults.filter(result => result !== null);
+            allMatches.push(...validResults);
+            
+            i += batch.length;
+            processedCount = startIdx + i;
+            
+            // 批次间延迟
+            if (i < chunk.length) {
+                const errorRate = apiHealthMonitor.getErrorRate();
+                const delay = errorRate > 0.2 ? 1000 : 500;
+                await sleep(delay);
+            }
+        }
         
-        // 批次间添加延迟，进一步避免速率限制
-        if (i + MAX_CONCURRENT_REQUESTS < pairings.length) {
-            console.log('批次间等待500ms...');
-            await new Promise(resolve => setTimeout(resolve, 500));
+        // 块间清理和延迟
+        if (chunkIndex < chunks.length - 1) {
+            // 检查内存使用
+            memoryMonitor.checkMemoryUsage();
+            
+            // 块间延迟，让出CPU
+            await sleep(200);
+            
+            console.log(`块 ${chunkIndex + 1} 完成，当前找到 ${allMatches.length} 个匹配`);
         }
     }
+    
+    matches.push(...allMatches);
     
     // 完成所有匹配
     matches.sort((a, b) => b.score - a.score);
     
     // 显示完成进度
     updateProgress(
-        totalBatches, 
-        totalBatches, 
+        pairings.length, 
+        pairings.length, 
         matches.length, 
         '匹配分析完成！',
         startTime
     );
     
-    const title = aiAnalysisEnabled ? '🎯 深度智能相似搭档推荐' : '🎯 传统算法相似搭档推荐';
-    displayMatches(matches.slice(0, 10), title);
+    const titleInfo = getMatchingTitle(matches, 'similar');
+    displayMatches(matches.slice(0, 10), titleInfo.title, titleInfo.subtitle);
 }
 
 // 寻找互补搭档（仅管理员）- 升级版
@@ -2269,119 +4042,159 @@ async function findComplementaryMatches() {
     
     const matches = [];
     
-    // 并发控制：限制同时处理的请求数量
-    const MAX_CONCURRENT_REQUESTS = 3; // 最多同时3个请求
-    const pairings = [];
+    // 使用预过滤函数获取优先级排序后的配对
+    const pairings = preFilterAndPrioritizePairs(members);
     
-    // 收集所有需要匹配的配对
-    for (let i = 0; i < members.length; i++) {
-        for (let j = i + 1; j < members.length; j++) {
-            // 首先检查性别偏好匹配
-            if (!checkGenderPreferenceMatch(members[i], members[j])) {
-                continue; // 跳过不符合性别偏好的配对
-            }
-            pairings.push({ user1: members[i], user2: members[j] });
-        }
-    }
+    console.log(`互补匹配：总共需要处理 ${pairings.length} 个配对，使用动态并发控制`);
     
-    console.log(`互补匹配：总共需要处理 ${pairings.length} 个配对`);
+    // 内存使用优化：清理缓存
+    memoryMonitor.checkMemoryUsage();
     
-    // 计算总批次数
-    const totalBatches = Math.ceil(pairings.length / MAX_CONCURRENT_REQUESTS);
+    // 显示所有缓存统计
+    const cacheStats = advancedCacheSystem.getCacheStats();
+    console.log('全面缓存统计:', cacheStats);
+    console.log('内存监控统计:', memoryMonitor.getCacheStats());
+    
+    // 重置API健康监控状态
+    apiHealthMonitor.consecutiveErrors = 0;
+    
     const startTime = Date.now();
+    let processedCount = 0;
     
     // 初始化进度
-    updateProgress(0, totalBatches, 0, `准备分析 ${pairings.length} 个互补配对...`, startTime);
+    updateProgress(0, pairings.length, 0, `准备分析 ${pairings.length} 个互补配对...`, startTime);
     
-    // 分批处理，避免API速率限制
-    for (let i = 0; i < pairings.length; i += MAX_CONCURRENT_REQUESTS) {
-        const batch = pairings.slice(i, i + MAX_CONCURRENT_REQUESTS);
-        const currentBatch = Math.floor(i / MAX_CONCURRENT_REQUESTS) + 1;
-        
-        console.log(`处理第 ${currentBatch} 批，共 ${batch.length} 个配对`);
-        
-        // 更新进度
-        updateProgress(
-            currentBatch - 1, 
-            totalBatches, 
-            matches.length, 
-            `正在处理第 ${currentBatch} 批互补配对...`,
-            startTime
-        );
-        
-        const batchPromises = batch.map(async (pairing) => {
-            try {
-                // 根据AI开关选择匹配算法
-                const result = aiAnalysisEnabled ? 
-                    await calculateAICompatibility(pairing.user1, pairing.user2) :
-                    await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+    // 使用分块处理优化内存使用
+    const processChunk = async (pairing) => {
+        try {
+            let result;
+            
+            // 智能算法选择：优先AI，降级时使用传统算法
+            if (apiHealthMonitor.shouldUseAI() && aiAnalysisEnabled) {
+                try {
+                    result = await calculateAICompatibility(pairing.user1, pairing.user2);
+                } catch (aiError) {
+                    console.warn(`AI匹配失败，降级到传统算法: ${pairing.user1.name} - ${pairing.user2.name}`, aiError.message);
                     
-                return {
-                    member1: pairing.user1,
-                    member2: pairing.user2,
-                    score: result.score,
-                    reason: result.reason || `${aiAnalysisEnabled ? 'AI智能' : '传统'}匹配分析完成`,
-                    // 向后兼容的字段
-                    commonHobbies: aiAnalysisEnabled ? 
-                        (result.analysis?.commonHobbies || []) : 
-                        (result.commonHobbies || []),
-                    commonBooks: aiAnalysisEnabled ? 
-                        (result.analysis?.commonBooks || []) : 
-                        (result.commonBooks || []),
-                    detailLevel: aiAnalysisEnabled ? 
-                        (result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }) : 
-                        (result.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }),
-                    // AI特有字段（仅在AI模式下有效）
-                    aiAnalysis: aiAnalysisEnabled ? result.analysis?.ai_analysis : null,
-                    matchType: aiAnalysisEnabled ? result.analysis?.ai_analysis?.match_type : '传统匹配',
-                    confidenceLevel: aiAnalysisEnabled ? result.analysis?.ai_analysis?.confidence_level : null,
-                    // 传统模式特有字段
-                    readingCommitmentCompatibility: aiAnalysisEnabled ? null : result.readingCommitmentCompatibility,
-                    textPreferenceAnalysis: aiAnalysisEnabled ? null : result.textPreferenceAnalysis,
-                    personalityProfiles: aiAnalysisEnabled ? null : result.personalityProfiles,
-                    implicitAnalysis: aiAnalysisEnabled ? null : result.implicitAnalysis,
-                    deepCompatibilityAnalysis: aiAnalysisEnabled ? null : result.deepCompatibilityAnalysis,
-                    matchingDimensions: aiAnalysisEnabled ? null : result.matchingDimensions,
-                    type: 'complementary',
-                    analysisMode: aiAnalysisEnabled ? 'ai' : 'traditional'
-                };
-            } catch (error) {
-                console.warn(`配对失败 ${pairing.user1.name} - ${pairing.user2.name}:`, error);
-                // 返回一个低分结果而不是null，确保所有配对都有结果
-                return {
-                    member1: pairing.user1,
-                    member2: pairing.user2,
-                    score: 0.1,
-                    reason: "AI分析失败",
-                    commonHobbies: [],
-                    commonBooks: [],
-                    detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
-                    aiAnalysis: null,
-                    matchType: "未知",
-                    confidenceLevel: 0,
-                    type: 'complementary'
-                };
+                    // 使用传统算法作为降级策略
+                    result = await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                    
+                    // 标记为降级结果
+                    result.degraded = true;
+                    result.degradationReason = aiError.message;
+                }
+            } else {
+                // 直接使用传统算法
+                result = await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                result.traditionalMode = !aiAnalysisEnabled;
+                result.healthDegraded = apiHealthMonitor.degradedMode;
             }
-        });
+                
+            return {
+                member1: pairing.user1,
+                member2: pairing.user2,
+                score: result.score,
+                reason: result.reason || `${getAnalysisModeLabel(result)}匹配分析完成`,
+                // 向后兼容的字段
+                commonHobbies: getFieldFromResult(result, 'commonHobbies'),
+                commonBooks: getFieldFromResult(result, 'commonBooks'),
+                detailLevel: getFieldFromResult(result, 'detailLevel'),
+                // AI特有字段（仅在AI模式下有效）
+                aiAnalysis: result.analysis?.ai_analysis || null,
+                matchType: result.analysis?.ai_analysis?.match_type || getMatchTypeFromResult(result),
+                confidenceLevel: result.analysis?.ai_analysis?.confidence_level || null,
+                // 传统模式特有字段
+                readingCommitmentCompatibility: result.readingCommitmentCompatibility || null,
+                textPreferenceAnalysis: result.textPreferenceAnalysis || null,
+                personalityProfiles: result.personalityProfiles || null,
+                implicitAnalysis: result.implicitAnalysis || null,
+                deepCompatibilityAnalysis: result.deepCompatibilityAnalysis || null,
+                matchingDimensions: result.matchingDimensions || null,
+                // 降级状态标记
+                degraded: result.degraded || false,
+                degradationReason: result.degradationReason || null,
+                traditionalMode: result.traditionalMode || false,
+                healthDegraded: result.healthDegraded || false,
+                type: 'complementary',
+                analysisMode: getAnalysisMode(result)
+            };
+        } catch (error) {
+            console.warn(`配对失败 ${pairing.user1.name} - ${pairing.user2.name}:`, error);
+            // 返回一个低分结果而不是null，确保所有配对都有结果
+            return {
+                member1: pairing.user1,
+                member2: pairing.user2,
+                score: 0.1,
+                reason: "分析失败",
+                commonHobbies: [],
+                commonBooks: [],
+                detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
+                aiAnalysis: null,
+                matchType: "未知",
+                confidenceLevel: 0,
+                degraded: false,
+                traditionalMode: false,
+                healthDegraded: false,
+                type: 'complementary',
+                analysisMode: 'error'
+            };
+        }
+    };
+    
+    // 使用分块处理器处理配对
+    const chunks = chunkArray(pairings, MEMORY_CONFIG.CHUNK_SIZE);
+    let allMatches = [];
+    
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        const chunk = chunks[chunkIndex];
+        const startIdx = chunkIndex * MEMORY_CONFIG.CHUNK_SIZE;
         
-        const batchResults = await Promise.all(batchPromises);
-        matches.push(...batchResults);
+        console.log(`处理块 ${chunkIndex + 1}/${chunks.length}，包含 ${chunk.length} 个配对`);
         
-        // 更新批次完成进度
-        updateProgress(
-            currentBatch, 
-            totalBatches, 
-            matches.length, 
-            `第 ${currentBatch} 批完成，已分析 ${matches.length} 个配对`,
-            startTime
-        );
+        // 在每个块内使用动态并发
+        let i = 0;
+        while (i < chunk.length) {
+            const currentBatchSize = apiHealthMonitor.getDynamicBatchSize();
+            const batch = chunk.slice(i, Math.min(i + currentBatchSize, chunk.length));
+            
+            // 更新进度
+            const currentProcessed = startIdx + i;
+            updateProgress(
+                currentProcessed, 
+                pairings.length, 
+                allMatches.length, 
+                `正在处理互补配对 ${currentProcessed + 1}-${currentProcessed + batch.length}...`,
+                startTime
+            );
+            
+            // 并发处理批次
+            const batchResults = await Promise.all(batch.map(processChunk));
+            allMatches.push(...batchResults);
+            
+            i += batch.length;
+            processedCount = startIdx + i;
+            
+            // 批次间延迟
+            if (i < chunk.length) {
+                const errorRate = apiHealthMonitor.getErrorRate();
+                const delay = errorRate > 0.2 ? 1000 : 500;
+                await sleep(delay);
+            }
+        }
         
-        // 批次间添加延迟，进一步避免速率限制
-        if (i + MAX_CONCURRENT_REQUESTS < pairings.length) {
-            console.log('批次间等待500ms...');
-            await new Promise(resolve => setTimeout(resolve, 500));
+        // 块间清理和延迟
+        if (chunkIndex < chunks.length - 1) {
+            // 检查内存使用
+            memoryMonitor.checkMemoryUsage();
+            
+            // 块间延迟，让出CPU
+            await sleep(200);
+            
+            console.log(`块 ${chunkIndex + 1} 完成，当前处理 ${allMatches.length} 个配对`);
         }
     }
+    
+    matches.push(...allMatches);
     
     // 互补匹配排序：根据分析模式使用不同的排序策略
     matches.sort((a, b) => {
@@ -2417,19 +4230,19 @@ async function findComplementaryMatches() {
     
     // 显示完成进度
     updateProgress(
-        totalBatches, 
-        totalBatches, 
+        pairings.length, 
+        pairings.length, 
         matches.length, 
         '互补匹配分析完成！',
         startTime
     );
     
-    const title = aiAnalysisEnabled ? '🌱 深度智能互补搭档推荐' : '🌱 传统算法互补搭档推荐';
-    displayMatches(matches.slice(0, 10), title);
+    const titleInfo = getMatchingTitle(matches, 'complementary');
+    displayMatches(matches.slice(0, 10), titleInfo.title, titleInfo.subtitle);
 }
 
 // 显示匹配结果
-function displayMatches(matches, title) {
+function displayMatches(matches, title, subtitle = null) {
     const resultsDiv = document.getElementById('matchResults');
     
     if (matches.length === 0) {
@@ -2437,16 +4250,43 @@ function displayMatches(matches, title) {
         return;
     }
     
+    // 生成降级状态统计
+    const degradedCount = matches.filter(m => m.degraded).length;
+    const traditionalCount = matches.filter(m => m.traditionalMode || m.healthDegraded).length;
+    const aiCount = matches.filter(m => m.aiAnalysis && !m.degraded).length;
+    
+    let statusInfo = '';
+    if (degradedCount > 0 || traditionalCount > 0) {
+        statusInfo = `
+            <div style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+                <h4 style="margin: 0 0 8px 0; color: #1565c0;">📊 匹配模式统计</h4>
+                <div style="display: flex; gap: 15px; font-size: 13px;">
+                    ${aiCount > 0 ? `<span>🧠 AI智能: ${aiCount}个</span>` : ''}
+                    ${degradedCount > 0 ? `<span>🔀 AI降级: ${degradedCount}个</span>` : ''}
+                    ${traditionalCount > 0 ? `<span>📊 传统算法: ${traditionalCount}个</span>` : ''}
+                </div>
+                ${subtitle ? `<div style="margin-top: 5px; font-size: 12px; color: #666;">${subtitle}</div>` : ''}
+            </div>
+        `;
+    } else if (subtitle) {
+        statusInfo = `
+            <div style="margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                <div style="font-size: 13px; color: #666;">${subtitle}</div>
+            </div>
+        `;
+    }
+    
     resultsDiv.innerHTML = `
         <div class="section">
             <h2>${title}</h2>
+            ${statusInfo}
             <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
                 <p>📊 管理员专用：智能匹配结果分析</p>
                 <small>匹配类型：✅ 精确匹配 (1.0分) | 🔗 语义匹配 (0.8分) | 📂 类别匹配 (0.6分)</small>
             </div>
             ${matches.map((match, index) => `
-                <div class="match-item">
-                    <h3>匹配 ${index + 1} ${generateMatchIcon(match.score)}</h3>
+                <div class="${getMatchItemClass(match)}">
+                    <h3>匹配 ${index + 1} ${generateMatchIcon(match.score)} ${generateMatchStatusTags(match)}</h3>
                     ${generateMatchScoreHtml(match)}
                     
                     <div class="match-details">
@@ -2464,6 +4304,7 @@ function displayMatches(matches, title) {
                     </div>
                     
                     ${generateMatchDetails(match)}
+                    ${generateDegradationInfo(match)}
                 </div>
             `).join('')}
         </div>
@@ -2906,6 +4747,51 @@ function findCommonElements(arr1, arr2) {
     return arr1.filter(item => arr2.includes(item));
 }
 
+// 生成降级信息显示
+function generateDegradationInfo(match) {
+    if (!match.degraded && !match.degradationReason && !match.healthDegraded) {
+        return '';
+    }
+    
+    let degradationHtml = '<div class="common-interests degradation-info" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 5px solid #ff9800;">';
+    degradationHtml += '<h4>⚠️ 降级处理信息</h4>';
+    
+    if (match.degraded) {
+        degradationHtml += `
+            <div class="match-type-group">
+                <span class="match-type-label">降级原因：</span>
+                <span class="tag degraded-tag">${match.degradationReason || 'AI服务异常'}</span>
+            </div>
+            <div class="match-type-group">
+                <span class="match-type-label">处理方式：</span>
+                <span class="tag ai-element-tag">自动切换到传统匹配算法</span>
+            </div>
+        `;
+    }
+    
+    if (match.healthDegraded) {
+        const status = apiHealthMonitor.getDegradationStatus();
+        degradationHtml += `
+            <div class="match-type-group">
+                <span class="match-type-label">系统状态：</span>
+                <span class="tag traditional-degraded-tag">API健康降级模式</span>
+            </div>
+            <div class="match-type-group">
+                <span class="match-type-label">降级时长：</span>
+                <span class="tag score-tag">${Math.round(status.duration/1000)}秒</span>
+            </div>
+        `;
+    }
+    
+    degradationHtml += '<div style="margin-top: 8px; font-size: 12px; color: #ef6c00;">';
+    degradationHtml += '💡 降级模式确保服务连续性，算法会在条件恢复后自动切换回AI模式';
+    degradationHtml += '</div>';
+    
+    degradationHtml += '</div>';
+    
+    return degradationHtml;
+}
+
 // 分类显示匹配项
 function categorizeMatches(matches) {
     const exact = matches.filter(m => m.type === 'exact');
@@ -2939,3 +4825,256 @@ function categorizeMatches(matches) {
     
     return html;
 }
+
+// ===== 监控仪表板管理函数 =====
+
+/**
+ * 刷新监控数据显示
+ */
+function refreshMonitoringData() {
+    console.log('🔄 刷新监控数据...');
+    
+    // 更新系统健康状态
+    errorMonitoringSystem.updateSystemHealth();
+    
+    // 获取最新统计数据
+    const errorStats = errorMonitoringSystem.getErrorStats();
+    const healthReport = errorMonitoringSystem.getHealthReport();
+    
+    // 更新错误统计显示
+    document.getElementById('totalErrors').textContent = errorStats.total;
+    document.getElementById('hourlyErrors').textContent = errorStats.lastHour;
+    document.getElementById('recentErrors').textContent = errorStats.last5min;
+    
+    // 更新性能统计显示
+    document.getElementById('totalRequests').textContent = healthReport.performance.totalRequests;
+    document.getElementById('successRate').textContent = healthReport.performance.successRate;
+    document.getElementById('avgResponseTime').textContent = healthReport.performance.averageResponseTime;
+    
+    // 更新系统健康状态显示
+    const healthElement = document.getElementById('systemHealth');
+    const healthMap = {
+        'healthy': { text: '良好', color: '#28a745' },
+        'degraded': { text: '降级', color: '#ffc107' },
+        'critical': { text: '严重', color: '#dc3545' },
+        'maintenance': { text: '维护', color: '#6c757d' }
+    };
+    
+    const healthInfo = healthMap[healthReport.systemHealth.overall] || healthMap['critical'];
+    healthElement.textContent = healthInfo.text;
+    healthElement.style.color = healthInfo.color;
+    
+    console.log('✅ 监控数据刷新完成');
+}
+
+/**
+ * 显示详细健康报告
+ */
+function showDetailedHealthReport() {
+    const report = errorMonitoringSystem.getHealthReport();
+    
+    let reportHtml = `
+        <div style="max-width: 800px; max-height: 600px; overflow-y: auto; padding: 20px; background: white; border-radius: 12px;">
+            <h3 style="margin-bottom: 20px; color: #2c3e50;">📋 系统健康详细报告</h3>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #34495e; margin-bottom: 10px;">🏥 系统健康状态</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div><strong>整体状态:</strong> ${report.systemHealth.overall}</div>
+                    <div><strong>API状态:</strong> ${report.systemHealth.api}</div>
+                    <div><strong>缓存状态:</strong> ${report.systemHealth.cache}</div>
+                    <div><strong>内存状态:</strong> ${report.systemHealth.memory}</div>
+                    <div><strong>最后检查:</strong> ${new Date(report.systemHealth.lastHealthCheck).toLocaleString('zh-CN')}</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #34495e; margin-bottom: 10px;">📊 错误统计</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div><strong>总错误数:</strong> ${report.errorStats.total}</div>
+                    <div><strong>最近24小时:</strong> ${report.errorStats.last24h}</div>
+                    <div><strong>最近1小时:</strong> ${report.errorStats.lastHour}</div>
+                    <div><strong>最近5分钟:</strong> ${report.errorStats.last5min}</div>
+                    <div><strong>错误率(5分钟):</strong> ${(report.errorStats.errorRate5min * 100).toFixed(2)}%/分钟</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #34495e; margin-bottom: 10px;">⚡ 性能指标</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div><strong>总请求数:</strong> ${report.performance.totalRequests}</div>
+                    <div><strong>成功率:</strong> ${report.performance.successRate}</div>
+                    <div><strong>平均响应时间:</strong> ${report.performance.averageResponseTime}</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #34495e; margin-bottom: 10px;">🗄️ 缓存健康</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div><strong>AI缓存大小:</strong> ${report.cacheHealth.aiCacheSize}</div>
+                    <div><strong>AI缓存命中率:</strong> ${report.cacheHealth.aiCacheHitRate}</div>
+                    <div><strong>用户画像缓存:</strong> ${report.cacheHealth.userProfilesSize}</div>
+                    <div><strong>请求缓存大小:</strong> ${report.cacheHealth.requestCacheSize}</div>
+                </div>
+            </div>
+            
+            ${report.recommendations.length > 0 ? `
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #34495e; margin-bottom: 10px;">💡 优化建议</h4>
+                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                        ${report.recommendations.map(rec => `
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-weight: bold; color: ${rec.priority === 'high' ? '#dc3545' : rec.priority === 'medium' ? '#fd7e14' : '#6c757d'};">
+                                    [${rec.priority.toUpperCase()}]
+                                </span>
+                                ${rec.message}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="closeHealthReport()" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                    关闭报告
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // 创建模态框显示报告
+    const modal = document.createElement('div');
+    modal.id = 'healthReportModal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+    modal.innerHTML = reportHtml;
+    
+    document.body.appendChild(modal);
+    
+    // 点击外部关闭
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeHealthReport();
+        }
+    });
+}
+
+/**
+ * 关闭健康报告模态框
+ */
+function closeHealthReport() {
+    const modal = document.getElementById('healthReportModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * 重置监控数据
+ */
+function resetMonitoringData() {
+    if (confirm('确定要重置所有监控数据吗？这将清除错误日志、性能统计等数据。')) {
+        errorMonitoringSystem.resetMonitoring();
+        refreshMonitoringData();
+        alert('✅ 监控数据已重置');
+    }
+}
+
+/**
+ * 显示API健康状态（保持向后兼容）
+ */
+function showApiHealthStatus() {
+    const report = errorMonitoringSystem.getHealthReport();
+    const apiStats = apiHealthMonitor;
+    
+    const statusInfo = `
+📊 API健康状态报告
+
+🔹 基础统计:
+  • 成功请求: ${apiStats.successCount}
+  • 失败请求: ${apiStats.errorCount}
+  • 连续错误: ${apiStats.consecutiveErrors}
+  • 当前批处理大小: ${apiStats.currentBatchSize}
+  • 错误率: ${(apiStats.getErrorRate() * 100).toFixed(2)}%
+
+🔹 系统状态:
+  • 整体健康: ${report.systemHealth.overall}
+  • API状态: ${report.systemHealth.api}
+  • 缓存状态: ${report.systemHealth.cache}
+  • 内存状态: ${report.systemHealth.memory}
+
+🔹 降级状态:
+  • 降级模式: ${apiStats.degradedMode ? '已启用' : '未启用'}
+  • AI分析开关: ${aiAnalysisEnabled ? '开启' : '关闭'}
+
+点击"详细报告"查看更多信息...
+    `;
+    
+    alert(statusInfo);
+}
+
+/**
+ * 重置API健康状态（保持向后兼容）
+ */
+function resetApiHealth() {
+    if (confirm('确定要重置API健康监控数据吗？')) {
+        // 重置API健康监控器
+        apiHealthMonitor.errorCount = 0;
+        apiHealthMonitor.successCount = 0;
+        apiHealthMonitor.consecutiveErrors = 0;
+        apiHealthMonitor.lastErrorTime = null;
+        apiHealthMonitor.currentBatchSize = 3;
+        apiHealthMonitor.degradedMode = false;
+        apiHealthMonitor.degradationStartTime = null;
+        
+        // 重置错误监控系统
+        errorMonitoringSystem.resetMonitoring();
+        
+        // 启用AI分析（如果被禁用）
+        aiAnalysisEnabled = true;
+        updateAiToggleUI();
+        
+        // 刷新监控显示
+        refreshMonitoringData();
+        
+        alert('✅ API健康状态已重置');
+    }
+}
+
+// 页面加载时初始化监控仪表板
+const originalShowLoggedInView = showLoggedInView;
+showLoggedInView = function() {
+    originalShowLoggedInView.apply(this, arguments);
+    
+    // 如果是管理员，初始化监控数据
+    if (isAdmin) {
+        setTimeout(() => {
+            refreshMonitoringData();
+            
+            // 设置定期刷新监控数据
+            if (!window.monitoringInterval) {
+                window.monitoringInterval = setInterval(refreshMonitoringData, 30000); // 每30秒刷新
+            }
+        }, 1000);
+    }
+};
+
+// 退出登录时清除监控定时器
+const originalLogout = logout;
+logout = function() {
+    if (window.monitoringInterval) {
+        clearInterval(window.monitoringInterval);
+        window.monitoringInterval = null;
+    }
+    originalLogout.apply(this, arguments);
+};
