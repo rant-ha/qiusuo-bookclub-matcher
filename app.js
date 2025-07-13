@@ -11,6 +11,7 @@ const GIST_FILENAME = 'bookclub_members.json';
 let members = [];
 let currentUser = null; // 当前登录用户
 let isAdmin = false;
+let aiAnalysisEnabled = true; // AI分析开关状态
 
 // 验证规则配置
 const VALIDATION_RULES = {
@@ -196,6 +197,15 @@ window.onload = async function() {
        ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
    }
 
+   // 初始化AI分析开关状态
+   const savedAiState = localStorage.getItem('ai_analysis_enabled');
+   if (savedAiState !== null) {
+       aiAnalysisEnabled = savedAiState === 'true';
+   }
+   
+   // 初始化AI开关UI状态（如果存在）
+   updateAiToggleUI();
+
    // 如果是注册页面，则不需要执行登录逻辑
    if (window.location.pathname.endsWith('register.html')) {
        return;
@@ -228,6 +238,32 @@ window.onload = async function() {
        memberForm.addEventListener('submit', handleUpdateMemberInfo);
    }
 };
+
+// AI分析开关管理函数
+function toggleAiAnalysis() {
+    aiAnalysisEnabled = !aiAnalysisEnabled;
+    localStorage.setItem('ai_analysis_enabled', aiAnalysisEnabled.toString());
+    updateAiToggleUI();
+    console.log(`AI分析已${aiAnalysisEnabled ? '启用' : '禁用'}`);
+}
+
+// 更新AI开关UI状态
+function updateAiToggleUI() {
+    const aiToggleBtn = document.getElementById('aiToggleBtn');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    
+    if (aiToggleBtn) {
+        aiToggleBtn.textContent = aiAnalysisEnabled ? '🤖 AI分析：开启' : '📊 AI分析：关闭';
+        aiToggleBtn.style.background = aiAnalysisEnabled ? 
+            'linear-gradient(135deg, #00b894 0%, #00a085 100%)' : 
+            'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)';
+    }
+    
+    if (loadingIndicator) {
+        const baseText = aiAnalysisEnabled ? '🧠 正在进行AI智能分析，请稍候...' : '📊 正在进行传统匹配分析，请稍候...';
+        loadingIndicator.textContent = baseText;
+    }
+}
 
 // 处理注册
 async function handleRegistration(name, studentId) {
@@ -1992,7 +2028,12 @@ async function findSimilarMatches() {
         return;
     }
 
-    document.getElementById('loadingIndicator').style.display = 'block';
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    loadingIndicator.style.display = 'block';
+    loadingIndicator.textContent = aiAnalysisEnabled ? 
+        '🧠 正在进行AI智能分析，请稍候...' : 
+        '📊 正在进行传统匹配分析，请稍候...';
+    
     const matches = [];
     
     // 并发控制：限制同时处理的请求数量
@@ -2025,22 +2066,40 @@ async function findSimilarMatches() {
         
         const batchPromises = batch.map(async (pairing) => {
             try {
-                const result = await calculateAICompatibility(pairing.user1, pairing.user2);
+                // 根据AI开关选择匹配算法
+                const result = aiAnalysisEnabled ? 
+                    await calculateAICompatibility(pairing.user1, pairing.user2) :
+                    await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                    
                 if (result.score > 0) {
                     return {
                         member1: pairing.user1,
                         member2: pairing.user2,
                         score: result.score,
-                        reason: result.reason,
-                        // 保持向后兼容的字段
-                        commonHobbies: result.analysis?.commonHobbies || [],
-                        commonBooks: result.analysis?.commonBooks || [],
-                        detailLevel: result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
-                        // 新增AI分析数据
-                        aiAnalysis: result.analysis?.ai_analysis,
-                        matchType: result.analysis?.ai_analysis?.match_type,
-                        confidenceLevel: result.analysis?.ai_analysis?.confidence_level,
-                        type: 'similar'
+                        reason: result.reason || `${aiAnalysisEnabled ? 'AI智能' : '传统'}匹配分析完成`,
+                        // 向后兼容的字段
+                        commonHobbies: aiAnalysisEnabled ? 
+                            (result.analysis?.commonHobbies || []) : 
+                            (result.commonHobbies || []),
+                        commonBooks: aiAnalysisEnabled ? 
+                            (result.analysis?.commonBooks || []) : 
+                            (result.commonBooks || []),
+                        detailLevel: aiAnalysisEnabled ? 
+                            (result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }) : 
+                            (result.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }),
+                        // AI特有字段（仅在AI模式下有效）
+                        aiAnalysis: aiAnalysisEnabled ? result.analysis?.ai_analysis : null,
+                        matchType: aiAnalysisEnabled ? result.analysis?.ai_analysis?.match_type : '传统匹配',
+                        confidenceLevel: aiAnalysisEnabled ? result.analysis?.ai_analysis?.confidence_level : null,
+                        // 传统模式特有字段
+                        readingCommitmentCompatibility: aiAnalysisEnabled ? null : result.readingCommitmentCompatibility,
+                        textPreferenceAnalysis: aiAnalysisEnabled ? null : result.textPreferenceAnalysis,
+                        personalityProfiles: aiAnalysisEnabled ? null : result.personalityProfiles,
+                        implicitAnalysis: aiAnalysisEnabled ? null : result.implicitAnalysis,
+                        deepCompatibilityAnalysis: aiAnalysisEnabled ? null : result.deepCompatibilityAnalysis,
+                        matchingDimensions: aiAnalysisEnabled ? null : result.matchingDimensions,
+                        type: 'similar',
+                        analysisMode: aiAnalysisEnabled ? 'ai' : 'traditional'
                     };
                 }
                 return null;
@@ -2061,7 +2120,8 @@ async function findSimilarMatches() {
     }
     matches.sort((a, b) => b.score - a.score);
     document.getElementById('loadingIndicator').style.display = 'none';
-    displayMatches(matches.slice(0, 10), '🎯 深度智能相似搭档推荐');
+    const title = aiAnalysisEnabled ? '🎯 深度智能相似搭档推荐' : '🎯 传统算法相似搭档推荐';
+    displayMatches(matches.slice(0, 10), title);
 }
 
 // 寻找互补搭档（仅管理员）- 升级版
@@ -2075,7 +2135,12 @@ async function findComplementaryMatches() {
         return;
     }
 
-    document.getElementById('loadingIndicator').style.display = 'block';
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    loadingIndicator.style.display = 'block';
+    loadingIndicator.textContent = aiAnalysisEnabled ? 
+        '🧠 正在进行AI智能分析，请稍候...' : 
+        '📊 正在进行传统匹配分析，请稍候...';
+    
     const matches = [];
     
     // 并发控制：限制同时处理的请求数量
@@ -2108,21 +2173,39 @@ async function findComplementaryMatches() {
         
         const batchPromises = batch.map(async (pairing) => {
             try {
-                const result = await calculateAICompatibility(pairing.user1, pairing.user2);
+                // 根据AI开关选择匹配算法
+                const result = aiAnalysisEnabled ? 
+                    await calculateAICompatibility(pairing.user1, pairing.user2) :
+                    await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                    
                 return {
                     member1: pairing.user1,
                     member2: pairing.user2,
                     score: result.score,
-                    reason: result.reason,
-                    // 保持向后兼容的字段
-                    commonHobbies: result.analysis?.commonHobbies || [],
-                    commonBooks: result.analysis?.commonBooks || [],
-                    detailLevel: result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
-                    // 新增AI分析数据
-                    aiAnalysis: result.analysis?.ai_analysis,
-                    matchType: result.analysis?.ai_analysis?.match_type,
-                    confidenceLevel: result.analysis?.ai_analysis?.confidence_level,
-                    type: 'complementary'
+                    reason: result.reason || `${aiAnalysisEnabled ? 'AI智能' : '传统'}匹配分析完成`,
+                    // 向后兼容的字段
+                    commonHobbies: aiAnalysisEnabled ? 
+                        (result.analysis?.commonHobbies || []) : 
+                        (result.commonHobbies || []),
+                    commonBooks: aiAnalysisEnabled ? 
+                        (result.analysis?.commonBooks || []) : 
+                        (result.commonBooks || []),
+                    detailLevel: aiAnalysisEnabled ? 
+                        (result.analysis?.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }) : 
+                        (result.detailLevel || { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }),
+                    // AI特有字段（仅在AI模式下有效）
+                    aiAnalysis: aiAnalysisEnabled ? result.analysis?.ai_analysis : null,
+                    matchType: aiAnalysisEnabled ? result.analysis?.ai_analysis?.match_type : '传统匹配',
+                    confidenceLevel: aiAnalysisEnabled ? result.analysis?.ai_analysis?.confidence_level : null,
+                    // 传统模式特有字段
+                    readingCommitmentCompatibility: aiAnalysisEnabled ? null : result.readingCommitmentCompatibility,
+                    textPreferenceAnalysis: aiAnalysisEnabled ? null : result.textPreferenceAnalysis,
+                    personalityProfiles: aiAnalysisEnabled ? null : result.personalityProfiles,
+                    implicitAnalysis: aiAnalysisEnabled ? null : result.implicitAnalysis,
+                    deepCompatibilityAnalysis: aiAnalysisEnabled ? null : result.deepCompatibilityAnalysis,
+                    matchingDimensions: aiAnalysisEnabled ? null : result.matchingDimensions,
+                    type: 'complementary',
+                    analysisMode: aiAnalysisEnabled ? 'ai' : 'traditional'
                 };
             } catch (error) {
                 console.warn(`配对失败 ${pairing.user1.name} - ${pairing.user2.name}:`, error);
@@ -2153,26 +2236,41 @@ async function findComplementaryMatches() {
         }
     }
     
-    // 互补匹配：基于AI分析的匹配类型和成长潜力排序
+    // 互补匹配排序：根据分析模式使用不同的排序策略
     matches.sort((a, b) => {
-        // 新AI系统的成长潜力评分
-        const aGrowthScore = (a.aiAnalysis?.growth_opportunities?.length || 0) * 0.5 + 
-                           (a.aiAnalysis?.detailed_analysis?.complementarity_score || 0) * 0.3 +
-                           (a.confidenceLevel || 0) * 0.2;
-        const bGrowthScore = (b.aiAnalysis?.growth_opportunities?.length || 0) * 0.5 + 
-                           (b.aiAnalysis?.detailed_analysis?.complementarity_score || 0) * 0.3 +
-                           (b.confidenceLevel || 0) * 0.2;
-        
-        // 如果都没有AI分析数据，则按基础分数排序
-        if (aGrowthScore === 0 && bGrowthScore === 0) {
-            return b.score - a.score;
+        if (aiAnalysisEnabled) {
+            // AI模式：基于AI分析的匹配类型和成长潜力排序
+            const aGrowthScore = (a.aiAnalysis?.growth_opportunities?.length || 0) * 0.5 + 
+                               (a.aiAnalysis?.detailed_analysis?.complementarity_score || 0) * 0.3 +
+                               (a.confidenceLevel || 0) * 0.2;
+            const bGrowthScore = (b.aiAnalysis?.growth_opportunities?.length || 0) * 0.5 + 
+                               (b.aiAnalysis?.detailed_analysis?.complementarity_score || 0) * 0.3 +
+                               (b.confidenceLevel || 0) * 0.2;
+            
+            // 如果都没有AI分析数据，则按基础分数排序
+            if (aGrowthScore === 0 && bGrowthScore === 0) {
+                return b.score - a.score;
+            }
+            
+            return bGrowthScore - aGrowthScore;
+        } else {
+            // 传统模式：基于传统匹配维度排序，互补性优先
+            const aComplementarity = (a.matchingDimensions?.growth_potential || 0) + 
+                                   (a.matchingDimensions?.implicit_resonance || 0) * 0.8;
+            const bComplementarity = (b.matchingDimensions?.growth_potential || 0) + 
+                                   (b.matchingDimensions?.implicit_resonance || 0) * 0.8;
+            
+            if (aComplementarity === 0 && bComplementarity === 0) {
+                return b.score - a.score;
+            }
+            
+            return bComplementarity - aComplementarity;
         }
-        
-        return bGrowthScore - aGrowthScore;
     });
     
     document.getElementById('loadingIndicator').style.display = 'none';
-    displayMatches(matches.slice(0, 10), '🌱 深度智能互补搭档推荐');
+    const title = aiAnalysisEnabled ? '🌱 深度智能互补搭档推荐' : '🌱 传统算法互补搭档推荐';
+    displayMatches(matches.slice(0, 10), title);
 }
 
 // 显示匹配结果
