@@ -1,7 +1,10 @@
 // GitHub Gist 配置 - 构建时替换
 let GITHUB_TOKEN = 'BUILD_TIME_GITHUB_TOKEN';
 let GIST_ID = 'BUILD_TIME_GIST_ID';
-let ADMIN_PASSWORD = 'BUILD_TIME_ADMIN_PASSWORD';
+let SUPER_ADMIN_PASSWORD = 'BUILD_TIME_SUPER_ADMIN_PASSWORD';
+let REGULAR_ADMIN_PASSWORD = 'BUILD_TIME_REGULAR_ADMIN_PASSWORD';
+let ADMIN_PASSWORD = 'BUILD_TIME_ADMIN_PASSWORD'; // 向后兼容支持
+let ADMIN_ROLES_ENABLED = 'BUILD_TIME_ADMIN_ROLES_ENABLED';
 let AI_BASE_URL = 'BUILD_TIME_AI_BASE_URL';
 let AI_API_KEY = 'BUILD_TIME_AI_API_KEY';
 let AI_MODEL_NAME = 'BUILD_TIME_AI_MODEL_NAME';
@@ -9,9 +12,58 @@ const GIST_FILENAME = 'bookclub_members.json';
 
 // 存储所有成员数据
 let members = [];
+// 全局状态管理
 let currentUser = null; // 当前登录用户
 let isAdmin = false;
+let currentAdminRole = null; // 当前管理员角色
+let currentPermissions = []; // 当前权限列表
 let aiAnalysisEnabled = true; // AI分析开关状态
+
+// 角色定义
+const ROLES = {
+    SUPER_ADMIN: 'super_admin',
+    REGULAR_ADMIN: 'regular_admin',
+    LEGACY_ADMIN: 'legacy_admin'
+};
+
+// 权限定义
+const PERMISSIONS = {
+    USER_MANAGEMENT: 'user_management',
+    SYSTEM_MONITORING: 'system_monitoring',
+    API_MANAGEMENT: 'api_management',
+    CACHE_MANAGEMENT: 'cache_management',
+    ERROR_MONITORING: 'error_monitoring',
+    AI_TOGGLE_CONTROL: 'ai_toggle_control',
+    MEMBER_MANAGEMENT: 'member_management',
+    MATCHING_FUNCTIONS: 'matching_functions',
+    DATA_REFRESH: 'data_refresh'
+};
+
+// 角色权限映射
+const ROLE_PERMISSIONS = {
+    [ROLES.SUPER_ADMIN]: [
+        PERMISSIONS.USER_MANAGEMENT,
+        PERMISSIONS.SYSTEM_MONITORING,
+        PERMISSIONS.API_MANAGEMENT,
+        PERMISSIONS.CACHE_MANAGEMENT,
+        PERMISSIONS.ERROR_MONITORING,
+        PERMISSIONS.AI_TOGGLE_CONTROL,
+        PERMISSIONS.MEMBER_MANAGEMENT,
+        PERMISSIONS.MATCHING_FUNCTIONS,
+        PERMISSIONS.DATA_REFRESH
+    ],
+    [ROLES.REGULAR_ADMIN]: [
+        PERMISSIONS.USER_MANAGEMENT,
+        PERMISSIONS.MEMBER_MANAGEMENT,
+        PERMISSIONS.MATCHING_FUNCTIONS,
+        PERMISSIONS.DATA_REFRESH
+    ],
+    [ROLES.LEGACY_ADMIN]: [
+        PERMISSIONS.USER_MANAGEMENT,
+        PERMISSIONS.SYSTEM_MONITORING,
+        PERMISSIONS.API_MANAGEMENT
+    ]
+};
 
 // 日志级别配置
 const LOG_LEVELS = {
@@ -228,59 +280,78 @@ async function handleEnhancedRegistration(enhancedFormData) {
 
 // 页面加载时初始化
 window.onload = async function() {
-   // 优先使用构建时注入的配置
-   const isBuiltWithEnv = GITHUB_TOKEN !== 'BUILD_TIME_GITHUB_TOKEN' && ADMIN_PASSWORD !== 'BUILD_TIME_ADMIN_PASSWORD' && GIST_ID !== 'BUILD_TIME_GIST_ID';
-   if (!isBuiltWithEnv) {
-       // 降级到手动配置
-       GITHUB_TOKEN = localStorage.getItem('github_token') || '';
-       GIST_ID = localStorage.getItem('gist_id') || '';
-       ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
-   }
+    // 优先使用构建时注入的配置
+    const isBuiltWithEnv = GITHUB_TOKEN !== 'BUILD_TIME_GITHUB_TOKEN' &&
+                          ADMIN_PASSWORD !== 'BUILD_TIME_ADMIN_PASSWORD' &&
+                          GIST_ID !== 'BUILD_TIME_GIST_ID' &&
+                          SUPER_ADMIN_PASSWORD !== 'BUILD_TIME_SUPER_ADMIN_PASSWORD' &&
+                          REGULAR_ADMIN_PASSWORD !== 'BUILD_TIME_REGULAR_ADMIN_PASSWORD';
+    
+    if (!isBuiltWithEnv) {
+        // 降级到手动配置
+        GITHUB_TOKEN = localStorage.getItem('github_token') || '';
+        GIST_ID = localStorage.getItem('gist_id') || '';
+        ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
+        SUPER_ADMIN_PASSWORD = localStorage.getItem('super_admin_password') || '';
+        REGULAR_ADMIN_PASSWORD = localStorage.getItem('regular_admin_password') || '';
+        ADMIN_ROLES_ENABLED = localStorage.getItem('admin_roles_enabled') || 'false';
+    }
 
-   // 初始化AI分析开关状态
-   const savedAiState = localStorage.getItem('ai_analysis_enabled');
-   if (savedAiState !== null) {
-       aiAnalysisEnabled = savedAiState === 'true';
-   }
-   
-   // 初始化AI开关UI状态（如果存在）
-   updateAiToggleUI();
+    // 初始化AI分析开关状态
+    const savedAiState = localStorage.getItem('ai_analysis_enabled');
+    if (savedAiState !== null) {
+        aiAnalysisEnabled = savedAiState === 'true';
+    }
+    
+    // 初始化AI开关UI状态（如果存在）
+    updateAiToggleUI();
 
-   // 如果是注册页面，则不需要执行登录逻辑
-   if (window.location.pathname.endsWith('register.html')) {
-       return;
-   }
-   
-   // 自动加载Gist数据
-   if (GIST_ID) {
-       await loadMembersFromGist();
-   }
+    // 如果是注册页面，则不需要执行登录逻辑
+    if (window.location.pathname.endsWith('register.html')) {
+        return;
+    }
+    
+    // 自动加载Gist数据
+    if (GIST_ID) {
+        await loadMembersFromGist();
+    }
 
-   // 检查本地存储的登录状态
-   const loggedInUser = sessionStorage.getItem('currentUser');
-   if (loggedInUser) {
-       currentUser = JSON.parse(loggedInUser);
-       isAdmin = sessionStorage.getItem('isAdmin') === 'true';
-       showLoggedInView();
-   } else {
-       showLoginView();
-   }
+    // 检查本地存储的登录状态
+    const loggedInUser = sessionStorage.getItem('currentUser');
+    if (loggedInUser) {
+        currentUser = JSON.parse(loggedInUser);
+        isAdmin = sessionStorage.getItem('isAdmin') === 'true';
+        currentAdminRole = sessionStorage.getItem('adminRole') || null;
+        try {
+            currentPermissions = JSON.parse(sessionStorage.getItem('permissions') || '[]');
+        } catch (e) {
+            currentPermissions = [];
+            console.error('解析权限数据失败:', e);
+        }
+        showLoggedInView();
+    } else {
+        showLoginView();
+    }
 
-   // 绑定登录表单事件
-   const loginForm = document.getElementById('loginForm');
-   if(loginForm) {
-       loginForm.addEventListener('submit', handleLogin);
-   }
+    // 绑定登录表单事件
+    const loginForm = document.getElementById('loginForm');
+    if(loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    }
 
-   // 绑定成员信息更新表单事件
-   const memberForm = document.getElementById('memberForm');
-   if(memberForm) {
-       memberForm.addEventListener('submit', handleUpdateMemberInfo);
-   }
+    // 绑定成员信息更新表单事件
+    const memberForm = document.getElementById('memberForm');
+    if(memberForm) {
+        memberForm.addEventListener('submit', handleUpdateMemberInfo);
+    }
 };
 
 // AI分析开关管理函数
 function toggleAiAnalysis() {
+    if (!validateAdminPermission(PERMISSIONS.AI_TOGGLE_CONTROL, 'toggleAiAnalysis')) {
+        return;
+    }
+    
     aiAnalysisEnabled = !aiAnalysisEnabled;
     localStorage.setItem('ai_analysis_enabled', aiAnalysisEnabled.toString());
     updateAiToggleUI();
@@ -474,57 +545,119 @@ async function handleRegistration(name, studentId) {
 
 // 处理登录
 async function handleLogin(e) {
-   e.preventDefault();
-   const name = document.getElementById('loginName').value.trim();
-   const studentId = document.getElementById('loginStudentId').value.trim();
-   const password = document.getElementById('loginPassword').value.trim();
+    e.preventDefault();
+    const name = document.getElementById('loginName').value.trim();
+    const studentId = document.getElementById('loginStudentId').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
 
-   // 管理员登录
-   if (password) {
-       if (password === ADMIN_PASSWORD) {
-           isAdmin = true;
-           currentUser = { name: 'Admin' };
-           sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-           sessionStorage.setItem('isAdmin', 'true');
-           showLoggedInView();
-           alert('管理员登录成功！');
-       } else {
-           alert('管理员密码错误！');
-       }
-       return;
-   }
+    // 管理员登录
+    if (password) {
+        // 检查是否启用了新的管理员角色系统
+        if (ADMIN_ROLES_ENABLED === 'true') {
+            // 尝试验证超级管理员
+            if (password === SUPER_ADMIN_PASSWORD) {
+                isAdmin = true;
+                currentUser = { name: 'Super Admin' };
+                currentAdminRole = ROLES.SUPER_ADMIN;
+                currentPermissions = ROLE_PERMISSIONS[ROLES.SUPER_ADMIN];
+                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                sessionStorage.setItem('isAdmin', 'true');
+                sessionStorage.setItem('adminRole', ROLES.SUPER_ADMIN);
+                sessionStorage.setItem('permissions', JSON.stringify(currentPermissions));
+                showLoggedInView();
+                alert('超级管理员登录成功！');
+                return;
+            }
+            
+            // 尝试验证普通管理员
+            if (password === REGULAR_ADMIN_PASSWORD) {
+                isAdmin = true;
+                currentUser = { name: 'Regular Admin' };
+                currentAdminRole = ROLES.REGULAR_ADMIN;
+                currentPermissions = ROLE_PERMISSIONS[ROLES.REGULAR_ADMIN];
+                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                sessionStorage.setItem('isAdmin', 'true');
+                sessionStorage.setItem('adminRole', ROLES.REGULAR_ADMIN);
+                sessionStorage.setItem('permissions', JSON.stringify(currentPermissions));
+                showLoggedInView();
+                alert('管理员登录成功！');
+                return;
+            }
+            
+            // 尝试验证旧版管理员密码（向后兼容）
+            if (password === ADMIN_PASSWORD) {
+                isAdmin = true;
+                currentUser = { name: 'Legacy Admin' };
+                currentAdminRole = ROLES.LEGACY_ADMIN;
+                currentPermissions = ROLE_PERMISSIONS[ROLES.LEGACY_ADMIN];
+                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                sessionStorage.setItem('isAdmin', 'true');
+                sessionStorage.setItem('adminRole', ROLES.LEGACY_ADMIN);
+                sessionStorage.setItem('permissions', JSON.stringify(currentPermissions));
+                showLoggedInView();
+                alert('管理员登录成功！（旧版权限）');
+                return;
+            }
+        } else {
+            // 使用旧的管理员登录逻辑
+            if (password === ADMIN_PASSWORD) {
+                isAdmin = true;
+                currentUser = { name: 'Admin' };
+                currentAdminRole = ROLES.LEGACY_ADMIN;
+                currentPermissions = ROLE_PERMISSIONS[ROLES.LEGACY_ADMIN];
+                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                sessionStorage.setItem('isAdmin', 'true');
+                sessionStorage.setItem('adminRole', ROLES.LEGACY_ADMIN);
+                sessionStorage.setItem('permissions', JSON.stringify(currentPermissions));
+                showLoggedInView();
+                alert('管理员登录成功！');
+                return;
+            }
+        }
+        
+        alert('管理员密码错误！');
+        return;
+    }
 
-   // 普通用户登录
-   if (!name || !studentId) {
-       alert('请输入姓名和学号');
-       return;
-   }
+    // 普通用户登录
+    if (!name || !studentId) {
+        alert('请输入姓名和学号');
+        return;
+    }
 
-   await loadMembersFromGist();
-   const foundUser = members.find(m => m.name === name && m.studentId === studentId);
+    await loadMembersFromGist();
+    const foundUser = members.find(m => m.name === name && m.studentId === studentId);
 
-   if (foundUser) {
-       if (foundUser.status === 'approved') {
-           currentUser = foundUser;
-           isAdmin = false;
-           sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-           sessionStorage.setItem('isAdmin', 'false');
-           showLoggedInView();
-       } else {
-           alert('您的账号正在审核中，请耐心等待。');
-       }
-   } else {
-       alert('姓名或学号不正确，请检查或先注册。');
-   }
+    if (foundUser) {
+        if (foundUser.status === 'approved') {
+            currentUser = foundUser;
+            isAdmin = false;
+            currentAdminRole = null;
+            currentPermissions = [];
+            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            sessionStorage.setItem('isAdmin', 'false');
+            sessionStorage.setItem('adminRole', '');
+            sessionStorage.setItem('permissions', '[]');
+            showLoggedInView();
+        } else {
+            alert('您的账号正在审核中，请耐心等待。');
+        }
+    } else {
+        alert('姓名或学号不正确，请检查或先注册。');
+    }
 }
 
 // 退出登录
 function logout() {
-   currentUser = null;
-   isAdmin = false;
-   sessionStorage.removeItem('currentUser');
-   sessionStorage.removeItem('isAdmin');
-   showLoginView();
+    currentUser = null;
+    isAdmin = false;
+    currentAdminRole = null;
+    currentPermissions = [];
+    sessionStorage.removeItem('currentUser');
+    sessionStorage.removeItem('isAdmin');
+    sessionStorage.removeItem('adminRole');
+    sessionStorage.removeItem('permissions');
+    showLoginView();
 }
 
 // 管理员退出登录
@@ -688,8 +821,10 @@ async function handleUpdateMemberInfo(e) {
 
 // 渲染待审核列表（仅管理员）
 function renderPendingList() {
-   if (!isAdmin) return;
-   const pendingListDiv = document.getElementById('pendingList');
+    if (!validateAdminPermission(PERMISSIONS.MEMBER_MANAGEMENT, 'renderPendingList')) {
+        return;
+    }
+    const pendingListDiv = document.getElementById('pendingList');
    const pendingMembers = members.filter(m => m.status === 'pending');
 
    if (pendingMembers.length === 0) {
@@ -723,8 +858,10 @@ async function approveMember(id) {
 
 // 渲染已批准的成员列表
 function renderMemberList() {
-   if (!isAdmin) return;
-   const memberListDiv = document.getElementById('memberList');
+    if (!validateAdminPermission(PERMISSIONS.MEMBER_MANAGEMENT, 'renderMemberList')) {
+        return;
+    }
+    const memberListDiv = document.getElementById('memberList');
    const memberCountSpan = document.getElementById('memberCount');
    const approvedMembers = members.filter(m => m.status === 'approved');
 
@@ -859,15 +996,18 @@ function renderMemberList() {
 
 // 删除成员（管理员操作，可删除任何状态的用户）
 async function deleteMember(id) {
-   if (!isAdmin) return;
-   const memberName = members.find(m => m.id === id)?.name || '该用户';
-   if (confirm(`确定要删除 ${memberName} 吗？此操作不可撤销。`)) {
-       members = members.filter(m => m.id !== id);
-       await saveMembersToGist();
-       renderPendingList();
-       renderMemberList();
-       document.getElementById('matchResults').innerHTML = '';
-   }
+    if (!validateAdminPermission(PERMISSIONS.MEMBER_MANAGEMENT, 'deleteMember')) {
+        return;
+    }
+    
+    const memberName = members.find(m => m.id === id)?.name || '该用户';
+    if (confirm(`确定要删除 ${memberName} 吗？此操作不可撤销。`)) {
+        members = members.filter(m => m.id !== id);
+        await saveMembersToGist();
+        renderPendingList();
+        renderMemberList();
+        document.getElementById('matchResults').innerHTML = '';
+    }
 }
 
 // UI 更新
@@ -878,15 +1018,35 @@ function showLoginView() {
 }
 
 function showLoggedInView() {
-   document.getElementById('loginSection').style.display = 'none';
-   if (isAdmin) {
-       document.getElementById('adminSection').style.display = 'block';
-       document.getElementById('memberSection').style.display = 'none';
-       renderPendingList();
-       renderMemberList();
-   } else {
-       document.getElementById('adminSection').style.display = 'none';
-       document.getElementById('memberSection').style.display = 'block';
+    document.getElementById('loginSection').style.display = 'none';
+    if (isAdmin) {
+        document.getElementById('adminSection').style.display = 'block';
+        document.getElementById('memberSection').style.display = 'none';
+        
+        // 显示角色标识组件
+        const roleIndicator = document.getElementById('adminRoleIndicator');
+        if (roleIndicator) {
+            roleIndicator.style.display = 'flex';
+            updateAdminRoleIndicator();
+        }
+        
+        // 根据管理员角色显示/隐藏高级功能区
+        const advancedFeaturesSection = document.getElementById('advancedFeaturesSection');
+        const monitoringPanel = document.getElementById('monitoringPanel');
+        
+        if (currentAdminRole === ROLES.SUPER_ADMIN) {
+            if (advancedFeaturesSection) advancedFeaturesSection.style.display = 'block';
+            if (monitoringPanel) monitoringPanel.style.display = 'block';
+        } else {
+            if (advancedFeaturesSection) advancedFeaturesSection.style.display = 'none';
+            if (monitoringPanel) monitoringPanel.style.display = 'none';
+        }
+        
+        renderPendingList();
+        renderMemberList();
+    } else {
+        document.getElementById('adminSection').style.display = 'none';
+        document.getElementById('memberSection').style.display = 'block';
        
        // 确保用户数据已迁移到最新版本
        const migratedUser = migrateUserData(currentUser);
@@ -1002,6 +1162,11 @@ const BOOK_CATEGORIES = {
 
 // AI驱动的智能匹配算法
 async function getAiSimilarity(word1, word2) {
+    // 添加权限验证
+    if (!validateAdminPermission(PERMISSIONS.SYSTEM_MONITORING, 'getAiSimilarity', true)) {
+        return 0;
+    }
+
     if (!AI_BASE_URL || !AI_API_KEY) {
         return 0; // 如果未配置AI，则返回0
     }
@@ -1049,8 +1214,18 @@ async function getAiSimilarity(word1, word2) {
 
 // 阅读人格画像分析
 async function getReadingPersonalityProfile(userText, favoriteBooks = []) {
+    // 添加权限验证
+    if (!validateAdminPermission(PERMISSIONS.SYSTEM_MONITORING, 'getReadingPersonalityProfile', true)) {
+        return {
+            personality_dimensions: {},
+            reading_motivations: [],
+            cognitive_style: 'unknown',
+            confidence_score: 0
+        };
+    }
+
     if (!AI_BASE_URL || !AI_API_KEY || (!userText.trim() && favoriteBooks.length === 0)) {
-        return { 
+        return {
             personality_dimensions: {},
             reading_motivations: [],
             cognitive_style: 'unknown',
@@ -1179,6 +1354,11 @@ Return JSON with:
   "confidence_score": float (0.0-1.0)
 }`;
 
+    // 添加权限验证
+    if (!validateAdminPermission(PERMISSIONS.SYSTEM_MONITORING, 'getImplicitPreferenceAnalysis', true)) {
+        return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+    }
+
     const userPrompt = JSON.stringify({
         user_description: userText,
         favorite_books: favoriteBooks,
@@ -1223,9 +1403,20 @@ Return JSON with:
 
 // 深度兼容性匹配分析
 async function getDeepCompatibilityAnalysis(user1Profile, user2Profile, user1Implicit, user2Implicit) {
+    // 添加权限验证
+    if (!validateAdminPermission(PERMISSIONS.SYSTEM_MONITORING, 'getDeepCompatibilityAnalysis', true)) {
+        return {
+            compatibility_score: 0,
+            compatibility_dimensions: {},
+            synergy_potential: [],
+            growth_opportunities: [],
+            reading_chemistry: 'unknown'
+        };
+    }
+
     if (!AI_BASE_URL || !AI_API_KEY) {
-        return { 
-            compatibility_score: 0, 
+        return {
+            compatibility_score: 0,
             compatibility_dimensions: {},
             synergy_potential: [],
             growth_opportunities: [],
@@ -1315,6 +1506,11 @@ Return JSON with:
 
 // 智能文本偏好分析（升级版）
 async function getAiTextPreferenceAnalysis(text1, text2) {
+    // 添加权限验证
+    if (!validateAdminPermission(PERMISSIONS.SYSTEM_MONITORING, 'getAiTextPreferenceAnalysis', true)) {
+        return { similarity_score: 0, common_elements: [] };
+    }
+
     if (!AI_BASE_URL || !AI_API_KEY || !text1.trim() || !text2.trim()) {
         return { similarity_score: 0, common_elements: [] };
     }
@@ -1830,8 +2026,7 @@ function getMatchTypeFromResult(result) {
  * 手动重置API健康状态（管理员功能）
  */
 function resetApiHealth() {
-    if (!isAdmin) {
-        alert('只有管理员可以重置API状态');
+    if (!validateAdminPermission(PERMISSIONS.SYSTEM_MONITORING, 'resetApiHealth')) {
         return;
     }
     
@@ -4098,8 +4293,7 @@ async function findSimilarMatches() {
 
 // 寻找互补搭档（仅管理员）- 升级版
 async function findComplementaryMatches() {
-    if (!isAdmin) {
-        alert('只有管理员可以进行匹配');
+    if (!validateAdminPermission(PERMISSIONS.MATCHING_FUNCTIONS, 'findComplementaryMatches')) {
         return;
     }
     if (members.length < 2) {
