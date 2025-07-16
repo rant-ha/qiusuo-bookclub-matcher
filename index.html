@@ -5,6 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>求索书社灵魂寻友</title>
     <style>
+        /* 角色标识组件样式 */
+        .admin-role-badge {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            border: 2px solid;
+            background: var(--admin-bg);
+            border-color: var(--admin-color);
+            transition: all 0.3s ease;
+        }
+
+        /* 超级管理员主题 */
+        .super-admin-theme {
+            --admin-color: #007bff;
+            --admin-bg: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        }
+
+        /* 普通管理员主题 */
+        .regular-admin-theme {
+            --admin-color: #28a745;
+            --admin-bg: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+        }
+
+        .role-info {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+
+        .role-icon {
+            font-size: 24px;
+        }
+
+        .role-title {
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--admin-color);
+        }
+
+        .role-description {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .permission-count {
+            font-size: 12px;
+            padding: 4px 8px;
+            background: var(--admin-color);
+            color: white;
+            border-radius: 8px;
+        }
+
+        /* 权限不足提示组件样式 */
+        .permission-restricted {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            color: #856404;
+            margin: 20px 0;
+        }
+
+        .permission-restricted p {
+            margin: 0 0 4px 0;
+            font-weight: 600;
+        }
+
+        .permission-restricted small {
+            opacity: 0.8;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -1166,7 +1244,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="hobbies">兴趣爱好</label>
+                    <label for="hobbies">兴趣爱好</label>1
                     <textarea id="hobbies" placeholder="如：文学，历史，心理学，旅行"></textarea>
                     <div class="hint">多个爱好用逗号分隔（中英文逗号均可）</div>
                 </div>
@@ -1249,18 +1327,42 @@
         </div>
         
         <div id="adminSection" style="display: none;">
+            <!-- 角色标识组件 -->
+            <div id="adminRoleIndicator" class="admin-role-badge" style="display: none;">
+                <span id="roleIcon">🔧</span>
+                <div class="role-info">
+                    <span id="roleTitle">超级管理员</span>
+                    <span id="roleDescription">技术运维权限</span>
+                </div>
+                <div id="permissionCount" class="permission-count">6项权限</div>
+            </div>
+
+            <!-- 权限不足提示组件 -->
+            <div class="permission-restricted" style="display: none;">
+                <p>⚠️ 此功能仅限超级管理员访问</p>
+                <small>如需访问系统监控功能，请联系技术管理员</small>
+            </div>
+
+            <!-- 通用功能区 -->
             <div class="section">
-                <h2>管理员面板</h2>
+                <h2>📋 通用功能区</h2>
                 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                     <button class="secondary" onclick="loadMembersFromGist()">🔄 刷新数据</button>
-                    <button class="secondary" onclick="showApiHealthStatus()">📊 API状态</button>
-                    <button class="secondary" onclick="resetApiHealth()">🔧 重置API</button>
                     <button class="secondary" onclick="adminLogout()">📤 退出登录</button>
                 </div>
             </div>
+
+            <!-- 高级功能区 -->
+            <div class="section" id="advancedFeaturesSection">
+                <h2>⚙️ 高级功能区</h2>
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button class="secondary" onclick="showApiHealthStatus()">📊 API状态</button>
+                    <button class="secondary" onclick="resetApiHealth()">🔧 重置API</button>
+                </div>
+            </div>
             
-            <!-- 实时监控仪表板 -->
-            <div class="section" id="monitoringPanel">
+            <!-- 实时监控仪表板 (高级功能) -->
+            <div class="section" id="monitoringPanel" style="display: none;">
                 <h2>🔍 系统实时监控</h2>
                 <div class="monitoring-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
                     <div class="metric-card" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); padding: 15px; border-radius: 12px; text-align: center;">
