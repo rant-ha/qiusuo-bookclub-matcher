@@ -2812,14 +2812,13 @@ const errorMonitoringSystem = {
         // 更新错误率显示
         const errorRateElement = document.getElementById('errorRate');
         if (errorRateElement) {
-            const stats = this.getErrorStats();
-            const errorRate = ((stats.errorRate5min || 0) * 100).toFixed(1);
-            errorRateElement.textContent = `${errorRate}%`;
+            const errorRate = apiHealthMonitor.getErrorRate();
+            errorRateElement.textContent = `${(errorRate * 100).toFixed(2)}%`;
             
             // 根据错误率设置颜色
-            if (stats.errorRate5min > 2) {
+            if (errorRate > 0.1) { // 10%
                 errorRateElement.style.color = '#dc3545';
-            } else if (stats.errorRate5min > 0.5) {
+            } else if (errorRate > 0.05) { // 5%
                 errorRateElement.style.color = '#ffc107';
             } else {
                 errorRateElement.style.color = '#28a745';
