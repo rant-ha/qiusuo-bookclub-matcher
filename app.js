@@ -3516,9 +3516,20 @@ const advancedCacheSystem = {
             matching: profile2.matching_preferences
         });
         
+        // --- DEBUG LOGGING START ---
+        Logger.debug(`[Cache Key Gen] Profile 1 Content for ${profile1.basic_info.name}:`, content1);
+        Logger.debug(`[Cache Key Gen] Profile 2 Content for ${profile2.basic_info.name}:`, content2);
+        // --- DEBUG LOGGING END ---
+        
         // 确保键的一致性
         const sortedContents = [content1, content2].sort();
-        return `ai_${this.simpleHash(sortedContents.join('|'))}`;
+        const finalKey = `ai_${this.simpleHash(sortedContents.join('|'))}`;
+
+        // --- DEBUG LOGGING START ---
+        Logger.debug(`[Cache Key Gen] Generated Key for ${profile1.basic_info.name} & ${profile2.basic_info.name}:`, finalKey);
+        // --- DEBUG LOGGING END ---
+
+        return finalKey;
     },
     
     generateMatchKey(userIds, matchType) {
