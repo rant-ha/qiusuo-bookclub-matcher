@@ -3492,6 +3492,11 @@ const advancedCacheSystem = {
     
     // 第4层：批次结果缓存
     batchResultsCache: new Map(),
+
+    // 缓存系统健康检查
+    validateCacheSystem: async function() {
+        return validateCacheSystem();
+    },
     
     // 缓存配置
     config: {
@@ -3579,22 +3584,47 @@ const advancedCacheSystem = {
     },
     
     // AI分析结果缓存操作
-    setAIAnalysis(profile1, profile2, result) {
+    async setAIAnalysis(profile1, profile2, result) {
         const cacheKey = this.generateAIAnalysisKey(profile1, profile2);
-
-        // “即发即忘”地将结果写入服务端缓存
+        console.log(`[Cache] 生成缓存键: ${cacheKey}`);
+    
+        // 验证缓存系统状态
+        const healthStatus = await this.validateCacheSystem();
+        if (!healthStatus.isHealthy) {
+            console.warn(`[Cache] 缓存系统不健康: ${healthStatus.reason}`);
+            return;
+        }
+    
+        // 验证缓存系统状态
+        const cacheStatus = await this.validateCacheSystem();
+        if (!cacheStatus.isHealthy) {
+            console.warn(`[Cache] 缓存系统不健康: ${cacheStatus.reason}`);
+            return;
+        }
+    
+        // 写入服务端缓存
         try {
-            fetch('/.netlify/functions/cache', {
+            const authToken = sessionStorage.getItem('adminLoginTime') || '';
+            console.log(`[Cache] 写入缓存 - Authorization Token 存在: ${Boolean(authToken)}`);
+    
+            const response = await fetch('/.netlify/functions/cache', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': sessionStorage.getItem('adminLoginTime') || ''
+                    'Authorization': authToken
                 },
                 body: JSON.stringify({
                     key: cacheKey,
                     value: result
                 })
             });
+    
+            console.log(`[Cache] 写入响应状态: ${response.status}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[Cache] 写入错误: ${errorText}`);
+                throw new Error(`缓存写入失败: ${errorText}`);
+            }
         } catch (error) {
             console.error('写入服务端缓存失败:', error);
         }
@@ -3604,18 +3634,29 @@ const advancedCacheSystem = {
         const key = this.generateAIAnalysisKey(profile1, profile2);
         
         try {
+            // 添加日志跟踪缓存键和请求
+            console.log(`[Cache] 尝试获取缓存，键: ${key}`);
+            const authToken = sessionStorage.getItem('adminLoginTime') || '';
+            console.log(`[Cache] Authorization Token 存在: ${Boolean(authToken)}`);
+    
             const response = await fetch(`/.netlify/functions/cache?key=${encodeURIComponent(key)}`, {
                 method: 'GET',
                 headers: {
-                    'Authorization': sessionStorage.getItem('adminLoginTime') || ''
+                    'Authorization': authToken
                 }
             });
-
+    
+            console.log(`[Cache] 响应状态: ${response.status}`);
+            
             if (response.ok) {
                 const data = await response.json();
+                console.log(`[Cache] 获取到数据: ${Boolean(data)}, 数据大小: ${Object.keys(data || {}).length}`);
                 if (data && Object.keys(data).length > 0) {
                     return data;
                 }
+            } else {
+                const errorText = await response.text();
+                console.error(`[Cache] 响应错误: ${errorText}`);
             }
             
             return null;
@@ -3758,6 +3799,115 @@ const advancedCacheSystem = {
 /**
  * 检查缓存是否有效
  */
+// 缓存系统健康检查函数
+async function validateCacheSystem() {
+    try {
+        const testKey = `health-check-${Date.now()}`;
+        const testValue = { test: true, timestamp: Date.now() };
+        
+        // 1. 测试写入
+        const writeResponse = await fetch('/.netlify/functions/cache', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': sessionStorage.getItem('adminLoginTime') || ''
+            },
+            body: JSON.stringify({
+                key: testKey,
+                value: testValue
+            })
+        });
+        
+        if (!writeResponse.ok) {
+            return {
+                isHealthy: false,
+                reason: '缓存写入失败',
+                details: await writeResponse.text()
+            };
+        }
+        
+        // 2. 测试读取
+        const readResponse = await fetch(`/.netlify/functions/cache?key=${encodeURIComponent(testKey)}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': sessionStorage.getItem('adminLoginTime') || ''
+            }
+        });
+        
+        if (!readResponse.ok) {
+            return {
+                isHealthy: false,
+                reason: '缓存读取失败',
+                details: await readResponse.text()
+            };
+        }
+        
+        const readData = await readResponse.json();
+        if (!readData || !readData.test) {
+            return {
+                isHealthy: false,
+                reason: '缓存数据不一致',
+                details: '读取的数据与写入的不匹配'
+            };
+        }
+        
+        // 3. 测试删除
+        const deleteResponse = await fetch('/.netlify/functions/cache', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': sessionStorage.getItem('adminLoginTime') || ''
+            },
+            body: JSON.stringify({ key: testKey })
+        });
+        
+        if (!deleteResponse.ok) {
+            return {
+                isHealthy: false,
+                reason: '缓存删除失败',
+                details: await deleteResponse.text()
+            };
+        }
+        
+        // 4. 验证删除是否成功
+        const verifyResponse = await fetch(`/.netlify/functions/cache?key=${encodeURIComponent(testKey)}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': sessionStorage.getItem('adminLoginTime') || ''
+            }
+        });
+        
+        if (verifyResponse.ok) {
+            const verifyData = await verifyResponse.json();
+            if (verifyData && Object.keys(verifyData).length > 0) {
+                return {
+                    isHealthy: false,
+                    reason: '缓存删除验证失败',
+                    details: '删除后仍能读取到数据'
+                };
+            }
+        }
+        
+        return {
+            isHealthy: true,
+            reason: '所有测试通过',
+            details: {
+                writeTest: 'OK',
+                readTest: 'OK',
+                deleteTest: 'OK',
+                verifyTest: 'OK'
+            }
+        };
+        
+    } catch (error) {
+        return {
+            isHealthy: false,
+            reason: '缓存系统测试异常',
+            details: error.message
+        };
+    }
+}
+
 function isValidCache(cacheEntry) {
     return cacheEntry && (Date.now() - cacheEntry.timestamp) < CACHE_TTL;
 }
