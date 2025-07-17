@@ -2775,10 +2775,11 @@ const errorMonitoringSystem = {
             last24h: recent24h.length,
             lastHour: recentHour.length,
             last5min: recent5min.length,
-            errorRate5min: recent5min.length / 5, // 每分钟错误数
+            // 修正：直接使用 apiHealthMonitor 的准确错误率
+            overallErrorRate: apiHealthMonitor.getErrorRate(),
             byCategory: Object.fromEntries(
                 Object.entries(this.errorCategories).map(([key, value]) => [
-                    key, 
+                    key,
                     { count: value.count, lastOccurred: value.lastOccurred }
                 ])
             ),
@@ -5188,7 +5189,7 @@ function showDetailedHealthReport() {
                     <div><strong>最近24小时:</strong> ${report.errorStats.last24h}</div>
                     <div><strong>最近1小时:</strong> ${report.errorStats.lastHour}</div>
                     <div><strong>最近5分钟:</strong> ${report.errorStats.last5min}</div>
-                    <div><strong>错误率(5分钟):</strong> ${(report.errorStats.errorRate5min * 100).toFixed(2)}%/分钟</div>
+                    <div><strong>整体错误率:</strong> ${(report.errorStats.overallErrorRate * 100).toFixed(2)}%</div>
                 </div>
             </div>
             
