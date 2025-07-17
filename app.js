@@ -23,14 +23,14 @@ const ADMIN_ROLE_CONFIG = {
         description: '拥有所有系统权限'
     },
     [ROLES.REGULAR_ADMIN]: {
-        icon: '⭐',
-        text: '普通管理员',
-        description: '拥有基础管理权限'
+        icon: '⚙️',
+        text: '管理员',
+        description: '拥有管理权限'
     },
     [ROLES.LEGACY_ADMIN]: {
-        icon: '🔧',
-        text: '旧版管理员',
-        description: '兼容旧版本权限'
+        icon: '⚙️',
+        text: '管理员',
+        description: '拥有管理权限'
     }
 };
 
@@ -1086,6 +1086,21 @@ function showLoggedInView() {
                    restrictedPanel.style.display = 'block';
                }
            }
+       }
+       
+       // 根据权限显示或隐藏技术相关按钮
+       const apiStatusBtn = document.getElementById('apiStatusBtn');
+       const resetApiBtn = document.getElementById('resetApiBtn');
+       const aiToggleBtnContainer = document.getElementById('aiToggleBtnContainer');
+
+       if (hasPermission('api_management')) {
+           if (apiStatusBtn) apiStatusBtn.style.display = 'inline-block';
+           if (resetApiBtn) resetApiBtn.style.display = 'inline-block';
+           if (aiToggleBtnContainer) aiToggleBtnContainer.style.display = 'flex';
+       } else {
+           if (apiStatusBtn) apiStatusBtn.style.display = 'none';
+           if (resetApiBtn) resetApiBtn.style.display = 'none';
+           if (aiToggleBtnContainer) aiToggleBtnContainer.style.display = 'none';
        }
        
        renderPendingList();
