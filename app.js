@@ -2986,6 +2986,10 @@ const apiHealthMonitor = {
         this.successCount++;
         this.consecutiveErrors = 0;
         
+        // 同步更新性能指标
+        errorMonitoringSystem.performanceMetrics.totalRequests++;
+        errorMonitoringSystem.performanceMetrics.successfulRequests++;
+
         // 集成错误监控系统
         if (this.systemHealth?.isRecovering) {
             errorMonitoringSystem.systemHealth.consecutiveHealthChecks++;
@@ -3001,6 +3005,9 @@ const apiHealthMonitor = {
         this.errorCount++;
         this.consecutiveErrors++;
         this.lastErrorTime = Date.now();
+        
+        // 同步更新性能指标
+        errorMonitoringSystem.performanceMetrics.totalRequests++;
         
         // 检查是否需要进入降级模式
         if (!this.degradedMode && this.consecutiveErrors >= this.degradationThreshold) {
