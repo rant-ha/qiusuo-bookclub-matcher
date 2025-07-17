@@ -609,26 +609,44 @@ async function handleLogin(e) {
     const studentId = document.getElementById('loginStudentId').value.trim();
     const password = document.getElementById('loginPassword').value.trim();
 
-    // 管理员登录逻辑
+    // 优先处理超级管理员登录，无需姓名和学号
+    if (password && SUPER_ADMIN_PASSWORD && password === SUPER_ADMIN_PASSWORD) {
+        const authResult = {
+            role: ROLES.SUPER_ADMIN,
+            permissions: ROLE_PERMISSIONS[ROLES.SUPER_ADMIN]
+        };
+        isAdmin = true;
+        currentUser = { name: 'Super Admin', role: authResult.role };
+        currentAdminRole = authResult.role;
+        currentAdminPermissions = authResult.permissions;
+
+        // 存储会话信息
+        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        sessionStorage.setItem('isAdmin', 'true');
+        sessionStorage.setItem('adminRole', currentAdminRole);
+        sessionStorage.setItem('adminPermissions', JSON.stringify(currentAdminPermissions));
+        sessionStorage.setItem('adminLoginTime', Date.now());
+
+        showLoggedInView();
+        alert(`管理员 (${authResult.role}) 登录成功！`);
+        return;
+    }
+
+    // 对于其他登录（普通用户、普通管理员），姓名和学号是必需的
+    if (!name || !studentId) {
+        alert('请输入姓名和学号进行登录。');
+        return;
+    }
+
+    // 普通管理员或旧版管理员登录逻辑
     if (password) {
         let authResult = null;
-
-        // 1. 检查超级管理员
-        if (SUPER_ADMIN_PASSWORD && password === SUPER_ADMIN_PASSWORD) {
-            authResult = {
-                role: ROLES.SUPER_ADMIN,
-                permissions: ROLE_PERMISSIONS[ROLES.SUPER_ADMIN]
-            };
-        }
-        // 2. 检查普通管理员
-        else if (REGULAR_ADMIN_PASSWORD && password === REGULAR_ADMIN_PASSWORD) {
+        if (REGULAR_ADMIN_PASSWORD && password === REGULAR_ADMIN_PASSWORD) {
             authResult = {
                 role: ROLES.REGULAR_ADMIN,
                 permissions: ROLE_PERMISSIONS[ROLES.REGULAR_ADMIN]
             };
-        }
-        // 3. 检查旧版管理员（兼容）
-        else if (ADMIN_PASSWORD && password === ADMIN_PASSWORD) {
+        } else if (ADMIN_PASSWORD && password === ADMIN_PASSWORD) {
             authResult = {
                 role: ROLES.LEGACY_ADMIN,
                 permissions: ROLE_PERMISSIONS[ROLES.LEGACY_ADMIN]
@@ -646,7 +664,7 @@ async function handleLogin(e) {
             sessionStorage.setItem('isAdmin', 'true');
             sessionStorage.setItem('adminRole', currentAdminRole);
             sessionStorage.setItem('adminPermissions', JSON.stringify(currentAdminPermissions));
-            sessionStorage.setItem('adminLoginTime', Date.now()); // 记录登录时间
+            sessionStorage.setItem('adminLoginTime', Date.now());
 
             showLoggedInView();
             alert(`管理员 (${authResult.role}) 登录成功！`);
@@ -657,11 +675,6 @@ async function handleLogin(e) {
     }
 
     // 普通用户登录
-    if (!name || !studentId) {
-        alert('请输入姓名和学号');
-        return;
-    }
-
     await loadMembersFromGist();
     const foundUser = members.find(m => m.name === name && m.studentId === studentId);
 
