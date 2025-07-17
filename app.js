@@ -1289,6 +1289,10 @@ const BOOK_CATEGORIES = {
 
 // AI驱动的智能匹配算法
 async function getAiSimilarity(word1, word2) {
+    if (!apiHealthMonitor.shouldUseAI()) {
+        Logger.warn('AI服务不可用，getAiSimilarity调用被阻止');
+        return 0;
+    }
     if (!AI_BASE_URL || !AI_API_KEY) {
         return 0; // 如果未配置AI，则返回0
     }
@@ -1336,8 +1340,12 @@ async function getAiSimilarity(word1, word2) {
 
 // 阅读人格画像分析
 async function getReadingPersonalityProfile(userText, favoriteBooks = []) {
+    if (!apiHealthMonitor.shouldUseAI()) {
+        Logger.warn('AI服务不可用，getReadingPersonalityProfile调用被阻止');
+        return { personality_dimensions: {}, reading_motivations: [], cognitive_style: 'unknown', confidence_score: 0 };
+    }
     if (!AI_BASE_URL || !AI_API_KEY || (!userText.trim() && favoriteBooks.length === 0)) {
-        return { 
+        return {
             personality_dimensions: {},
             reading_motivations: [],
             cognitive_style: 'unknown',
@@ -1432,6 +1440,10 @@ Return JSON with:
 
 // 隐含偏好挖掘分析
 async function getImplicitPreferenceAnalysis(userText, favoriteBooks = [], bookCategories = []) {
+    if (!apiHealthMonitor.shouldUseAI()) {
+        Logger.warn('AI服务不可用，getImplicitPreferenceAnalysis调用被阻止');
+        return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+    }
     if (!AI_BASE_URL || !AI_API_KEY) {
         return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
     }
@@ -1510,9 +1522,13 @@ Return JSON with:
 
 // 深度兼容性匹配分析
 async function getDeepCompatibilityAnalysis(user1Profile, user2Profile, user1Implicit, user2Implicit) {
+    if (!apiHealthMonitor.shouldUseAI()) {
+        Logger.warn('AI服务不可用，getDeepCompatibilityAnalysis调用被阻止');
+        return { compatibility_score: 0, compatibility_dimensions: {}, synergy_potential: [], growth_opportunities: [], reading_chemistry: 'unknown' };
+    }
     if (!AI_BASE_URL || !AI_API_KEY) {
-        return { 
-            compatibility_score: 0, 
+        return {
+            compatibility_score: 0,
             compatibility_dimensions: {},
             synergy_potential: [],
             growth_opportunities: [],
@@ -1602,6 +1618,10 @@ Return JSON with:
 
 // 智能文本偏好分析（升级版）
 async function getAiTextPreferenceAnalysis(text1, text2) {
+    if (!apiHealthMonitor.shouldUseAI()) {
+        Logger.warn('AI服务不可用，getAiTextPreferenceAnalysis调用被阻止');
+        return { similarity_score: 0, common_elements: [] };
+    }
     if (!AI_BASE_URL || !AI_API_KEY || !text1.trim() || !text2.trim()) {
         return { similarity_score: 0, common_elements: [] };
     }
