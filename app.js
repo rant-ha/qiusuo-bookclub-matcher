@@ -3716,7 +3716,7 @@ async function calculateAICompatibility(user1, user2) {
     const cachedResult = requestCache.get(cacheKey);
     if (isValidCache(cachedResult)) {
         console.log(`使用缓存结果: ${cacheKey}`);
-        memoryMonitor.cacheHits++;
+        memoryMonitor.cacheHits++; // 增加requestCache命中计数
         return cachedResult.data;
     }
     memoryMonitor.cacheMisses++;
@@ -3742,6 +3742,7 @@ async function calculateAICompatibility(user1, user2) {
     const cachedAIAnalysis = advancedCacheSystem.getAIAnalysis(profile1, profile2);
     if (cachedAIAnalysis) {
         console.log(`使用AI分析缓存结果: ${user1.name} - ${user2.name}`);
+        advancedCacheSystem.stats.aiCacheHits++; // 增加AI缓存命中计数
         return {
             score: cachedAIAnalysis.compatibility_score,
             reason: cachedAIAnalysis.summary || "AI缓存分析完成",
