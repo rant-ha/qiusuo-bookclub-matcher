@@ -39,7 +39,7 @@ const LOGIN_MESSAGES = {
     // 成功信息
     SUCCESS: {
         SUPER_ADMIN: '🎉 超级管理员登录成功！欢迎回来，您拥有系统的全部权限。',
-        REGULAR_ADMIN: '✨ 管理员登录成功！欢迎使用管理面板。',
+        REGULAR_ADMIN: '管理员登录成功！',
         LEGACY_ADMIN: '✨ 管理员登录成功！欢迎使用管理面板。',
         USER: '🎉 登录成功！欢迎来到 KindredMinds 读书社区！'
     },
