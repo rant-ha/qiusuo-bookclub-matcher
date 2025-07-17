@@ -1,3 +1,20 @@
+// 角色和权限定义
+const ROLES = {
+    SUPER_ADMIN: 'super_admin',
+    REGULAR_ADMIN: 'regular_admin',
+    LEGACY_ADMIN: 'legacy_admin'
+};
+
+const PERMISSIONS = {
+    USER_MANAGEMENT: 'user_management',
+    SYSTEM_MONITORING: 'system_monitoring',
+    API_MANAGEMENT: 'api_management',
+    CACHE_MANAGEMENT: 'cache_management',
+    MEMBER_MANAGEMENT: 'member_management',
+    MATCHING_FUNCTIONS: 'matching_functions',
+    DATA_REFRESH: 'data_refresh'
+};
+
 // 管理员角色配置
 const ADMIN_ROLE_CONFIG = {
     [ROLES.SUPER_ADMIN]: {
@@ -69,22 +86,6 @@ let AI_API_KEY = 'BUILD_TIME_AI_API_KEY';
 let AI_MODEL_NAME = 'BUILD_TIME_AI_MODEL_NAME';
 const GIST_FILENAME = 'bookclub_members.json';
 
-// 角色和权限定义
-const ROLES = {
-    SUPER_ADMIN: 'super_admin',
-    REGULAR_ADMIN: 'regular_admin',
-    LEGACY_ADMIN: 'legacy_admin'
-};
-
-const PERMISSIONS = {
-    USER_MANAGEMENT: 'user_management',
-    SYSTEM_MONITORING: 'system_monitoring',
-    API_MANAGEMENT: 'api_management',
-    CACHE_MANAGEMENT: 'cache_management',
-    MEMBER_MANAGEMENT: 'member_management',
-    MATCHING_FUNCTIONS: 'matching_functions',
-    DATA_REFRESH: 'data_refresh'
-};
 
 const ROLE_PERMISSIONS = {
     [ROLES.SUPER_ADMIN]: [
