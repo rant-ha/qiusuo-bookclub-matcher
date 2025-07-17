@@ -1060,12 +1060,17 @@ function showLoggedInView() {
        // 根据权限显示监控面板
        const monitoringPanel = document.getElementById('monitoringPanel');
        if (monitoringPanel) {
+           const restrictedPanel = monitoringPanel.querySelector('.permission-restricted');
            if (hasPermission('system_monitoring')) {
                monitoringPanel.style.display = 'block';
-               monitoringPanel.querySelector('.permission-restricted')?.style.display = 'none';
+               if (restrictedPanel) {
+                   restrictedPanel.style.display = 'none';
+               }
            } else {
                monitoringPanel.style.display = 'none';
-               monitoringPanel.querySelector('.permission-restricted')?.style.display = 'block';
+               if (restrictedPanel) {
+                   restrictedPanel.style.display = 'block';
+               }
            }
        }
        
