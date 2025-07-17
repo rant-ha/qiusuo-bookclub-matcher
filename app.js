@@ -34,6 +34,61 @@ const ADMIN_ROLE_CONFIG = {
     }
 };
 
+// UI 提示信息配置
+const LOGIN_MESSAGES = {
+    // 成功信息
+    SUCCESS: {
+        SUPER_ADMIN: '🎉 超级管理员登录成功！欢迎回来，您拥有系统的全部权限。',
+        REGULAR_ADMIN: '✨ 管理员登录成功！欢迎使用管理面板。',
+        LEGACY_ADMIN: '✨ 管理员登录成功！欢迎使用管理面板。',
+        USER: '🎉 登录成功！欢迎来到 KindredMinds 读书社区！'
+    },
+    // 错误信息
+    ERROR: {
+        MISSING_CREDENTIALS: '❌ 请输入姓名和学号进行登录。',
+        INVALID_PASSWORD: '❌ 管理员密码错误！请检查后重试。',
+        USER_NOT_FOUND: '❌ 姓名或学号不正确，请检查或先注册。',
+        PENDING_APPROVAL: '⏳ 您的账号正在审核中，请耐心等待管理员审核。',
+        SESSION_EXPIRED: '⏰ 会话已过期，请重新登录。',
+        PERMISSION_DENIED: '🚫 权限不足，无法执行此操作。'
+    },
+    // 欢迎信息
+    WELCOME: {
+        SUPER_ADMIN: '👑 超级管理员模式已启用，您可以管理系统的所有功能。',
+        REGULAR_ADMIN: '⚙️ 管理员模式已启用，您可以管理用户和匹配功能。',
+        LEGACY_ADMIN: '⚙️ 管理员模式已启用，您可以管理用户和匹配功能。'
+    }
+};
+
+/**
+ * 获取登录相关的UI提示信息
+ * @param {string} type - 消息类型: 'success', 'error', 'welcome'
+ * @param {string} role - 用户角色或具体的错误类型
+ * @returns {string} 相应的提示信息
+ */
+function getLoginMessage(type, role) {
+    try {
+        const messageType = type.toUpperCase();
+        const messageRole = role ? role.toUpperCase() : '';
+        
+        if (LOGIN_MESSAGES[messageType] && LOGIN_MESSAGES[messageType][messageRole]) {
+            return LOGIN_MESSAGES[messageType][messageRole];
+        }
+        
+        // 默认消息
+        const defaultMessages = {
+            SUCCESS: '✅ 登录成功！',
+            ERROR: '❌ 登录失败，请重试。',
+            WELCOME: '🎉 欢迎使用 KindredMinds！'
+        };
+        
+        return defaultMessages[messageType] || '系统消息';
+    } catch (error) {
+        Logger.error('获取登录消息失败:', error);
+        return '系统消息';
+    }
+}
+
 // 更新管理员角色指示器
 function updateAdminRoleIndicator() {
     const indicator = document.getElementById('adminRoleIndicator');
@@ -628,13 +683,13 @@ async function handleLogin(e) {
         sessionStorage.setItem('adminLoginTime', Date.now());
 
         showLoggedInView();
-        alert(`管理员 (${authResult.role}) 登录成功！`);
+        alert(getLoginMessage('success', authResult.role));
         return;
     }
 
     // 对于其他登录（普通用户、普通管理员），姓名和学号是必需的
     if (!name || !studentId) {
-        alert('请输入姓名和学号进行登录。');
+        alert(getLoginMessage('error', 'missing_credentials'));
         return;
     }
 
@@ -667,9 +722,9 @@ async function handleLogin(e) {
             sessionStorage.setItem('adminLoginTime', Date.now());
 
             showLoggedInView();
-            alert(`管理员 (${authResult.role}) 登录成功！`);
+            alert(getLoginMessage('success', authResult.role));
         } else {
-            alert('管理员密码错误！');
+            alert(getLoginMessage('error', 'invalid_password'));
         }
         return;
     }
@@ -690,10 +745,10 @@ async function handleLogin(e) {
             sessionStorage.removeItem('adminPermissions');
             showLoggedInView();
         } else {
-            alert('您的账号正在审核中，请耐心等待。');
+            alert(getLoginMessage('error', 'pending_approval'));
         }
     } else {
-        alert('姓名或学号不正确，请检查或先注册。');
+        alert(getLoginMessage('error', 'user_not_found'));
     }
 }
 
