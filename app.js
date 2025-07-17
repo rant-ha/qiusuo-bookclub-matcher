@@ -1,16 +1,124 @@
+// 管理员角色配置
+const ADMIN_ROLE_CONFIG = {
+    [ROLES.SUPER_ADMIN]: {
+        icon: '👑',
+        text: '超级管理员',
+        description: '拥有所有系统权限'
+    },
+    [ROLES.REGULAR_ADMIN]: {
+        icon: '⭐',
+        text: '普通管理员',
+        description: '拥有基础管理权限'
+    },
+    [ROLES.LEGACY_ADMIN]: {
+        icon: '🔧',
+        text: '旧版管理员',
+        description: '兼容旧版本权限'
+    }
+};
+
+// 更新管理员角色指示器
+function updateAdminRoleIndicator() {
+    const indicator = document.getElementById('adminRoleIndicator');
+    if (!indicator) return;
+
+    // 更新角色主题
+    updateAdminTheme();
+
+    if (currentAdminRole && ADMIN_ROLE_CONFIG[currentAdminRole]) {
+        const config = ADMIN_ROLE_CONFIG[currentAdminRole];
+        indicator.innerHTML = `
+            <div class="admin-role-content">
+                <span class="admin-role-icon">${config.icon}</span>
+                <span class="admin-role-text">${config.text}</span>
+                <span class="admin-role-description">${config.description}</span>
+            </div>
+        `;
+        indicator.style.display = 'inline-flex';
+    } else {
+        indicator.style.display = 'none';
+    }
+}
+
+// 新增：更新管理员主题
+function updateAdminTheme() {
+    const body = document.body;
+    const themes = {
+        [ROLES.SUPER_ADMIN]: 'super-admin-theme',
+        [ROLES.REGULAR_ADMIN]: 'regular-admin-theme',
+        [ROLES.LEGACY_ADMIN]: 'legacy-admin-theme'
+    };
+
+    // 移除所有可能的主题
+    Object.values(themes).forEach(theme => body.classList.remove(theme));
+
+    // 添加当前角色主题
+    if (currentAdminRole && themes[currentAdminRole]) {
+        body.classList.add(themes[currentAdminRole]);
+    }
+}
+
 // GitHub Gist 配置 - 构建时替换
 let GITHUB_TOKEN = 'BUILD_TIME_GITHUB_TOKEN';
 let GIST_ID = 'BUILD_TIME_GIST_ID';
 let ADMIN_PASSWORD = 'BUILD_TIME_ADMIN_PASSWORD';
+let SUPER_ADMIN_PASSWORD = 'BUILD_TIME_SUPER_ADMIN_PASSWORD';
+let REGULAR_ADMIN_PASSWORD = 'BUILD_TIME_REGULAR_ADMIN_PASSWORD';
 let AI_BASE_URL = 'BUILD_TIME_AI_BASE_URL';
 let AI_API_KEY = 'BUILD_TIME_AI_API_KEY';
 let AI_MODEL_NAME = 'BUILD_TIME_AI_MODEL_NAME';
 const GIST_FILENAME = 'bookclub_members.json';
 
+// 角色和权限定义
+const ROLES = {
+    SUPER_ADMIN: 'super_admin',
+    REGULAR_ADMIN: 'regular_admin',
+    LEGACY_ADMIN: 'legacy_admin'
+};
+
+const PERMISSIONS = {
+    USER_MANAGEMENT: 'user_management',
+    SYSTEM_MONITORING: 'system_monitoring',
+    API_MANAGEMENT: 'api_management',
+    CACHE_MANAGEMENT: 'cache_management',
+    MEMBER_MANAGEMENT: 'member_management',
+    MATCHING_FUNCTIONS: 'matching_functions',
+    DATA_REFRESH: 'data_refresh'
+};
+
+const ROLE_PERMISSIONS = {
+    [ROLES.SUPER_ADMIN]: [
+        PERMISSIONS.USER_MANAGEMENT,
+        PERMISSIONS.SYSTEM_MONITORING,
+        PERMISSIONS.API_MANAGEMENT,
+        PERMISSIONS.CACHE_MANAGEMENT,
+        PERMISSIONS.MEMBER_MANAGEMENT,
+        PERMISSIONS.MATCHING_FUNCTIONS,
+        PERMISSIONS.DATA_REFRESH
+    ],
+    [ROLES.REGULAR_ADMIN]: [
+        PERMISSIONS.USER_MANAGEMENT,
+        PERMISSIONS.MEMBER_MANAGEMENT,
+        PERMISSIONS.MATCHING_FUNCTIONS,
+        PERMISSIONS.DATA_REFRESH
+    ],
+    [ROLES.LEGACY_ADMIN]: [ // 兼容旧版管理员
+        PERMISSIONS.USER_MANAGEMENT,
+        PERMISSIONS.SYSTEM_MONITORING,
+        PERMISSIONS.API_MANAGEMENT,
+        PERMISSIONS.MEMBER_MANAGEMENT,
+        PERMISSIONS.MATCHING_FUNCTIONS,
+        PERMISSIONS.DATA_REFRESH
+    ]
+};
+
+
 // 存储所有成员数据
 let members = [];
 let currentUser = null; // 当前登录用户
 let isAdmin = false;
+let currentAdminRole = null; // 新增：当前管理员角色
+let currentAdminPermissions = []; // 新增：当前管理员权限
 let aiAnalysisEnabled = true; // AI分析开关状态
 
 // 日志级别配置
@@ -261,6 +369,17 @@ window.onload = async function() {
    if (loggedInUser) {
        currentUser = JSON.parse(loggedInUser);
        isAdmin = sessionStorage.getItem('isAdmin') === 'true';
+       currentAdminRole = sessionStorage.getItem('adminRole');
+       currentAdminPermissions = JSON.parse(sessionStorage.getItem('adminPermissions') || '[]');
+       
+       if (isAdmin) {
+           if (!validateAdminSession()) {
+               alert('会话已过期，请重新登录。');
+               logout();
+               return;
+           }
+       }
+       
        showLoggedInView();
    } else {
        showLoginView();
@@ -281,6 +400,10 @@ window.onload = async function() {
 
 // AI分析开关管理函数
 function toggleAiAnalysis() {
+    if (!hasPermission('api_management')) {
+        alert('权限不足');
+        return;
+    }
     aiAnalysisEnabled = !aiAnalysisEnabled;
     localStorage.setItem('ai_analysis_enabled', aiAnalysisEnabled.toString());
     updateAiToggleUI();
@@ -472,50 +595,92 @@ async function handleRegistration(name, studentId) {
    window.location.href = 'index.html';
 }
 
+// 权限检查函数
+function hasPermission(requiredPermission) {
+    if (!isAdmin || !currentAdminRole) return false;
+    return currentAdminPermissions.includes(requiredPermission);
+}
+
 // 处理登录
 async function handleLogin(e) {
-   e.preventDefault();
-   const name = document.getElementById('loginName').value.trim();
-   const studentId = document.getElementById('loginStudentId').value.trim();
-   const password = document.getElementById('loginPassword').value.trim();
+    e.preventDefault();
+    const name = document.getElementById('loginName').value.trim();
+    const studentId = document.getElementById('loginStudentId').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
 
-   // 管理员登录
-   if (password) {
-       if (password === ADMIN_PASSWORD) {
-           isAdmin = true;
-           currentUser = { name: 'Admin' };
-           sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-           sessionStorage.setItem('isAdmin', 'true');
-           showLoggedInView();
-           alert('管理员登录成功！');
-       } else {
-           alert('管理员密码错误！');
-       }
-       return;
-   }
+    // 管理员登录逻辑
+    if (password) {
+        let authResult = null;
 
-   // 普通用户登录
-   if (!name || !studentId) {
-       alert('请输入姓名和学号');
-       return;
-   }
+        // 1. 检查超级管理员
+        if (SUPER_ADMIN_PASSWORD && password === SUPER_ADMIN_PASSWORD) {
+            authResult = {
+                role: ROLES.SUPER_ADMIN,
+                permissions: ROLE_PERMISSIONS[ROLES.SUPER_ADMIN]
+            };
+        }
+        // 2. 检查普通管理员
+        else if (REGULAR_ADMIN_PASSWORD && password === REGULAR_ADMIN_PASSWORD) {
+            authResult = {
+                role: ROLES.REGULAR_ADMIN,
+                permissions: ROLE_PERMISSIONS[ROLES.REGULAR_ADMIN]
+            };
+        }
+        // 3. 检查旧版管理员（兼容）
+        else if (ADMIN_PASSWORD && password === ADMIN_PASSWORD) {
+            authResult = {
+                role: ROLES.LEGACY_ADMIN,
+                permissions: ROLE_PERMISSIONS[ROLES.LEGACY_ADMIN]
+            };
+        }
 
-   await loadMembersFromGist();
-   const foundUser = members.find(m => m.name === name && m.studentId === studentId);
+        if (authResult) {
+            isAdmin = true;
+            currentUser = { name: 'Admin', role: authResult.role };
+            currentAdminRole = authResult.role;
+            currentAdminPermissions = authResult.permissions;
 
-   if (foundUser) {
-       if (foundUser.status === 'approved') {
-           currentUser = foundUser;
-           isAdmin = false;
-           sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-           sessionStorage.setItem('isAdmin', 'false');
-           showLoggedInView();
-       } else {
-           alert('您的账号正在审核中，请耐心等待。');
-       }
-   } else {
-       alert('姓名或学号不正确，请检查或先注册。');
-   }
+            // 存储会话信息
+            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            sessionStorage.setItem('isAdmin', 'true');
+            sessionStorage.setItem('adminRole', currentAdminRole);
+            sessionStorage.setItem('adminPermissions', JSON.stringify(currentAdminPermissions));
+            sessionStorage.setItem('adminLoginTime', Date.now()); // 记录登录时间
+
+            showLoggedInView();
+            alert(`管理员 (${authResult.role}) 登录成功！`);
+        } else {
+            alert('管理员密码错误！');
+        }
+        return;
+    }
+
+    // 普通用户登录
+    if (!name || !studentId) {
+        alert('请输入姓名和学号');
+        return;
+    }
+
+    await loadMembersFromGist();
+    const foundUser = members.find(m => m.name === name && m.studentId === studentId);
+
+    if (foundUser) {
+        if (foundUser.status === 'approved') {
+            currentUser = foundUser;
+            isAdmin = false;
+            currentAdminRole = null;
+            currentAdminPermissions = [];
+            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            sessionStorage.setItem('isAdmin', 'false');
+            sessionStorage.removeItem('adminRole');
+            sessionStorage.removeItem('adminPermissions');
+            showLoggedInView();
+        } else {
+            alert('您的账号正在审核中，请耐心等待。');
+        }
+    } else {
+        alert('姓名或学号不正确，请检查或先注册。');
+    }
 }
 
 // 退出登录
@@ -524,6 +689,12 @@ function logout() {
    isAdmin = false;
    sessionStorage.removeItem('currentUser');
    sessionStorage.removeItem('isAdmin');
+   sessionStorage.removeItem('adminRole');
+   sessionStorage.removeItem('adminPermissions');
+   
+   // 退出时移除主题
+   updateAdminTheme();
+
    showLoginView();
 }
 
@@ -882,6 +1053,22 @@ function showLoggedInView() {
    if (isAdmin) {
        document.getElementById('adminSection').style.display = 'block';
        document.getElementById('memberSection').style.display = 'none';
+       
+       // 更新管理员角色指示器
+       updateAdminRoleIndicator();
+       
+       // 根据权限显示监控面板
+       const monitoringPanel = document.getElementById('monitoringPanel');
+       if (monitoringPanel) {
+           if (hasPermission('system_monitoring')) {
+               monitoringPanel.style.display = 'block';
+               monitoringPanel.querySelector('.permission-restricted')?.style.display = 'none';
+           } else {
+               monitoringPanel.style.display = 'none';
+               monitoringPanel.querySelector('.permission-restricted')?.style.display = 'block';
+           }
+       }
+       
        renderPendingList();
        renderMemberList();
    } else {
@@ -1830,8 +2017,8 @@ function getMatchTypeFromResult(result) {
  * 手动重置API健康状态（管理员功能）
  */
 function resetApiHealth() {
-    if (!isAdmin) {
-        alert('只有管理员可以重置API状态');
+    if (!hasPermission('api_management')) {
+        alert('权限不足');
         return;
     }
     
@@ -1846,8 +2033,8 @@ function resetApiHealth() {
  * 检查和显示API健康状态（管理员功能）
  */
 function showApiHealthStatus() {
-    if (!isAdmin) {
-        alert('只有管理员可以查看API状态');
+    if (!hasPermission('api_management')) {
+        alert('权限不足');
         return;
     }
     
@@ -3921,8 +4108,9 @@ async function getAIMatchingAnalysis(profile1, profile2) {
 
 // 寻找相似搭档（仅管理员）- 升级版
 async function findSimilarMatches() {
-    if (!isAdmin) {
-        alert('只有管理员可以进行匹配');
+    if (!isAdmin || !validateAdminSession()) {
+        alert('只有管理员可以进行匹配或会话已过期');
+        if (!validateAdminSession()) logout();
         return;
     }
     if (members.length < 2) {
@@ -4098,8 +4286,9 @@ async function findSimilarMatches() {
 
 // 寻找互补搭档（仅管理员）- 升级版
 async function findComplementaryMatches() {
-    if (!isAdmin) {
-        alert('只有管理员可以进行匹配');
+    if (!isAdmin || !validateAdminSession()) {
+        alert('只有管理员可以进行匹配或会话已过期');
+        if (!validateAdminSession()) logout();
         return;
     }
     if (members.length < 2) {
@@ -5137,6 +5326,25 @@ showLoggedInView = function() {
                 isMonitoringVisible: false,
                 pauseWhenHidden: true
             };
+            
+            // 新增：验证管理员会话
+            function validateAdminSession() {
+                const loginTime = sessionStorage.getItem('adminLoginTime');
+                if (!loginTime) {
+                    return false;
+                }
+            
+                const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2小时
+                const currentTime = Date.now();
+            
+                if (currentTime - loginTime > SESSION_TIMEOUT) {
+                    return false;
+                }
+            
+                // 每次验证通过，刷新登录时间（活动检测）
+                sessionStorage.setItem('adminLoginTime', currentTime);
+                return true;
+            }
 
             // 检测监控面板是否可见
             function isMonitoringPanelVisible() {
