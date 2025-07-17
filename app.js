@@ -5330,6 +5330,25 @@ function resetApiHealth() {
 }
 
 // 页面加载时初始化监控仪表板
+// 新增：验证管理员会话 (移动到全局作用域)
+function validateAdminSession() {
+    const loginTime = sessionStorage.getItem('adminLoginTime');
+    if (!loginTime) {
+        return false;
+    }
+
+    const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2小时
+    const currentTime = Date.now();
+
+    if (currentTime - loginTime > SESSION_TIMEOUT) {
+        return false;
+    }
+
+    // 每次验证通过，刷新登录时间（活动检测）
+    sessionStorage.setItem('adminLoginTime', currentTime);
+    return true;
+}
+
 const originalShowLoggedInView = showLoggedInView;
 showLoggedInView = function() {
     originalShowLoggedInView.apply(this, arguments);
@@ -5346,25 +5365,6 @@ showLoggedInView = function() {
                 pauseWhenHidden: true
             };
             
-            // 新增：验证管理员会话
-            function validateAdminSession() {
-                const loginTime = sessionStorage.getItem('adminLoginTime');
-                if (!loginTime) {
-                    return false;
-                }
-            
-                const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2小时
-                const currentTime = Date.now();
-            
-                if (currentTime - loginTime > SESSION_TIMEOUT) {
-                    return false;
-                }
-            
-                // 每次验证通过，刷新登录时间（活动检测）
-                sessionStorage.setItem('adminLoginTime', currentTime);
-                return true;
-            }
-
             // 检测监控面板是否可见
             function isMonitoringPanelVisible() {
                 const monitoringElements = [
