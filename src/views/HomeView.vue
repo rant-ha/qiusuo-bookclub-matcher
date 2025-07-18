@@ -24,6 +24,7 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import LazyImageDemo from '@/components/LazyImageDemo.vue'
 </script>
 
