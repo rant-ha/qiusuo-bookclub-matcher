@@ -1,3 +1,4 @@
+/* 旧入口
 // 角色和权限定义
 const ROLES = {
     SUPER_ADMIN: 'super_admin',
@@ -66,6 +67,7 @@ const LOGIN_MESSAGES = {
  * @param {string} role - 用户角色或具体的错误类型
  * @returns {string} 相应的提示信息
  */
+/*
 function getLoginMessage(type, role) {
     try {
         const messageType = type.toUpperCase();
@@ -2545,6 +2547,7 @@ const RECOVERY_STRATEGIES = {
  * 增强型错误监控系统 - 阶段3.2
  * 提供全面的错误分类、健康监控、自动恢复和实时统计
  */
+/*
 const errorMonitoringSystem = {
     // 错误分类与计数
     errorCategories: {
@@ -3290,12 +3293,14 @@ const RETRY_CONFIG = {
 /**
  * 生成缓存键
  */
+/*
 function generateCacheKey(user1, user2) {
     const id1 = user1.id || user1.name;
     const id2 = user2.id || user2.name;
     // 确保键的一致性，无论用户顺序
     return id1 < id2 ? `${id1}-${id2}` : `${id2}-${id1}`;
 }
+*/
 
 /**
  * 分块处理函数 - 将大数组分成小块处理，避免内存峰值
@@ -3303,6 +3308,7 @@ function generateCacheKey(user1, user2) {
  * @param {number} chunkSize - 每块的大小
  * @returns {Array} 分块后的数组
  */
+/*
 function chunkArray(array, chunkSize = MEMORY_CONFIG.CHUNK_SIZE) {
     const chunks = [];
     for (let i = 0; i < array.length; i += chunkSize) {
@@ -3318,6 +3324,7 @@ function chunkArray(array, chunkSize = MEMORY_CONFIG.CHUNK_SIZE) {
  * @param {Object} options - 配置选项
  * @returns {Array} 处理结果
  */
+/*
 async function processInChunks(items, processor, options = {}) {
     const {
         chunkSize = MEMORY_CONFIG.CHUNK_SIZE,
@@ -3363,6 +3370,7 @@ async function processInChunks(items, processor, options = {}) {
  * @param {Object} user2 - 第二个用户
  * @returns {Object} 过滤结果 {shouldMatch: boolean, reason: string}
  */
+/*
 function preFilterPair(user1, user2) {
     // 1. 性别偏好检查（已存在，但这里明确列出）
     if (!checkGenderPreferenceMatch(user1, user2)) {
@@ -3460,6 +3468,7 @@ function preFilterPair(user1, user2) {
  * @param {Array} members - 所有成员
  * @returns {Array} 过滤并排序后的配对列表
  */
+/*
 function preFilterAndPrioritizePairs(members) {
     const pairings = [];
     
@@ -3494,6 +3503,7 @@ function preFilterAndPrioritizePairs(members) {
  * @param {Object} user - 原始用户对象
  * @returns {Object} 轻量级用户引用
  */
+/*
 function createLightweightUserRef(user) {
     return {
         id: user.id,
@@ -3523,6 +3533,7 @@ function createLightweightUserRef(user) {
 /**
  * 优化的预过滤函数 - 使用轻量级数据结构
  */
+/*
 function optimizedPreFilterPair(lightUser1, lightUser2) {
     // 1. 性别偏好检查（简化版）
     const genderPrefMatch = checkGenderPreferenceMatch(lightUser1, lightUser2);
@@ -3874,6 +3885,7 @@ const advancedCacheSystem = {
 /**
  * 检查缓存是否有效
  */
+/*
 // 缓存系统健康检查函数
 async function validateCacheSystem() {
     try {
@@ -4004,10 +4016,11 @@ function calculateDelay(retryCount) {
 /**
  * 睡眠函数
  */
+/*
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-
+*/
 /**
  * 新一代AI驱动的用户匹配引擎
  * 使用单次AI调用完成全面的匹配分析，替代原有的多层次计算
@@ -4015,6 +4028,7 @@ function sleep(ms) {
  * @param {Object} user2 - 第二个用户  
  * @returns {Object} 详细的匹配分析结果
  */
+/*
 async function calculateAICompatibility(user1, user2) {
     // 检查缓存
     const cacheKey = generateCacheKey(user1, user2);
@@ -4141,6 +4155,7 @@ async function calculateAICompatibility(user1, user2) {
  * @param {Object} profile2 - 用户2的画像
  * @returns {Object} 调整后的分析结果
  */
+/*
 function adjustScoreByPreference(aiResult, profile1, profile2) {
     const pref1 = profile1.matching_preferences.matching_type_preference;
     const pref2 = profile2.matching_preferences.matching_type_preference;
@@ -4210,6 +4225,7 @@ function adjustScoreByPreference(aiResult, profile1, profile2) {
  * @param {Object} profile2 - 第二个用户的标准化画像
  * @returns {Object} AI分析结果
  */
+/*
 async function getAIMatchingAnalysis(profile1, profile2) {
     if (!AI_BASE_URL || !AI_API_KEY) {
         throw new Error('AI服务未配置');
@@ -5441,6 +5457,7 @@ function categorizeMatches(matches) {
 /**
  * 刷新监控数据显示
  */
+/*
 function refreshMonitoringData() {
     Logger.monitoring('刷新监控数据...');
     
@@ -5480,6 +5497,7 @@ function refreshMonitoringData() {
 /**
  * 显示详细健康报告
  */
+/*
 function showDetailedHealthReport() {
     const report = errorMonitoringSystem.getHealthReport();
     
@@ -5582,6 +5600,7 @@ function showDetailedHealthReport() {
 /**
  * 关闭健康报告模态框
  */
+/*
 function closeHealthReport() {
     const modal = document.getElementById('healthReportModal');
     if (modal) {
@@ -5592,6 +5611,7 @@ function closeHealthReport() {
 /**
  * 重置监控数据
  */
+/*
 function resetMonitoringData() {
     if (confirm('确定要重置所有监控数据吗？这将清除错误日志、性能统计等数据。')) {
         errorMonitoringSystem.resetMonitoring();
@@ -5603,6 +5623,7 @@ function resetMonitoringData() {
 /**
  * 显示API健康状态（保持向后兼容）
  */
+/*
 function showApiHealthStatus() {
     const report = errorMonitoringSystem.getHealthReport();
     const apiStats = apiHealthMonitor;
@@ -5636,6 +5657,7 @@ function showApiHealthStatus() {
 /**
  * 重置API健康状态（保持向后兼容）
  */
+/*
 function resetApiHealth() {
     if (confirm('确定要重置API健康监控数据吗？')) {
         // 重置API健康监控器
@@ -5734,3 +5756,4 @@ logout = function() {
     }
     originalLogout.apply(this, arguments);
 };
+*/
