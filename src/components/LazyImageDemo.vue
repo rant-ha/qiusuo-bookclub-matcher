@@ -77,10 +77,6 @@ onMounted(() => {
 })
 </script>
 
-<script setup>
-// 使用全局注册的 v-lazy 指令
-</script>
-
 <style scoped>
 .image-gallery {
   padding: 20px;
