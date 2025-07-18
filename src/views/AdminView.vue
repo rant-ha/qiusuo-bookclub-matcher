@@ -229,7 +229,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useMemberStore } from '../stores/memberStore'
-import { useErrorMonitor } from '../composables/useErrorMonitor'
+import { useErrorStore } from '../stores/errorStore'
 
 const authStore = useAuthStore()
 const memberStore = useMemberStore()
@@ -240,7 +240,7 @@ const isLoading = ref(false)
 const isRefreshing = ref(false)
 
 // 错误监控
-const errorMonitor = useErrorMonitor()
+const errorMonitor = useErrorStore()
 const healthStatus = computed(() => errorMonitor.systemHealth)
 const errorStats = computed(() => errorMonitor.getErrorStats())
 const performanceMetrics = computed(() => errorMonitor.getHealthReport().performance)
