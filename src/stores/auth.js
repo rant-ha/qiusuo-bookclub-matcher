@@ -1,12 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed } from 'vue'
-import { invalidateUserCaches } from '../services/cache'
 import { useOnboarding } from '../composables/useOnboarding'
-
-// Gist API 配置
-const GIST_ID = import.meta.env.VITE_GIST_ID
-const GITHUB_TOKEN = import.meta.env.VITE_GITHUB_TOKEN
-const GIST_FILENAME = 'bookclub_members.json'
+import { useMemberStore } from './memberStore'
 
 // 表单验证规则
 const VALIDATION_RULES = Object.freeze({
@@ -312,39 +307,21 @@ export const useAuthStore = defineStore('auth', () => {
       return false
     }
 
-    if (!GIST_ID || !GITHUB_TOKEN) {
-      error.value = '系统配置错误，请联系管理员'
-      return false
-    }
-
     isSubmitting.value = true
     error.value = null
 
     try {
-      // 1. 加载现有成员数据
-      const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        headers: GITHUB_TOKEN ? { 'Authorization': `token ${GITHUB_TOKEN}` } : {}
-      })
-      
-      if (!response.ok) {
-        throw new Error('加载数据失败')
-      }
-      
-      const gist = await response.json()
-      const content = gist.files[GIST_FILENAME]?.content
-      const members = content ? JSON.parse(content) : []
+      const memberStore = useMemberStore()
+      await memberStore.fetchMembers()
 
-      // 2. 检查用户是否已存在
-      const userExists = members.some(m =>
-        m.name === formData.name || m.studentId === formData.studentId
-      )
-      
-      if (userExists) {
+      // 检查用户是否已存在
+      const existingUser = memberStore.findMember(formData.name, formData.studentId)
+      if (existingUser) {
         error.value = '该姓名或学号已被注册'
         return false
       }
 
-      // 3. 创建新用户数据
+      // 创建新用户数据
       const newUser = {
         id: Date.now().toString(),
         name: formData.name,
@@ -364,27 +341,10 @@ export const useAuthStore = defineStore('auth', () => {
         }
       }
 
-      // 4. 保存到 Gist
-      const saveResponse = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `token ${GITHUB_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          files: {
-            [GIST_FILENAME]: {
-              content: JSON.stringify([...members, newUser], null, 2)
-            }
-          }
-        })
-      })
+      // 使用 memberStore 添加新用户
+      await memberStore.addMember(newUser)
 
-      if (!saveResponse.ok) {
-        throw new Error('保存数据失败')
-      }
-
-      // 5. 更新本地状态
+      // 更新本地状态
       setUser(newUser)
       return true
 
@@ -408,65 +368,54 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      // 1. 优先处理超级管理员登录
-      if (password === import.meta.env.VITE_SUPER_ADMIN_PASSWORD) {
-        setUser(
-          { name: 'Super Admin', role: ROLES.SUPER_ADMIN },
-          ROLES.SUPER_ADMIN,
-          ROLE_PERMISSIONS[ROLES.SUPER_ADMIN]
-        )
-        return true
-      }
-
-      // 2. 处理普通管理员登录
+      // 1. 如果提供了密码，优先处理管理员登录
       if (password) {
-        let authResult = null
-        if (password === import.meta.env.VITE_REGULAR_ADMIN_PASSWORD) {
-          authResult = {
-            role: ROLES.REGULAR_ADMIN,
-            permissions: ROLE_PERMISSIONS[ROLES.REGULAR_ADMIN]
-          }
-        } else if (password === import.meta.env.VITE_ADMIN_PASSWORD) {
-          authResult = {
-            role: ROLES.LEGACY_ADMIN,
-            permissions: ROLE_PERMISSIONS[ROLES.LEGACY_ADMIN]
-          }
-        }
-
-        if (authResult) {
+        // 1.1 检查超级管理员密码
+        if (password === import.meta.env.VITE_SUPER_ADMIN_PASSWORD) {
           setUser(
-            { name: 'Admin', role: authResult.role },
-            authResult.role,
-            authResult.permissions
+            { name: 'Super Admin', role: ROLES.SUPER_ADMIN },
+            ROLES.SUPER_ADMIN,
+            ROLE_PERMISSIONS[ROLES.SUPER_ADMIN]
           )
           return true
         }
 
+        // 1.2 检查普通管理员密码
+        if (password === import.meta.env.VITE_REGULAR_ADMIN_PASSWORD) {
+          setUser(
+            { name: 'Admin', role: ROLES.REGULAR_ADMIN },
+            ROLES.REGULAR_ADMIN,
+            ROLE_PERMISSIONS[ROLES.REGULAR_ADMIN]
+          )
+          return true
+        }
+
+        // 1.3 检查旧版管理员密码
+        if (password === import.meta.env.VITE_ADMIN_PASSWORD) {
+          setUser(
+            { name: 'Admin', role: ROLES.LEGACY_ADMIN },
+            ROLES.LEGACY_ADMIN,
+            ROLE_PERMISSIONS[ROLES.LEGACY_ADMIN]
+          )
+          return true
+        }
+
+        // 1.4 如果密码不匹配任何管理员密码，立即返回错误
         error.value = '管理员密码错误'
         return false
       }
 
-      // 3. 处理普通用户登录
+      // 2. 处理普通用户登录
+      // 2.1 验证必填字段
       if (!name || !studentId) {
         error.value = '请输入姓名和学号'
         return false
       }
 
-      // 加载成员数据
-      const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        headers: GITHUB_TOKEN ? { 'Authorization': `token ${GITHUB_TOKEN}` } : {}
-      })
-
-      if (!response.ok) {
-        throw new Error('加载数据失败')
-      }
-
-      const gist = await response.json()
-      const content = gist.files[GIST_FILENAME]?.content
-      const members = content ? JSON.parse(content) : []
-
-      // 查找用户
-      const foundUser = members.find(m => m.name === name && m.studentId === studentId)
+      // 2.2 使用 memberStore 查找用户
+      const memberStore = useMemberStore()
+      await memberStore.fetchMembers()
+      const foundUser = memberStore.findMember(name, studentId)
 
       if (foundUser) {
         if (foundUser.status === 'approved') {
@@ -508,71 +457,33 @@ export const useAuthStore = defineStore('auth', () => {
         return false
       }
 
-      // 加载现有成员数据
-      const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        headers: GITHUB_TOKEN ? { 'Authorization': `token ${GITHUB_TOKEN}` } : {}
-      })
-
-      if (!response.ok) {
-        throw new Error('加载数据失败')
-      }
-
-      const gist = await response.json()
-      const content = gist.files[GIST_FILENAME]?.content
-      const members = content ? JSON.parse(content) : []
-
-      // 查找并更新用户数据
-      const userIndex = members.findIndex(m => m.id === user.value.id)
-      if (userIndex === -1) {
+      const memberStore = useMemberStore()
+      const currentUser = memberStore.getMemberById(user.value.id)
+      
+      if (!currentUser) {
         throw new Error('用户数据不存在')
       }
 
       // 备份当前用户数据
-      lastUserProfileBackup.value = JSON.parse(JSON.stringify(members[userIndex]))
+      lastUserProfileBackup.value = JSON.parse(JSON.stringify(currentUser))
 
       // 更新用户数据
-      members[userIndex] = {
-        ...members[userIndex],
+      const updatedUser = {
+        ...currentUser,
         ...profileData,
         questionnaire: {
-          ...members[userIndex].questionnaire,
+          ...currentUser.questionnaire,
           ...profileData,
           lastUpdated: new Date().toISOString(),
           version: '2.0'
         }
       }
 
-      // 保存到 Gist
-      const saveResponse = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `token ${GITHUB_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          files: {
-            [GIST_FILENAME]: {
-              content: JSON.stringify(members, null, 2)
-            }
-          }
-        })
-      })
-
-      if (!saveResponse.ok) {
-        throw new Error('保存数据失败')
-      }
+      // 使用 memberStore 更新数据
+      await memberStore.updateMember(updatedUser)
 
       // 更新本地用户数据
-      setUser(members[userIndex])
-      
-      // 缓存失效处理
-      try {
-        await invalidateUserCaches(user.value.id)
-      } catch (cacheError) {
-        console.warn('Cache invalidation failed:', cacheError)
-        // 不影响主要功能，只记录警告
-      }
-      
+      setUser(updatedUser)
       return true
 
     } catch (err) {
@@ -595,60 +506,16 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      // 加载现有成员数据
-      const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        headers: GITHUB_TOKEN ? { 'Authorization': `token ${GITHUB_TOKEN}` } : {}
-      })
-
-      if (!response.ok) {
-        throw new Error('加载数据失败')
-      }
-
-      const gist = await response.json()
-      const content = gist.files[GIST_FILENAME]?.content
-      const members = content ? JSON.parse(content) : []
-
-      // 查找并恢复用户数据
-      const userIndex = members.findIndex(m => m.id === user.value.id)
-      if (userIndex === -1) {
-        throw new Error('用户数据不存在')
-      }
-
-      // 恢复备份的数据
-      members[userIndex] = lastUserProfileBackup.value
-
-      // 保存到 Gist
-      const saveResponse = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `token ${GITHUB_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          files: {
-            [GIST_FILENAME]: {
-              content: JSON.stringify(members, null, 2)
-            }
-          }
-        })
-      })
-
-      if (!saveResponse.ok) {
-        throw new Error('保存数据失败')
-      }
+      const memberStore = useMemberStore()
+      
+      // 使用 memberStore 恢复数据
+      await memberStore.updateMember(lastUserProfileBackup.value)
 
       // 更新本地用户数据
-      setUser(members[userIndex])
+      setUser(lastUserProfileBackup.value)
       
       // 清除备份
       lastUserProfileBackup.value = null
-
-      // 缓存失效处理
-      try {
-        await invalidateUserCaches(user.value.id)
-      } catch (cacheError) {
-        console.warn('Cache invalidation failed:', cacheError)
-      }
 
       return true
 

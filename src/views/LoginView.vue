@@ -13,10 +13,9 @@
           v-model="formData.name"
           type="text"
           placeholder="请输入姓名"
-          required
           minlength="2"
           maxlength="50"
-          aria-required="true"
+          :aria-required="!formData.password"
           :error="errors.name"
           :aria-describedby="['name-help', errors.name ? 'name-error' : undefined].filter(Boolean).join(' ')"
           @blur="validateField('name')"
@@ -37,9 +36,8 @@
           v-model="formData.studentId"
           type="text"
           placeholder="请输入学号"
-          required
           pattern="[A-Za-z0-9]+"
-          aria-required="true"
+          :aria-required="!formData.password"
           :error="errors.studentId"
           :aria-describedby="['studentId-help', errors.studentId ? 'studentId-error' : undefined].filter(Boolean).join(' ')"
           @blur="validateField('studentId')"
@@ -59,6 +57,7 @@
           管理员密码
           <span class="optional-text" id="password-description">(选填，仅管理员需要)</span>
         </label>
+        <div class="admin-hint">管理员可直接输入密码登录，无需填写姓名和学号</div>
         <BaseInput
           id="password"
           v-model="formData.password"
@@ -148,18 +147,24 @@ function validateField(field) {
 
   switch (field) {
     case 'name':
-      if (!formData.name) {
-        errors.name = '请输入姓名'
-      } else if (formData.name.length < 2) {
-        errors.name = '姓名至少需要2个字符'
+      // 如果有密码，则不验证姓名
+      if (!formData.password) {
+        if (!formData.name) {
+          errors.name = '请输入姓名'
+        } else if (formData.name.length < 2) {
+          errors.name = '姓名至少需要2个字符'
+        }
       }
       break
 
     case 'studentId':
-      if (!formData.studentId) {
-        errors.studentId = '请输入学号'
-      } else if (!/^[A-Za-z0-9]+$/.test(formData.studentId)) {
-        errors.studentId = '学号只能包含字母和数字'
+      // 如果有密码，则不验证学号
+      if (!formData.password) {
+        if (!formData.studentId) {
+          errors.studentId = '请输入学号'
+        } else if (!/^[A-Za-z0-9]+$/.test(formData.studentId)) {
+          errors.studentId = '学号只能包含字母和数字'
+        }
       }
       break
 
@@ -174,12 +179,17 @@ function validateField(field) {
 
 // 表单验证
 function validateForm() {
-  let isValid = true
-  
-  // 验证所有必填字段
-  validateField('name')
-  validateField('studentId')
-  validateField('password')
+  // 重置所有错误
+  Object.keys(errors).forEach(key => errors[key] = '')
+
+  // 如果输入了密码，只验证密码字段
+  if (formData.password) {
+    validateField('password')
+  } else {
+    // 否则验证姓名和学号
+    validateField('name')
+    validateField('studentId')
+  }
 
   // 检查是否有错误
   return !Object.values(errors).some(error => error)
@@ -218,6 +228,12 @@ async function handleSubmit() {
 </script>
 
 <style scoped>
+.admin-hint {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin-top: var(--spacing-1);
+  margin-bottom: var(--spacing-2);
+}
 .login-view {
   max-width: 480px;
   margin: var(--spacing-8) auto;
