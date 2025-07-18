@@ -1,15 +1,23 @@
 <template>
-  <div class="profile-container">
-    <div class="profile-header">
-      <h1>个人资料</h1>
-      <p class="subtitle">管理您的个人信息和阅读偏好</p>
-    </div>
+  <main class="profile-container">
+    <header class="profile-header">
+      <h1 id="profile-title">个人资料</h1>
+      <p class="subtitle" id="profile-description">管理您的个人信息和阅读偏好</p>
+    </header>
 
-    <div class="profile-content">
-      <form @submit.prevent="handleSubmit" class="profile-form">
+    <div class="profile-content" role="main" aria-labelledby="profile-title" aria-describedby="profile-description">
+      <form
+        @submit.prevent="handleSubmit"
+        class="profile-form"
+        aria-label="个人资料编辑表单"
+      >
         <!-- 基本信息 -->
-        <CollapsibleSection title="基本信息" :defaultOpen="true">
-          <h2>基本信息</h2>
+        <CollapsibleSection
+          title="基本信息"
+          :defaultOpen="true"
+          aria-label="基本个人信息区域"
+        >
+          <h2 id="basic-info-heading">基本信息</h2>
           <div class="form-group">
             <label for="name">姓名</label>
             <input 
@@ -33,8 +41,11 @@
         </CollapsibleSection>
 
         <!-- 个人偏好 -->
-        <CollapsibleSection title="个人偏好">
-          <h2>个人偏好</h2>
+        <CollapsibleSection
+          title="个人偏好"
+          aria-label="个人偏好设置区域"
+        >
+          <h2 id="preferences-heading">个人偏好</h2>
           <div class="form-group">
             <label>性别</label>
             <div class="radio-group">
@@ -135,11 +146,19 @@
         </CollapsibleSection>
 
         <!-- 阅读偏好 -->
-        <CollapsibleSection title="阅读偏好">
-          <h2>阅读偏好</h2>
+        <CollapsibleSection
+          title="阅读偏好"
+          aria-label="阅读偏好设置区域"
+        >
+          <h2 id="reading-preferences-heading">阅读偏好</h2>
           <div class="form-group">
-            <label>书籍类别 <span class="required">*</span></label>
-            <div class="checkbox-group">
+            <label id="book-categories-label">书籍类别 <span class="required" aria-hidden="true">*</span></label>
+            <div
+              class="checkbox-group"
+              role="group"
+              aria-labelledby="book-categories-label"
+              aria-required="true"
+            >
               <label class="checkbox-option" v-for="category in bookCategoryOptions" :key="category.value">
                 <input 
                   v-model="formData.bookCategories" 
@@ -165,8 +184,13 @@
           </div>
 
           <div class="form-group">
-            <label>最爱的书籍 <span class="required">*</span></label>
-            <div class="favorite-books">
+            <label id="favorite-books-label">最爱的书籍 <span class="required" aria-hidden="true">*</span></label>
+            <div
+              class="favorite-books"
+              role="group"
+              aria-labelledby="favorite-books-label"
+              aria-required="true"
+            >
               <div v-for="(book, index) in formData.favoriteBooks" :key="index" class="book-input-row">
                 <input 
                   v-model="formData.favoriteBooks[index]" 
@@ -174,30 +198,37 @@
                   :placeholder="`第${index + 1}本书`"
                   maxlength="100"
                 >
-                <button 
-                  type="button" 
-                  @click="removeFavoriteBook(index)" 
+                <button
+                  type="button"
+                  @click="removeFavoriteBook(index)"
                   class="remove-btn"
                   v-if="formData.favoriteBooks.length > 2"
+                  :aria-label="`删除第${index + 1}本书`"
                 >
-                  ×
+                  <span aria-hidden="true">×</span>
                 </button>
               </div>
-              <button 
-                type="button" 
-                @click="addFavoriteBook" 
+              <button
+                type="button"
+                @click="addFavoriteBook"
                 class="add-btn"
                 v-if="formData.favoriteBooks.length < 10"
+                aria-label="添加新的最爱书籍"
               >
-                + 添加书籍
+                <span aria-hidden="true">+</span> 添加书籍
               </button>
             </div>
             <p class="help-text">请填写至少2本，最多10本您最喜欢的书籍</p>
           </div>
 
           <div class="form-group">
-            <label>阅读强度 <span class="required">*</span></label>
-            <div class="radio-group">
+            <label id="reading-intensity-label">阅读强度 <span class="required" aria-hidden="true">*</span></label>
+            <div
+              class="radio-group"
+              role="radiogroup"
+              aria-labelledby="reading-intensity-label"
+              aria-required="true"
+            >
               <label class="radio-option">
                 <input 
                   v-model="formData.readingCommitment" 
@@ -235,8 +266,11 @@
         </CollapsibleSection>
 
         <!-- 传统字段 -->
-        <CollapsibleSection title="兴趣爱好">
-          <h2>兴趣爱好</h2>
+        <CollapsibleSection
+          title="兴趣爱好"
+          aria-label="兴趣爱好设置区域"
+        >
+          <h2 id="hobbies-heading">兴趣爱好</h2>
           <div class="form-group">
             <label for="hobbies">爱好</label>
             <textarea 
@@ -265,9 +299,15 @@
             :disabled="isLoading"
             :class="{ 'btn-loading': isLoading }"
             class="submit-btn"
+            :aria-busy="isLoading"
+            aria-label="保存个人资料"
           >
             <span v-if="isLoading">
-              <i class="spinner"></i>
+              <i
+                class="spinner"
+                aria-hidden="true"
+                role="presentation"
+              ></i>
               保存中...
             </span>
             <span v-else>保存修改</span>
@@ -276,34 +316,56 @@
 
         <!-- 错误提示 -->
         <Transition name="fade-slide">
-          <div v-if="error" class="error-message">
+          <div
+            v-if="error"
+            class="error-message"
+            role="alert"
+            aria-live="assertive"
+          >
             {{ error }}
           </div>
         </Transition>
 
         <!-- 成功提示和撤销按钮 -->
         <Transition name="fade-slide">
-          <div v-if="showSuccess" class="success-message">
+          <div
+            v-if="showSuccess"
+            class="success-message"
+            role="status"
+            aria-live="polite"
+          >
             <span>个人资料更新成功！</span>
             <button
               v-if="showUndoButton"
               @click="handleUndo"
               class="undo-btn"
+              :disabled="isLoading"
+              :aria-busy="isLoading"
+              aria-label="撤销最近的修改"
             >
-              撤销
+              <span v-if="isLoading">
+                <i class="spinner" aria-hidden="true"></i>
+                撤销中...
+              </span>
+              <span v-else>撤销</span>
             </button>
           </div>
         </Transition>
       </form>
     </div>
-  </div>
+  </main>
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
+import { useAutoSave } from '@/composables/useAutoSave'
+
+// 存储所有区块标题元素的引用
+const sectionHeaders = ref([])
+let currentFocusIndex = -1
 
 export default {
   name: 'ProfileView',
@@ -319,6 +381,33 @@ export default {
     const showSuccess = ref(false)
     const showUndoButton = ref(false)
     let undoTimer = null
+
+    // 初始化自动保存
+    const { saveToStorage, restoreFromStorage, clearStorage, hasSavedData } = useAutoSave('profile_form_data', {
+      onSave: () => console.log('个人资料已自动保存'),
+      onRestore: (data) => {
+        Object.keys(data).forEach(key => {
+          if (formData[key] !== undefined) {
+            formData[key] = data[key]
+          }
+        })
+        if (data.hobbies) hobbiesText.value = data.hobbies
+        if (data.books) booksText.value = data.books
+      }
+    })
+
+    // 监听表单数据变化
+    watch([
+      () => ({...formData}),
+      () => hobbiesText.value,
+      () => booksText.value
+    ], ([newFormData, newHobbies, newBooks]) => {
+      saveToStorage({
+        ...newFormData,
+        hobbies: newHobbies,
+        books: newBooks
+      })
+    }, { deep: true })
     
     // 表单数据
     const formData = reactive({
@@ -425,6 +514,7 @@ export default {
         if (success) {
           showSuccess.value = true
           showUndoButton.value = true
+          clearStorage() // 保存成功后清除暂存数据
           
           // 清除之前的计时器
           if (undoTimer) {
@@ -444,9 +534,70 @@ export default {
       }
     }
     
+    // 键盘事件处理
+    const handleKeyDown = (event) => {
+      // 如果当前焦点在输入框或文本域，不处理导航
+      if (document.activeElement.tagName === 'INPUT' ||
+          document.activeElement.tagName === 'TEXTAREA') {
+        return
+      }
+
+      switch (event.key) {
+        case 'ArrowUp':
+          event.preventDefault()
+          if (currentFocusIndex > 0) {
+            currentFocusIndex--
+            sectionHeaders.value[currentFocusIndex]?.focus()
+          }
+          break
+        case 'ArrowDown':
+          event.preventDefault()
+          if (currentFocusIndex < sectionHeaders.value.length - 1) {
+            currentFocusIndex++
+            sectionHeaders.value[currentFocusIndex]?.focus()
+          }
+          break
+        case 'Escape':
+          if (showSuccess.value) {
+            showSuccess.value = false
+            showUndoButton.value = false
+            if (undoTimer) {
+              clearTimeout(undoTimer)
+            }
+          }
+          break
+      }
+    }
+
     // 组件挂载时初始化
     onMounted(() => {
       initializeForm()
+      
+      // 收集所有区块标题元素
+      sectionHeaders.value = Array.from(
+        document.querySelectorAll('.section-header')
+      )
+      
+      // 添加键盘事件监听
+      window.addEventListener('keydown', handleKeyDown)
+
+      // 检查是否有已保存的数据
+      if (hasSavedData.value) {
+        const shouldRestore = window.confirm('发现未保存的个人资料修改，是否恢复？')
+        if (shouldRestore) {
+          restoreFromStorage()
+        } else {
+          clearStorage()
+        }
+      }
+    })
+
+    // 组件卸载时清理
+    onUnmounted(() => {
+      window.removeEventListener('keydown', handleKeyDown)
+      if (undoTimer) {
+        clearTimeout(undoTimer)
+      }
     })
 
     // 处理撤销操作

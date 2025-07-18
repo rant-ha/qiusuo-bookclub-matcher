@@ -1,16 +1,26 @@
 <template>
-  <div class="home">
-    <div class="card">
-      <h1>欢迎来到 KindredMinds</h1>
-      <p>这是一个帮助人们建立联系的平台。</p>
-      <div class="actions">
-        <router-link to="/register" class="btn btn-primary">立即注册</router-link>
+  <main class="home">
+    <section class="hero-section" aria-labelledby="welcome-heading">
+      <div class="card">
+        <h1 id="welcome-heading">欢迎来到 KindredMinds</h1>
+        <p>这是一个帮助人们建立联系的平台。</p>
+        <div class="actions">
+          <router-link
+            to="/register"
+            class="btn btn-primary"
+            role="button"
+            aria-label="开始注册新账号"
+          >
+            立即注册
+          </router-link>
+        </div>
       </div>
-    </div>
+    </section>
     
-    <!-- 添加图片展示区域 -->
-    <LazyImageDemo />
-  </div>
+    <section class="image-showcase" aria-label="平台功能展示">
+      <LazyImageDemo />
+    </section>
+  </main>
 </template>
 
 <script setup>

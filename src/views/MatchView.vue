@@ -110,8 +110,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
-import { useMatchStore } from '@/stores/match'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { storeToRefs } from 'pinia'
 
@@ -119,30 +118,69 @@ export default {
   name: 'MatchView',
   
   setup() {
-    const matchStore = useMatchStore()
     const authStore = useAuthStore()
     
-    const {
-      isLoading,
-      matches,
-      progress,
-      loadingText,
-      resultTitle,
-      resultSubtitle
-    } = storeToRefs(matchStore)
+    // 状态
+    const isLoading = ref(false)
+    const matches = ref([])
+    const progress = ref({
+      current: 0,
+      total: 0,
+      text: '',
+      estimatedTime: ''
+    })
+    const loadingText = ref('')
+    const resultTitle = ref('')
+    const resultSubtitle = ref('')
+    const matchStore = ref(null)
+
+    // 初始化 match store
+    const initMatchStore = async () => {
+      const { useMatchStore } = await import('@/stores/match')
+      matchStore.value = useMatchStore()
+      const store = matchStore.value
+      
+      // 同步状态
+      isLoading.value = store.isLoading
+      matches.value = store.matches
+      progress.value = store.progress
+      loadingText.value = store.loadingText
+      resultTitle.value = store.resultTitle
+      resultSubtitle.value = store.resultSubtitle
+
+      // 监听状态变化
+      store.$subscribe((mutation, state) => {
+        isLoading.value = state.isLoading
+        matches.value = state.matches
+        progress.value = state.progress
+        loadingText.value = state.loadingText
+        resultTitle.value = state.resultTitle
+        resultSubtitle.value = state.resultSubtitle
+      })
+    }
+
+    onMounted(() => {
+      initMatchStore()
+    })
 
     const hasAttemptedMatch = ref(false)
 
     // 处理相似匹配
     const handleSimilarMatch = async () => {
+      if (!matchStore.value) {
+        await initMatchStore()
+      }
       hasAttemptedMatch.value = true
-      await matchStore.findSimilarMatches()
+      await matchStore.value.findSimilarMatches()
     }
 
     // 处理互补匹配
     const handleComplementaryMatch = async () => {
+      if (!matchStore.value) {
+        await initMatchStore()
+      }
       hasAttemptedMatch.value = true
-      await matchStore.findComplementaryMatches()
+      await matchStore.value.findComplementaryMatches()
     }
 
     // 格式化列表

@@ -1,9 +1,13 @@
 <template>
   <div class="collapsible-section">
-    <div 
-      class="section-header" 
+    <div
+      class="section-header"
       @click="toggleSection"
       :class="{ 'is-open': isOpen }"
+      role="button"
+      tabindex="0"
+      :aria-expanded="isOpen"
+      @keydown.space.prevent="toggleSection"
     >
       <h2>{{ title }}</h2>
       <span class="toggle-icon">{{ isOpen ? '▼' : '▶' }}</span>

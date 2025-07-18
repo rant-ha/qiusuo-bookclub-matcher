@@ -14,10 +14,31 @@
           <router-link to="/profile" class="nav-link">个人资料</router-link>
           <router-link to="/match" class="nav-link">智能匹配</router-link>
           <router-link v-if="isAdmin" to="/admin" class="nav-link">管理面板</router-link>
-          <button @click="start" class="nav-button help-btn" title="重新查看新手引导">
-            <span class="help-icon">?</span>
+          <button
+            @click="start"
+            class="nav-button help-btn"
+            aria-label="重新查看新手引导"
+            title="重新查看新手引导"
+          >
+            <span class="help-icon" aria-hidden="true">?</span>
           </button>
-          <button @click="handleLogout" class="nav-button logout-btn">退出登录</button>
+          <button
+            @click="toggleHighContrast"
+            class="nav-button contrast-btn"
+            :aria-label="isHighContrast ? '关闭高对比度模式' : '开启高对比度模式'"
+            :title="isHighContrast ? '关闭高对比度模式' : '开启高对比度模式'"
+          >
+            <span class="contrast-icon" aria-hidden="true">
+              {{ isHighContrast ? '🌙' : '☀️' }}
+            </span>
+          </button>
+          <button
+            @click="handleLogout"
+            class="nav-button logout-btn"
+            aria-label="退出登录"
+          >
+            退出登录
+          </button>
         </template>
         
         <!-- 未登录用户的导航链接 -->
@@ -35,7 +56,7 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, watch, ref, onMounted } from 'vue'
 import { useAuthStore } from './stores/auth'
 import { useRouter } from 'vue-router'
 import { useOnboarding } from './composables/useOnboarding'
@@ -47,6 +68,34 @@ const { checkAndStartOnboarding, start } = useOnboarding()
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const isAdmin = computed(() => authStore.isAdmin)
+const isHighContrast = ref(false)
+
+// 初始化主题设置
+onMounted(() => {
+  // 从localStorage读取主题设置
+  const savedTheme = localStorage.getItem('highContrastMode')
+  if (savedTheme === 'true') {
+    isHighContrast.value = true
+    document.documentElement.classList.add('high-contrast')
+  }
+  
+  // 监听系统主题偏好变化
+  const mediaQuery = window.matchMedia('(prefers-contrast: more)')
+  const handleChange = (e) => {
+    if (!localStorage.getItem('highContrastMode')) {
+      isHighContrast.value = e.matches
+      document.documentElement.classList.toggle('high-contrast', e.matches)
+    }
+  }
+  mediaQuery.addEventListener('change', handleChange)
+})
+
+// 切换高对比度模式
+const toggleHighContrast = () => {
+  isHighContrast.value = !isHighContrast.value
+  document.documentElement.classList.toggle('high-contrast')
+  localStorage.setItem('highContrastMode', isHighContrast.value)
+}
 
 // 监听登录状态变化，自动启动引导
 watch(isAuthenticated, (newValue) => {
@@ -173,6 +222,19 @@ header {
 
 .help-icon {
   font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.contrast-btn {
+  padding: 0.5rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.contrast-icon {
   font-size: 1.1rem;
 }
 

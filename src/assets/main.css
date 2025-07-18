@@ -1,3 +1,50 @@
+/* 主题变量 */
+:root {
+  --primary-color: #667eea;
+  --secondary-color: #764ba2;
+  --text-color: #333;
+  --bg-color: #f8fafc;
+  --link-color: #667eea;
+  --header-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --nav-link-color: rgba(255, 255, 255, 0.9);
+  --nav-hover-bg: rgba(255, 255, 255, 0.1);
+  --nav-active-bg: rgba(255, 255, 255, 0.2);
+  --button-bg: rgba(255, 255, 255, 0.1);
+  --button-border: rgba(255, 255, 255, 0.3);
+}
+
+/* 高对比度主题 */
+.high-contrast {
+  --primary-color: #ffff00;
+  --secondary-color: #ffff00;
+  --text-color: #ffffff;
+  --bg-color: #000000;
+  --link-color: #ffff00;
+  --header-bg: #000000;
+  --nav-link-color: #ffffff;
+  --nav-hover-bg: #ffff00;
+  --nav-active-bg: #ffff00;
+  --button-bg: transparent;
+  --button-border: #ffffff;
+}
+
+/* 系统高对比度模式自动适配 */
+@media (prefers-contrast: more) {
+  :root {
+    --primary-color: #ffff00;
+    --secondary-color: #ffff00;
+    --text-color: #ffffff;
+    --bg-color: #000000;
+    --link-color: #ffff00;
+    --header-bg: #000000;
+    --nav-link-color: #ffffff;
+    --nav-hover-bg: #ffff00;
+    --nav-active-bg: #ffff00;
+    --button-bg: transparent;
+    --button-border: #ffffff;
+  }
+}
+
 /* 全局 spinner 动画 */
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -25,4 +72,29 @@
 .btn-loading:disabled {
   background-color: var(--primary-color);
   opacity: 0.7;
+}
+
+/* 全局焦点样式 */
+:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 确保按钮和输入框在获得焦点时有清晰的视觉反馈 */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 链接焦点样式 */
+a:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: 2px;
+  text-decoration: underline;
 }

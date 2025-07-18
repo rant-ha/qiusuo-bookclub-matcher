@@ -3,7 +3,7 @@
     <h1>登录 KindredMinds</h1>
     
     <!-- 登录表单 -->
-    <form @submit.prevent="handleSubmit" class="login-form">
+    <form @submit.prevent="handleSubmit" class="login-form" aria-label="登录表单">
       <!-- 基本信息区域 -->
       <div class="form-group">
         <label for="name">姓名</label>
@@ -17,8 +17,18 @@
           required
           minlength="2"
           maxlength="50"
+          aria-required="true"
+          :aria-invalid="!!errors.name"
+          :aria-describedby="['name-help', errors.name ? 'name-error' : undefined].filter(Boolean).join(' ')"
+          @blur="validateField('name')"
         >
-        <span v-if="errors.name" class="error-message">{{ errors.name }}</span>
+        <span id="name-help" class="helper-text">请输入2-50个字符的姓名</span>
+        <span
+          v-if="errors.name"
+          id="name-error"
+          class="error-message"
+          role="alert"
+        >{{ errors.name }}</span>
       </div>
 
       <div class="form-group">
@@ -32,15 +42,25 @@
           placeholder="请输入学号"
           required
           pattern="[A-Za-z0-9]+"
+          aria-required="true"
+          :aria-invalid="!!errors.studentId"
+          :aria-describedby="['studentId-help', errors.studentId ? 'studentId-error' : undefined].filter(Boolean).join(' ')"
+          @blur="validateField('studentId')"
         >
-        <span v-if="errors.studentId" class="error-message">{{ errors.studentId }}</span>
+        <span id="studentId-help" class="helper-text">学号只能包含字母和数字</span>
+        <span
+          v-if="errors.studentId"
+          id="studentId-error"
+          class="error-message"
+          role="alert"
+        >{{ errors.studentId }}</span>
       </div>
 
       <!-- 管理员密码区域（可选） -->
       <div class="form-group">
         <label for="password">
           管理员密码
-          <span class="optional-text">(选填，仅管理员需要)</span>
+          <span class="optional-text" id="password-description">(选填，仅管理员需要)</span>
         </label>
         <input
           id="password"
@@ -49,8 +69,16 @@
           class="form-control"
           :class="{ 'error': errors.password }"
           placeholder="如果您是管理员，请输入密码"
+          aria-required="false"
+          :aria-invalid="!!errors.password"
+          :aria-describedby="[errors.password ? 'password-error' : undefined, 'password-description'].filter(Boolean).join(' ')"
         >
-        <span v-if="errors.password" class="error-message">{{ errors.password }}</span>
+        <span
+          v-if="errors.password"
+          id="password-error"
+          class="error-message"
+          role="alert"
+        >{{ errors.password }}</span>
       </div>
 
       <!-- 提交按钮 -->
@@ -60,9 +88,11 @@
           class="submit-button"
           :class="{ 'btn-loading': isSubmitting }"
           :disabled="isSubmitting"
+          :aria-busy="isSubmitting"
+          aria-label="登录按钮"
         >
           <span v-if="isSubmitting">
-            <i class="spinner"></i>
+            <i class="spinner" aria-hidden="true"></i>
             登录中...
           </span>
           <span v-else>登录</span>
@@ -70,7 +100,14 @@
       </div>
 
       <!-- 错误提示 -->
-      <div v-if="error" class="alert alert-error" role="alert">
+      <div
+        v-if="error"
+        class="alert alert-error"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+      >
+        <span class="error-icon" aria-hidden="true">⚠</span>
         {{ error }}
       </div>
 
@@ -107,32 +144,47 @@ const errors = reactive({
   password: ''
 })
 
+// 字段验证
+function validateField(field) {
+  errors[field] = ''
+
+  switch (field) {
+    case 'name':
+      if (!formData.name) {
+        errors.name = '请输入姓名'
+      } else if (formData.name.length < 2) {
+        errors.name = '姓名至少需要2个字符'
+      }
+      break
+
+    case 'studentId':
+      if (!formData.studentId) {
+        errors.studentId = '请输入学号'
+      } else if (!/^[A-Za-z0-9]+$/.test(formData.studentId)) {
+        errors.studentId = '学号只能包含字母和数字'
+      }
+      break
+
+    case 'password':
+      // 密码是可选的，只在有值时验证
+      if (formData.password && formData.password.length < 6) {
+        errors.password = '密码至少需要6个字符'
+      }
+      break
+  }
+}
+
 // 表单验证
 function validateForm() {
   let isValid = true
-  errors.name = ''
-  errors.studentId = ''
-  errors.password = ''
+  
+  // 验证所有必填字段
+  validateField('name')
+  validateField('studentId')
+  validateField('password')
 
-  // 验证姓名
-  if (!formData.name) {
-    errors.name = '请输入姓名'
-    isValid = false
-  } else if (formData.name.length < 2) {
-    errors.name = '姓名至少需要2个字符'
-    isValid = false
-  }
-
-  // 验证学号
-  if (!formData.studentId) {
-    errors.studentId = '请输入学号'
-    isValid = false
-  } else if (!/^[A-Za-z0-9]+$/.test(formData.studentId)) {
-    errors.studentId = '学号只能包含字母和数字'
-    isValid = false
-  }
-
-  return isValid
+  // 检查是否有错误
+  return !Object.values(errors).some(error => error)
 }
 
 // 提交处理
@@ -258,6 +310,14 @@ label {
   color: #721c24;
   background-color: #f8d7da;
   border: 1px solid #f5c6cb;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.error-icon {
+  font-size: 1.2em;
+  color: #dc3545;
 }
 
 .register-link {

@@ -2,7 +2,14 @@
   <div class="register">
     <div class="card">
       <!-- 进度指示器 -->
-      <div class="progress-steps">
+      <nav
+        class="progress-steps"
+        aria-label="注册进度"
+        role="progressbar"
+        :aria-valuenow="authStore.registrationStep"
+        aria-valuemin="1"
+        aria-valuemax="3"
+      >
         <div
           v-for="step in 3"
           :key="step"
@@ -13,11 +20,12 @@
               'completed': authStore.registrationStep > step
             }
           ]"
+          :aria-current="authStore.registrationStep === step ? 'step' : undefined"
         >
-          <div class="step-number">{{ step }}</div>
+          <div class="step-number" aria-hidden="true">{{ step }}</div>
           <div class="step-label">{{ stepLabels[step - 1] }}</div>
         </div>
-      </div>
+      </nav>
 
       <h1>{{ stepTitles[authStore.registrationStep - 1] }}</h1>
 
@@ -37,9 +45,23 @@
               id="name"
               v-model="authStore.formData.name"
               class="form-control"
+              :class="{ 'error': errors.name }"
               required
+              minlength="2"
+              maxlength="50"
               :disabled="authStore.isSubmitting"
+              aria-required="true"
+              :aria-invalid="!!errors.name"
+              :aria-describedby="['name-help', errors.name ? 'name-error' : undefined].filter(Boolean).join(' ')"
+              @blur="validateField('name')"
             >
+            <span id="name-help" class="helper-text">请输入2-50个字符的姓名</span>
+            <span
+              v-if="errors.name"
+              id="name-error"
+              class="error-message"
+              role="alert"
+            >{{ errors.name }}</span>
           </div>
           
           <div class="form-group">
@@ -49,9 +71,22 @@
               id="studentId"
               v-model="authStore.formData.studentId"
               class="form-control"
+              :class="{ 'error': errors.studentId }"
               required
+              pattern="[A-Za-z0-9]+"
               :disabled="authStore.isSubmitting"
+              aria-required="true"
+              :aria-invalid="!!errors.studentId"
+              :aria-describedby="['studentId-help', errors.studentId ? 'studentId-error' : undefined].filter(Boolean).join(' ')"
+              @blur="validateField('studentId')"
             >
+            <span id="studentId-help" class="helper-text">学号只能包含字母和数字</span>
+            <span
+              v-if="errors.studentId"
+              id="studentId-error"
+              class="error-message"
+              role="alert"
+            >{{ errors.studentId }}</span>
           </div>
           
           <div class="form-group">
@@ -100,14 +135,22 @@
         <!-- 步骤 2: 阅读偏好 -->
         <div v-if="authStore.registrationStep === 2" :class="['form-step', slideDirection]">
           <div class="form-group">
-            <label>书籍类别（至少选择1个，最多7个）</label>
-            <div class="checkbox-group">
+            <label id="book-categories-label">书籍类别（至少选择1个，最多7个）</label>
+            <div
+              class="checkbox-group"
+              role="group"
+              aria-labelledby="book-categories-label"
+            >
               <label v-for="category in bookCategories" :key="category.value" class="checkbox-label">
                 <input
                   type="checkbox"
                   v-model="authStore.formData.bookCategories"
                   :value="category.value"
                   :disabled="authStore.isSubmitting ||
+                    (authStore.formData.bookCategories.length >= 7 &&
+                    !authStore.formData.bookCategories.includes(category.value))"
+                  :aria-checked="authStore.formData.bookCategories.includes(category.value)"
+                  :aria-disabled="authStore.isSubmitting ||
                     (authStore.formData.bookCategories.length >= 7 &&
                     !authStore.formData.bookCategories.includes(category.value))"
                 >
@@ -125,12 +168,18 @@
               rows="4"
               placeholder="请描述您喜欢的书籍类型、作者或主题..."
               :disabled="authStore.isSubmitting"
+              aria-required="false"
+              :aria-invalid="!!authStore.error"
             ></textarea>
           </div>
 
           <div class="form-group">
-            <label>最爱的书籍（2-10本）</label>
-            <div class="favorite-books">
+            <label id="favorite-books-label">最爱的书籍（2-10本）</label>
+            <div
+              class="favorite-books"
+              role="group"
+              aria-labelledby="favorite-books-label"
+            >
               <div
                 v-for="(_, index) in favoriteBookInputs"
                 :key="index"
@@ -167,8 +216,12 @@
         <!-- 步骤 3: 阅读习惯 -->
         <div v-if="authStore.registrationStep === 3" :class="['form-step', slideDirection]">
           <div class="form-group">
-            <label>阅读承诺</label>
-            <div class="radio-group commitment-group">
+            <label id="reading-commitment-label">阅读承诺</label>
+            <div
+              class="radio-group commitment-group"
+              role="radiogroup"
+              aria-labelledby="reading-commitment-label"
+            >
               <label
                 v-for="commitment in readingCommitments"
                 :key="commitment.value"
@@ -179,6 +232,8 @@
                   v-model="authStore.formData.readingCommitment"
                   :value="commitment.value"
                   :disabled="authStore.isSubmitting"
+                  :aria-checked="authStore.formData.readingCommitment === commitment.value"
+                  :aria-disabled="authStore.isSubmitting"
                 >
                 <span class="commitment-content">
                   <strong>{{ commitment.label }}</strong>
@@ -189,11 +244,14 @@
           </div>
 
           <div class="form-group">
-            <label>每周阅读时间</label>
+            <label id="weekly-hours-label">每周阅读时间</label>
             <select
               v-model="authStore.formData.readingHabits.weeklyHours"
               class="form-control"
               :disabled="authStore.isSubmitting"
+              aria-labelledby="weekly-hours-label"
+              aria-required="true"
+              :aria-invalid="!authStore.formData.readingHabits.weeklyHours"
             >
               <option value="">请选择</option>
               <option value="0-2">0-2小时</option>
@@ -204,14 +262,20 @@
           </div>
 
           <div class="form-group">
-            <label>偏好阅读时段（可多选）</label>
-            <div class="checkbox-group">
+            <label id="preferred-times-label">偏好阅读时段（可多选）</label>
+            <div
+              class="checkbox-group"
+              role="group"
+              aria-labelledby="preferred-times-label"
+            >
               <label v-for="time in readingTimes" :key="time.value" class="checkbox-label">
                 <input
                   type="checkbox"
                   v-model="authStore.formData.readingHabits.preferredTimes"
                   :value="time.value"
                   :disabled="authStore.isSubmitting"
+                  :aria-checked="authStore.formData.readingHabits.preferredTimes.includes(time.value)"
+                  :aria-disabled="authStore.isSubmitting"
                 >
                 <span>{{ time.label }}</span>
               </label>
@@ -221,7 +285,12 @@
 
         <!-- 错误提示 -->
         <Transition name="fade-slide">
-          <div class="error-message" v-if="authStore.error">
+          <div
+            v-if="authStore.error"
+            class="error-message"
+            role="alert"
+            aria-live="assertive"
+          >
             {{ authStore.error }}
           </div>
         </Transition>
@@ -234,6 +303,7 @@
             @click="handlePrevious"
             v-if="authStore.registrationStep > 1"
             :disabled="authStore.isSubmitting"
+            aria-label="返回上一步"
           >
             上一步
           </button>
@@ -245,9 +315,11 @@
             @click="handleNext"
             v-if="authStore.registrationStep < 3"
             :disabled="authStore.isSubmitting"
+            :aria-busy="authStore.isSubmitting"
+            :aria-label="`进入第${authStore.registrationStep + 1}步：${stepLabels[authStore.registrationStep]}`"
           >
             <span v-if="authStore.isSubmitting">
-              <i class="spinner"></i>
+              <i class="spinner" aria-hidden="true"></i>
               处理中...
             </span>
             <span v-else>下一步</span>
@@ -259,9 +331,11 @@
             :class="{ 'btn-loading': authStore.isSubmitting }"
             v-if="authStore.registrationStep === 3"
             :disabled="authStore.isSubmitting"
+            :aria-busy="authStore.isSubmitting"
+            aria-label="完成注册并创建账号"
           >
             <span v-if="authStore.isSubmitting">
-              <i class="spinner"></i>
+              <i class="spinner" aria-hidden="true"></i>
               注册中...
             </span>
             <span v-else>完成注册</span>
@@ -273,12 +347,93 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useAutoSave } from '../composables/useAutoSave'
+
+// 键盘事件处理函数
+const handleKeyDown = (event) => {
+  // 如果当前有输入框或文本域被聚焦，不处理键盘导航
+  if (document.activeElement.tagName === 'INPUT' ||
+      document.activeElement.tagName === 'TEXTAREA') {
+    return
+  }
+
+  switch (event.key) {
+    case 'ArrowLeft':
+      if (authStore.registrationStep > 1) {
+        handlePrevious()
+      }
+      break
+    case 'ArrowRight':
+      if (authStore.registrationStep < 3) {
+        handleNext()
+      }
+      break
+  }
+}
 
 const router = useRouter()
 const authStore = useAuthStore()
+
+// 初始化自动保存
+const { saveToStorage, restoreFromStorage, clearStorage, hasSavedData } = useAutoSave('register_form_data', {
+  onSave: () => console.log('表单数据已自动保存'),
+  onRestore: (data) => {
+    Object.keys(data).forEach(key => {
+      if (authStore.formData[key] !== undefined) {
+        authStore.formData[key] = data[key]
+      }
+    })
+  }
+})
+
+// 监听表单数据变化
+watch(() => ({...authStore.formData}), (newData) => {
+  saveToStorage(newData)
+}, { deep: true })
+
+// 检查是否有已保存的数据
+onMounted(() => {
+  if (hasSavedData.value) {
+    const shouldRestore = window.confirm('发现未完成的注册表单，是否恢复？')
+    if (shouldRestore) {
+      restoreFromStorage()
+    } else {
+      clearStorage()
+    }
+  }
+})
+
+// 表单错误状态
+const errors = reactive({
+  name: '',
+  studentId: ''
+})
+
+// 字段验证
+function validateField(field) {
+  errors[field] = ''
+
+  switch (field) {
+    case 'name':
+      if (!authStore.formData.name) {
+        errors.name = '请输入姓名'
+      } else if (authStore.formData.name.length < 2) {
+        errors.name = '姓名至少需要2个字符'
+      }
+      break
+
+    case 'studentId':
+      if (!authStore.formData.studentId) {
+        errors.studentId = '请输入学号'
+      } else if (!/^[A-Za-z0-9]+$/.test(authStore.formData.studentId)) {
+        errors.studentId = '学号只能包含字母和数字'
+      }
+      break
+  }
+}
 
 // 触摸状态管理
 const touchStart = ref({ x: 0, y: 0 })
@@ -387,6 +542,17 @@ const removeBook = (index) => {
 
 // 处理下一步
 const handleNext = () => {
+  // 验证当前步骤的字段
+  if (authStore.registrationStep === 1) {
+    validateField('name')
+    validateField('studentId')
+    
+    // 如果有错误，不允许进入下一步
+    if (errors.name || errors.studentId) {
+      return
+    }
+  }
+
   slideDirection.value = 'sliding-left'
   if (authStore.nextStep()) {
     window.scrollTo(0, 0)
@@ -410,6 +576,7 @@ const handlePrevious = () => {
 // 处理提交
 const handleSubmit = async () => {
   if (await authStore.register()) {
+    clearStorage() // 注册成功后清除暂存数据
     router.push('/')
   }
 }
@@ -529,6 +696,21 @@ const handleSubmit = async () => {
 
 .form-group {
   margin-bottom: 1.5rem;
+}
+
+.helper-text {
+  display: block;
+  font-size: 0.875rem;
+  color: #666;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.error-message {
+  display: block;
+  color: #dc3545;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
 }
 
 label {
