@@ -1,3 +1,4 @@
+/*
 const fs = require('fs');
 const path = require('path');
 
@@ -61,3 +62,4 @@ fs.copyFileSync('README.md', 'dist/README.md');
 
 console.log('构建完成！');
 console.log('构建文件位于 dist/ 目录');
+*/
