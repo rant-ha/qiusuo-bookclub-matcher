@@ -17,39 +17,31 @@
   </component>
 </template>
 
-<script>
+<script setup>
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
-export default {
-  name: 'BaseButton',
-  props: {
-    variant: {
-      type: String,
-      default: 'primary',
-      validator: (value) => ['primary', 'secondary', 'text'].includes(value)
-    },
-    loading: {
-      type: Boolean,
-      default: false
-    },
-    disabled: {
-      type: Boolean,
-      default: false
-    },
-    to: {
-      type: [String, Object],
-      default: null
-    }
+const props = defineProps({
+  variant: {
+    type: String,
+    default: 'primary',
+    validator: (value) => ['primary', 'secondary', 'text'].includes(value)
   },
-  setup(props) {
-    const tag = computed(() => props.to ? RouterLink : 'button')
-    
-    return {
-      tag
-    }
+  loading: {
+    type: Boolean,
+    default: false
+  },
+  disabled: {
+    type: Boolean,
+    default: false
+  },
+  to: {
+    type: [String, Object],
+    default: null
   }
-}
+})
+
+const tag = computed(() => props.to ? RouterLink : 'button')
 </script>
 
 <style scoped>

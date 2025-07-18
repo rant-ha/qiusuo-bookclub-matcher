@@ -4,30 +4,26 @@
   </span>
 </template>
 
-<script>
-export default {
-  name: 'BaseTag',
-  props: {
-    // 标签颜色类型
-    type: {
-      type: String,
-      default: 'primary',
-      validator: value => [
-        'primary',
-        'success',
-        'warning',
-        'danger',
-        'info',
-        'muted'
-      ].includes(value)
-    }
-  },
-  computed: {
-    colorClass() {
-      return `base-tag--${this.type}`
-    }
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  // 标签颜色类型
+  type: {
+    type: String,
+    default: 'primary',
+    validator: value => [
+      'primary',
+      'success',
+      'warning',
+      'danger',
+      'info',
+      'muted'
+    ].includes(value)
   }
-}
+})
+
+const colorClass = computed(() => `base-tag--${props.type}`)
 </script>
 
 <style scoped>

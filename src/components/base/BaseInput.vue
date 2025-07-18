@@ -1,6 +1,8 @@
 <template>
   <div class="input-wrapper">
+    <label v-if="label" :for="inputId" class="input-label">{{ label }}</label>
     <input
+      :id="inputId"
       :value="modelValue"
       :class="['base-input', { 'has-error': error }]"
       :aria-invalid="error ? 'true' : 'false'"
@@ -13,31 +15,46 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'BaseInput',
-  props: {
-    modelValue: {
-      type: [String, Number],
-      default: ''
-    },
-    error: {
-      type: String,
-      default: ''
-    },
-    disabled: {
-      type: Boolean,
-      default: false
-    }
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  modelValue: {
+    type: [String, Number],
+    default: ''
   },
-  emits: ['update:modelValue']
-}
+  error: {
+    type: String,
+    default: ''
+  },
+  disabled: {
+    type: Boolean,
+    default: false
+  },
+  label: {
+    type: String,
+    default: ''
+  }
+})
+
+defineEmits(['update:modelValue'])
+
+// 生成唯一的input id
+const inputId = computed(() => `input-${Math.random().toString(36).slice(2, 11)}`)
 </script>
 
 <style scoped>
 .input-wrapper {
   position: relative;
   width: 100%;
+}
+
+.input-label {
+  display: block;
+  margin-bottom: var(--spacing-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
 }
 
 .base-input {

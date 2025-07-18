@@ -36,11 +36,11 @@ import LazyImageDemo from '@/components/LazyImageDemo.vue'
 
 h1 {
   margin-bottom: 1rem;
-  color: var(--dark-color);
+  color: var(--text-primary);
 }
 
 p {
-  color: var(--secondary-color);
+  color: var(--text-secondary);
   margin-bottom: 2rem;
 }
 

@@ -4,10 +4,8 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'BaseCard'
-}
+<script setup>
+// 组件不需要任何 props 或其他逻辑
 </script>
 
 <style scoped>
