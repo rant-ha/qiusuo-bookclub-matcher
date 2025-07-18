@@ -1,6 +1,7 @@
 <template>
-  <div class="register">
-    <div class="card">
+  <div class="register-page">
+    <div class="register">
+      <BaseCard>
       <!-- 进度指示器 -->
       <nav
         class="progress-steps"
@@ -40,12 +41,11 @@
         <div v-if="authStore.registrationStep === 1" :class="['form-step', slideDirection]">
           <div class="form-group">
             <label for="name">姓名</label>
-            <input
-              type="text"
+            <BaseInput
               id="name"
               v-model="authStore.formData.name"
-              class="form-control"
-              :class="{ 'error': errors.name }"
+              type="text"
+              :error="errors.name"
               required
               minlength="2"
               maxlength="50"
@@ -54,7 +54,7 @@
               :aria-invalid="!!errors.name"
               :aria-describedby="['name-help', errors.name ? 'name-error' : undefined].filter(Boolean).join(' ')"
               @blur="validateField('name')"
-            >
+            />
             <span id="name-help" class="helper-text">请输入2-50个字符的姓名</span>
             <span
               v-if="errors.name"
@@ -66,12 +66,11 @@
           
           <div class="form-group">
             <label for="studentId">学号</label>
-            <input
-              type="text"
+            <BaseInput
               id="studentId"
               v-model="authStore.formData.studentId"
-              class="form-control"
-              :class="{ 'error': errors.studentId }"
+              type="text"
+              :error="errors.studentId"
               required
               pattern="[A-Za-z0-9]+"
               :disabled="authStore.isSubmitting"
@@ -79,7 +78,7 @@
               :aria-invalid="!!errors.studentId"
               :aria-describedby="['studentId-help', errors.studentId ? 'studentId-error' : undefined].filter(Boolean).join(' ')"
               @blur="validateField('studentId')"
-            >
+            />
             <span id="studentId-help" class="helper-text">学号只能包含字母和数字</span>
             <span
               v-if="errors.studentId"
@@ -164,7 +163,7 @@
             <textarea
               id="detailedPreferences"
               v-model="authStore.formData.detailedBookPreferences"
-              class="form-control"
+              class="base-textarea"
               rows="4"
               placeholder="请描述您喜欢的书籍类型、作者或主题..."
               :disabled="authStore.isSubmitting"
@@ -185,30 +184,29 @@
                 :key="index"
                 class="book-input-group"
               >
-                <input
-                  type="text"
+                <BaseInput
                   v-model="authStore.formData.favoriteBooks[index]"
                   :placeholder="`第 ${index + 1} 本书`"
-                  class="form-control"
+                  type="text"
                   :disabled="authStore.isSubmitting"
-                >
-                <button
+                />
+                <BaseButton
                   type="button"
-                  class="remove-book"
+                  variant="text"
                   @click="removeBook(index)"
                   :disabled="authStore.isSubmitting || index < 2"
                 >
                   删除
-                </button>
+                </BaseButton>
               </div>
-              <button
+              <BaseButton
                 type="button"
-                class="add-book"
+                variant="secondary"
                 @click="addBook"
                 :disabled="authStore.isSubmitting || authStore.formData.favoriteBooks.length >= 10"
               >
                 添加书籍
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -247,7 +245,7 @@
             <label id="weekly-hours-label">每周阅读时间</label>
             <select
               v-model="authStore.formData.readingHabits.weeklyHours"
-              class="form-control"
+              class="base-select"
               :disabled="authStore.isSubmitting"
               aria-labelledby="weekly-hours-label"
               aria-required="true"
@@ -297,51 +295,42 @@
 
         <!-- 导航按钮 -->
         <div class="form-navigation">
-          <button
+          <BaseButton
             type="button"
-            class="btn btn-secondary"
+            variant="secondary"
             @click="handlePrevious"
             v-if="authStore.registrationStep > 1"
             :disabled="authStore.isSubmitting"
             aria-label="返回上一步"
           >
             上一步
-          </button>
+          </BaseButton>
 
-          <button
+          <BaseButton
             type="button"
-            class="btn btn-primary"
-            :class="{ 'btn-loading': authStore.isSubmitting }"
+            variant="primary"
+            :loading="authStore.isSubmitting"
             @click="handleNext"
             v-if="authStore.registrationStep < 3"
             :disabled="authStore.isSubmitting"
-            :aria-busy="authStore.isSubmitting"
             :aria-label="`进入第${authStore.registrationStep + 1}步：${stepLabels[authStore.registrationStep]}`"
           >
-            <span v-if="authStore.isSubmitting">
-              <i class="spinner" aria-hidden="true"></i>
-              处理中...
-            </span>
-            <span v-else>下一步</span>
-          </button>
+            {{ authStore.isSubmitting ? '处理中...' : '下一步' }}
+          </BaseButton>
 
-          <button
+          <BaseButton
             type="submit"
-            class="btn btn-primary"
-            :class="{ 'btn-loading': authStore.isSubmitting }"
+            variant="primary"
+            :loading="authStore.isSubmitting"
             v-if="authStore.registrationStep === 3"
             :disabled="authStore.isSubmitting"
-            :aria-busy="authStore.isSubmitting"
             aria-label="完成注册并创建账号"
           >
-            <span v-if="authStore.isSubmitting">
-              <i class="spinner" aria-hidden="true"></i>
-              注册中...
-            </span>
-            <span v-else>完成注册</span>
-          </button>
+            {{ authStore.isSubmitting ? '注册中...' : '完成注册' }}
+          </BaseButton>
         </div>
       </form>
+      </BaseCard>
     </div>
   </div>
 </template>
@@ -351,6 +340,9 @@ import { ref, computed, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useAutoSave } from '../composables/useAutoSave'
+import BaseCard from '../components/base/BaseCard.vue'
+import BaseInput from '../components/base/BaseInput.vue'
+import BaseButton from '../components/base/BaseButton.vue'
 
 // 键盘事件处理函数
 const handleKeyDown = (event) => {
@@ -583,26 +575,34 @@ const handleSubmit = async () => {
 </script>
 
 <style scoped>
+.register-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-4);
+}
+
 .register {
   max-width: 600px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 1.5rem;
   touch-action: pan-y pinch-zoom;
 }
 
-.card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  padding: 2rem;
-}
-
 /* 进度指示器 */
+
 .progress-steps {
   display: flex;
   justify-content: space-between;
   margin-bottom: 2rem;
   position: relative;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  padding: 1.5rem;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .progress-steps::before {
@@ -612,7 +612,7 @@ const handleSubmit = async () => {
   left: 0;
   right: 0;
   height: 2px;
-  background: #e0e0e0;
+  background: var(--color-border);
   z-index: 1;
 }
 
@@ -629,32 +629,36 @@ const handleSubmit = async () => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #fff;
-  border: 2px solid #e0e0e0;
+  background: var(--color-white);
+  border: 2px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
+  font-weight: var(--font-weight-bold);
   margin-bottom: 0.5rem;
-  transition: all 0.3s ease;
+  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-sm);
 }
 
 .step.active .step-number {
-  border-color: var(--primary-color);
-  background: var(--primary-color);
-  color: #fff;
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: var(--color-white);
+  box-shadow: var(--shadow-md);
+  transform: scale(1.1);
 }
 
 .step.completed .step-number {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-dark) 100%);
+  border-color: var(--color-success);
+  color: var(--color-white);
 }
 
 .step-label {
-  font-size: 0.875rem;
-  color: #666;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
   text-align: center;
+  font-weight: var(--font-weight-medium);
 }
 
 /* 表单样式 */
@@ -662,6 +666,12 @@ const handleSubmit = async () => {
   animation: fadeIn 0.3s ease;
   transition: transform 0.3s ease-out;
   will-change: transform, opacity;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .form-step.sliding-left {
@@ -695,45 +705,119 @@ const handleSubmit = async () => {
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .helper-text {
   display: block;
-  font-size: 0.875rem;
-  color: #666;
-  margin-top: 0.25rem;
-  margin-bottom: 0.25rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-1);
+  margin-bottom: var(--spacing-1);
 }
 
 .error-message {
   display: block;
-  color: #dc3545;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  margin-top: var(--spacing-1);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--color-danger-light);
+  border-radius: var(--border-radius-md);
+  border-left: 3px solid var(--color-danger);
 }
 
 label {
   display: block;
-  margin-bottom: 0.5rem;
-  color: #333;
-  font-weight: 500;
+  margin-bottom: var(--spacing-2);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
 }
 
-.form-control {
+/* 标题样式 */
+h1 {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-6);
+  background: linear-gradient(45deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: var(--shadow-sm);
+}
+
+/* Textarea 样式 */
+.base-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.9);
+  transition: all var(--transition-normal);
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.base-textarea:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.base-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+  transform: translateY(-1px);
+}
+
+.base-textarea:disabled {
+  background-color: var(--color-bg-disabled);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Select 样式 */
+.base-select {
   width: 100%;
   min-height: 44px;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 0.3s ease;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.9);
+  transition: all var(--transition-normal);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--spacing-4) center;
+  padding-right: var(--spacing-10);
 }
 
-.form-control:focus {
-  border-color: var(--primary-color);
+.base-select:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.base-select:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+  transform: translateY(-1px);
+}
+
+.base-select:disabled {
+  background-color: var(--color-bg-disabled);
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 /* 单选框和复选框组 */
@@ -741,7 +825,7 @@ label {
 .checkbox-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--spacing-3);
   justify-content: flex-start;
 }
 
@@ -764,146 +848,88 @@ label {
 .radio-label span,
 .checkbox-label span {
   display: inline-block;
-  padding: 10px 20px;
-  border: 2px solid #e0e0e0;
-  border-radius: 20px;
-  background-color: white;
-  color: #666;
-  font-size: 14px;
-  transition: all 0.3s ease;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--border-radius-full);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-normal);
   text-align: center;
+  box-shadow: var(--shadow-sm);
 }
 
 .radio-label:hover span,
 .checkbox-label:hover span {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .radio-label input:checked + span,
 .checkbox-label input:checked + span {
-  background-color: var(--primary-color);
-  border-color: var(--primary-color);
-  color: white;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  border-color: var(--color-primary);
+  color: var(--color-white);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .radio-label input:focus + span,
 .checkbox-label input:focus + span {
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+  box-shadow: var(--focus-ring);
 }
 
 /* 阅读承诺样式 */
 .commitment-group {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .commitment-label {
-  padding: 1rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  padding: var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  background: rgba(255, 255, 255, 0.9);
+  transition: all var(--transition-normal);
+}
+
+.commitment-label:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .commitment-content {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-1);
 }
 
 .commitment-content small {
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 /* 最爱书籍输入组 */
 .favorite-books {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-4);
 }
 
 .book-input-group {
   display: flex;
-  gap: 0.5rem;
-}
-
-.book-input-group .form-control {
-  flex: 1;
-}
-
-.remove-book {
-  padding: 0 1rem;
-  color: #dc3545;
-  background: none;
-  border: 1px solid #dc3545;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.remove-book:hover {
-  background: #dc3545;
-  color: #fff;
-}
-
-.add-book {
-  padding: 0.75rem;
-  background: none;
-  border: 1px dashed #666;
-  border-radius: 6px;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.add-book:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-}
-
-/* 错误消息 */
-.error-message {
-  color: #dc3545;
-  margin: 1rem 0;
-  padding: 0.75rem;
-  background: #fff5f5;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  gap: var(--spacing-2);
+  align-items: center;
 }
 
 /* 导航按钮 */
 .form-navigation {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 2rem;
-}
-
-.btn {
-  min-height: 44px;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-primary {
-  background: var(--primary-color);
-  color: #fff;
-  flex: 1;
-}
-
-.btn-secondary {
-  background: #f5f5f5;
-  color: #333;
-}
-
-.btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-8);
 }
 
 /* 动画 */
@@ -920,34 +946,32 @@ label {
 
 /* 移动端适配 */
 @media (max-width: 768px) {
-  .card {
-    padding: 1rem;
-    border-radius: 0;
-    box-shadow: none;
+  .register {
+    padding: var(--spacing-4);
+  }
+
+  .form-step {
+    padding: var(--spacing-4);
   }
 
   .step-label {
-    font-size: 0.75rem;
+    font-size: var(--font-size-xs);
   }
 
   .radio-group,
   .checkbox-group {
     justify-content: center;
-    gap: 8px;
+    gap: var(--spacing-2);
   }
 
   .radio-label span,
   .checkbox-label span {
-    padding: 8px 16px;
-    font-size: 13px;
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: var(--font-size-xs);
   }
 
   .form-navigation {
     flex-direction: column;
-  }
-
-  .btn {
-    width: 100%;
   }
 }
 </style>

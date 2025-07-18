@@ -4,20 +4,22 @@
     
     <!-- 匹配按钮区域 -->
     <div class="match-buttons">
-      <button 
-        class="match-btn similar-btn"
+      <BaseButton
+        variant="primary"
         @click="handleSimilarMatch"
+        :loading="isLoading"
         :disabled="isLoading"
       >
         🎯 寻找相似搭档
-      </button>
-      <button 
-        class="match-btn complementary-btn"
+      </BaseButton>
+      <BaseButton
+        variant="secondary"
         @click="handleComplementaryMatch"
+        :loading="isLoading"
         :disabled="isLoading"
       >
         🌱 寻找互补搭档
-      </button>
+      </BaseButton>
     </div>
 
     <!-- 加载指示器 -->
@@ -56,48 +58,51 @@
 
       <!-- 匹配列表 -->
       <div class="matches-list">
-        <div 
-          v-for="(match, index) in matches" 
+        <BaseCard
+          v-for="(match, index) in matches"
           :key="index"
-          class="match-item"
           :class="getMatchItemClass(match)"
         >
-          <h3>
-            匹配 {{ index + 1 }} 
-            {{ generateMatchIcon(match.score) }}
-            <span 
-              v-for="(tag, tagIndex) in generateMatchStatusTags(match)"
-              :key="tagIndex"
-              v-html="tag"
-            ></span>
-          </h3>
+          <template #default>
+            <h3>
+              匹配 {{ index + 1 }}
+              {{ generateMatchIcon(match.score) }}
+              <BaseTag
+                v-for="(tag, tagIndex) in generateMatchStatusTags(match)"
+                :key="tagIndex"
+                :type="tag.type"
+              >
+                {{ tag.text }}
+              </BaseTag>
+            </h3>
 
-          <!-- 匹配分数 -->
-          <div class="match-score" v-html="generateMatchScoreHtml(match)"></div>
+            <!-- 匹配分数 -->
+            <div class="match-score" v-html="generateMatchScoreHtml(match)"></div>
 
-          <!-- 用户信息 -->
-          <div class="match-details">
-            <div class="person-info">
-              <h4>{{ match.member1.name }}</h4>
-              <div>兴趣：{{ formatList(match.member1.hobbies) }}</div>
-              <div>最近读的书：{{ formatList(match.member1.books.slice(0, 2)) }}</div>
+            <!-- 用户信息 -->
+            <div class="match-details">
+              <div class="person-info">
+                <h4>{{ match.member1.name }}</h4>
+                <div>兴趣：{{ formatList(match.member1.hobbies) }}</div>
+                <div>最近读的书：{{ formatList(match.member1.books.slice(0, 2)) }}</div>
+              </div>
+              
+              <div class="person-info">
+                <h4>{{ match.member2.name }}</h4>
+                <div>兴趣：{{ formatList(match.member2.hobbies) }}</div>
+                <div>最近读的书：{{ formatList(match.member2.books.slice(0, 2)) }}</div>
+              </div>
             </div>
-            
-            <div class="person-info">
-              <h4>{{ match.member2.name }}</h4>
-              <div>兴趣：{{ formatList(match.member2.hobbies) }}</div>
-              <div>最近读的书：{{ formatList(match.member2.books.slice(0, 2)) }}</div>
+
+            <!-- 匹配详情 -->
+            <div v-html="generateMatchDetails(match)"></div>
+
+            <!-- 降级信息 -->
+            <div v-if="match.degraded || match.healthDegraded"
+                 v-html="generateDegradationInfo(match)">
             </div>
-          </div>
-
-          <!-- 匹配详情 -->
-          <div v-html="generateMatchDetails(match)"></div>
-
-          <!-- 降级信息 -->
-          <div v-if="match.degraded || match.healthDegraded" 
-               v-html="generateDegradationInfo(match)">
-          </div>
-        </div>
+          </template>
+        </BaseCard>
       </div>
     </div>
 
@@ -113,9 +118,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { storeToRefs } from 'pinia'
+import BaseButton from '@/components/base/BaseButton.vue'
+import BaseCard from '@/components/base/BaseCard.vue'
+import BaseTag from '@/components/base/BaseTag.vue'
 
 export default {
   name: 'MatchView',
+  components: {
+    BaseButton,
+    BaseCard,
+    BaseTag
+  },
   
   setup() {
     const authStore = useAuthStore()
@@ -199,7 +212,7 @@ export default {
 
     // 获取匹配项样式类
     const getMatchItemClass = (match) => {
-      const classes = ['match-item']
+      const classes = []
       if (match.degraded) {
         classes.push('degraded-match')
       } else if (match.traditionalMode || match.healthDegraded) {
@@ -213,15 +226,18 @@ export default {
       const tags = []
       
       if (match.degraded) {
-        tags.push('<span class="tag degraded-tag">AI降级→传统</span>')
+        tags.push({ text: 'AI降级→传统', type: 'warning' })
       } else if (match.healthDegraded) {
-        tags.push('<span class="tag traditional-degraded-tag">传统(降级)</span>')
+        tags.push({ text: '传统(降级)', type: 'warning' })
       } else if (match.traditionalMode) {
-        tags.push('<span class="tag category-tag">传统算法</span>')
+        tags.push({ text: '传统算法', type: 'muted' })
       } else if (match.aiAnalysis) {
-        tags.push('<span class="tag ai-analysis-tag">AI智能</span>')
+        tags.push({ text: 'AI智能', type: 'info' })
         if (match.confidenceLevel) {
-          tags.push(`<span class="tag score-tag">置信度: ${(match.confidenceLevel * 100).toFixed(0)}%</span>`)
+          tags.push({
+            text: `置信度: ${(match.confidenceLevel * 100).toFixed(0)}%`,
+            type: 'primary'
+          })
         }
       }
 
@@ -234,31 +250,54 @@ export default {
       const scoreText = score.toFixed(1)
 
       if (match.type === 'similar') {
-        const breakdown = `(精确${match.detailLevel.exactMatches} + 语义${match.detailLevel.semanticMatches} + 类别${match.detailLevel.categoryMatches})`
+        const breakdown = [
+          `<base-tag type="success">精确 ${match.detailLevel.exactMatches}</base-tag>`,
+          `<base-tag type="info">语义 ${match.detailLevel.semanticMatches}</base-tag>`,
+          `<base-tag type="primary">类别 ${match.detailLevel.categoryMatches}</base-tag>`
+        ]
         
-        let enhancedBreakdown = ''
+        const enhancedTags = []
         if (match.readingCommitmentCompatibility) {
-          enhancedBreakdown += ` | 阅读承诺: ${(match.readingCommitmentCompatibility.score * 0.8).toFixed(1)}分`
+          enhancedTags.push(
+            `<base-tag type="warning">阅读承诺 ${(match.readingCommitmentCompatibility.score * 0.8).toFixed(1)}分</base-tag>`
+          )
         }
         if (match.textPreferenceAnalysis?.similarity_score > 0) {
-          enhancedBreakdown += ` | AI文本分析: ${(match.textPreferenceAnalysis.similarity_score * 1.5).toFixed(1)}分`
+          enhancedTags.push(
+            `<base-tag type="info">AI分析 ${(match.textPreferenceAnalysis.similarity_score * 1.5).toFixed(1)}分</base-tag>`
+          )
         }
         
         return `
           <div class="match-score">
-            智能相似度：${scoreText} 分
-            <span class="match-breakdown">${breakdown}${enhancedBreakdown}</span>
+            <div class="score-main">智能相似度：${scoreText} 分</div>
+            <div class="score-breakdown">
+              <div class="breakdown-group">${breakdown.join('')}</div>
+              ${enhancedTags.length > 0 ? `<div class="breakdown-group">${enhancedTags.join('')}</div>` : ''}
+            </div>
           </div>`
       } else {
-        let description = ''
+        let type, description
         if (score <= 1.0) {
-          description = `差异度：高 (仅 ${scoreText} 分共同点)，<span class="complementary-high">极具互补潜力</span>`
+          type = 'danger'
+          description = `差异度：高 (仅 ${scoreText} 分共同点)`
         } else if (score > 1.0 && score < 2.5) {
-          description = `差异度：中 (有 ${scoreText} 分共同点)，<span class="complementary-medium">可共同探索</span>`
+          type = 'warning'
+          description = `差异度：中 (有 ${scoreText} 分共同点)`
         } else {
-          description = `差异度：低 (高达 ${scoreText} 分共同点)，<span class="complementary-low">更像相似搭档</span>`
+          type = 'success'
+          description = `差异度：低 (高达 ${scoreText} 分共同点)`
         }
-        return `<div class="match-score">${description}</div>`
+        
+        return `
+          <div class="match-score">
+            <div class="score-main">${description}</div>
+            <div class="score-breakdown">
+              <base-tag type="${type}">
+                ${score <= 1.0 ? '极具互补潜力' : score < 2.5 ? '可共同探索' : '更像相似搭档'}
+              </base-tag>
+            </div>
+          </div>`
       }
     }
 
@@ -335,17 +374,17 @@ export default {
         degradationHtml += `
           <div class="match-type-group">
             <span class="match-type-label">降级原因：</span>
-            <span class="tag degraded-tag">${match.degradationReason || 'AI服务异常'}</span>
+            <base-tag type="warning">${match.degradationReason || 'AI服务异常'}</base-tag>
           </div>
           <div class="match-type-group">
             <span class="match-type-label">处理方式：</span>
-            <span class="tag ai-element-tag">自动切换到传统匹配算法</span>
+            <base-tag type="info">自动切换到传统匹配算法</base-tag>
           </div>
         `
       }
       
       degradationHtml += `
-        <div style="margin-top: 8px; font-size: 12px; color: #ef6c00;">
+        <div class="degradation-note">
           💡 降级模式确保服务连续性，算法会在条件恢复后自动切换回AI模式
         </div>
       </div>
@@ -366,7 +405,9 @@ export default {
         html += `
           <div class="match-type-group">
             <span class="match-type-label">✅ 完全一致：</span>
-            ${exact.map(m => `<span class="tag exact-tag">${m.item}</span>`).join('')}
+            ${exact.map(m => `
+              <base-tag type="success">${m.item}</base-tag>
+            `).join('')}
           </div>
         `
       }
@@ -375,7 +416,9 @@ export default {
         html += `
           <div class="match-type-group">
             <span class="match-type-label">🔗 AI语义相关：</span>
-            ${semantic.map(m => `<span class="tag semantic-tag">${m.item}</span>`).join('')}
+            ${semantic.map(m => `
+              <base-tag type="info">${m.item}</base-tag>
+            `).join('')}
           </div>
         `
       }
@@ -385,7 +428,7 @@ export default {
           <div class="match-type-group">
             <span class="match-type-label">📂 同类兴趣：</span>
             ${category.map(m => `
-              <span class="tag category-tag" title="${m.details || ''}">${m.item}</span>
+              <base-tag type="primary" title="${m.details || ''}">${m.item}</base-tag>
             `).join('')}
           </div>
         `
@@ -418,44 +461,20 @@ export default {
 
 <style scoped>
 .match-view {
-  max-width: 1200px;
+  max-width: var(--max-width-xl);
   margin: 0 auto;
-  padding: 20px;
+  padding: var(--spacing-6);
 }
 
 .match-buttons {
   display: flex;
-  gap: 20px;
-  margin: 20px 0;
+  gap: var(--spacing-4);
+  margin: var(--spacing-6) 0;
   justify-content: center;
 }
 
-.match-btn {
-  padding: 12px 24px;
-  font-size: 16px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.match-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.similar-btn {
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-  color: white;
-}
-
-.complementary-btn {
-  background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-  color: white;
-}
-
 .loading-container {
-  margin: 40px 0;
+  margin: var(--spacing-10) 0;
   text-align: center;
 }
 
@@ -463,14 +482,14 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
+  gap: var(--spacing-4);
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #3498db;
+  border: 4px solid var(--color-muted);
+  border-top: 4px solid var(--color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -481,7 +500,7 @@ export default {
 }
 
 .progress-container {
-  margin-top: 20px;
+  margin-top: var(--spacing-6);
   width: 100%;
   max-width: 600px;
   margin-left: auto;
@@ -490,201 +509,219 @@ export default {
 
 .progress-bar {
   height: 6px;
-  background: #4CAF50;
-  border-radius: 3px;
-  transition: width 0.3s ease;
+  background: var(--color-success);
+  border-radius: var(--border-radius-full);
+  transition: width var(--transition-normal);
 }
 
 .progress-text {
-  margin-top: 8px;
-  font-size: 14px;
-  color: #666;
+  margin-top: var(--spacing-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .estimated-time {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #888;
+  margin-top: var(--spacing-1);
+  font-size: var(--font-size-xs);
+  color: var(--text-light);
 }
 
 .match-results {
-  margin-top: 40px;
+  margin-top: var(--spacing-10);
 }
 
 .results-header {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-6);
   text-align: center;
 }
 
 .results-subtitle {
-  color: #666;
-  font-size: 14px;
-  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  margin-top: var(--spacing-2);
 }
 
 .matches-list {
   display: grid;
-  gap: 20px;
+  gap: var(--spacing-6);
+  padding: var(--spacing-2);
 }
 
-.match-item {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+@media (min-width: 768px) {
+  .matches-list {
+    grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+  }
 }
 
-.match-item h3 {
-  margin-top: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+@media (max-width: 767px) {
+  .match-details {
+    grid-template-columns: 1fr;
+  }
+  
+  .score-breakdown {
+    overflow-x: auto;
+    padding-bottom: var(--spacing-2);
+  }
+  
+  .breakdown-group {
+    flex-wrap: nowrap;
+    padding: var(--spacing-1);
+  }
 }
 
 .match-score {
-  margin: 10px 0;
-  font-size: 16px;
-  color: #2c3e50;
+  margin: var(--spacing-4) 0;
 }
 
-.match-breakdown {
-  font-size: 14px;
-  color: #666;
+.score-main {
+  font-size: var(--font-size-lg);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-2);
+}
+
+.score-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.breakdown-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+  align-items: center;
 }
 
 .match-details {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin: 15px 0;
+  gap: var(--spacing-4);
+  margin: var(--spacing-4) 0;
 }
 
 .person-info {
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 8px;
+  background: var(--glass-bg);
+  padding: var(--spacing-4);
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--glass-border);
 }
 
 .person-info h4 {
   margin-top: 0;
-  margin-bottom: 10px;
-  color: #2c3e50;
+  margin-bottom: var(--spacing-3);
+  color: var(--text-primary);
 }
 
 .common-interests {
-  margin-top: 15px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  margin-top: var(--spacing-4);
+  padding: var(--spacing-4);
+  background: var(--glass-bg);
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--glass-border);
 }
 
 .match-type-group {
-  margin: 8px 0;
+  margin: var(--spacing-2) 0;
 }
 
 .match-type-label {
-  font-weight: 500;
-  margin-right: 8px;
-}
-
-.tag {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  margin: 2px;
-  font-size: 12px;
-}
-
-.exact-tag {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-.semantic-tag {
-  background: #f3e5f5;
-  color: #7b1fa2;
-}
-
-.category-tag {
-  background: #e8f5e9;
-  color: #388e3c;
-}
-
-.degraded-tag {
-  background: #fff3e0;
-  color: #f57c00;
-}
-
-.ai-analysis-tag {
-  background: #e1f5fe;
-  color: #0288d1;
-}
-
-.score-tag {
-  background: #f5f5f5;
-  color: #616161;
+  font-weight: var(--font-weight-medium);
+  margin-right: var(--spacing-2);
 }
 
 .degraded-match {
-  border-left: 4px solid #ff9800;
+  position: relative;
+}
+
+.degraded-match::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--color-warning);
+  border-radius: var(--border-radius-sm);
 }
 
 .traditional-match {
-  border-left: 4px solid #9e9e9e;
+  position: relative;
+}
+
+.traditional-match::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--color-muted);
+  border-radius: var(--border-radius-sm);
 }
 
 .no-matches {
   text-align: center;
-  padding: 40px;
-  color: #666;
-  font-size: 16px;
+  padding: var(--spacing-10);
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
 }
 
 /* AI分析相关样式 */
 .ai-analysis {
-  border-left: 4px solid #2196f3;
+  border-left: 4px solid var(--color-info);
 }
 
 .analysis-dimensions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  gap: var(--spacing-3);
+  margin-top: var(--spacing-3);
 }
 
 .dimension-score {
-  background: white;
-  padding: 8px;
-  border-radius: 4px;
+  background: var(--glass-bg);
+  padding: var(--spacing-2);
+  border-radius: var(--border-radius-md);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border: 1px solid var(--glass-border);
 }
 
 .score {
-  font-weight: 500;
-  color: #2196f3;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
 }
 
 /* 降级信息样式 */
 .degradation-info {
-  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-  border-left: 5px solid #ff9800;
+  background: var(--glass-bg);
+  border-left: 5px solid var(--color-warning);
+}
+
+.degradation-note {
+  margin-top: var(--spacing-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-warning);
+  padding: var(--spacing-2) var(--spacing-4);
+  background: rgba(255, 152, 0, 0.1);
+  border-radius: var(--border-radius-sm);
 }
 
 /* 互补匹配特殊样式 */
 .complementary-high {
-  color: #d32f2f;
-  font-weight: 500;
+  color: var(--color-danger);
+  font-weight: var(--font-weight-medium);
 }
 
 .complementary-medium {
-  color: #f57c00;
-  font-weight: 500;
+  color: var(--color-warning);
+  font-weight: var(--font-weight-medium);
 }
 
 .complementary-low {
-  color: #388e3c;
-  font-weight: 500;
+  color: var(--color-success);
+  font-weight: var(--font-weight-medium);
 }
 </style>

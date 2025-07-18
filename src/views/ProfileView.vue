@@ -5,7 +5,7 @@
       <p class="subtitle" id="profile-description">管理您的个人信息和阅读偏好</p>
     </header>
 
-    <div class="profile-content" role="main" aria-labelledby="profile-title" aria-describedby="profile-description">
+    <BaseCard role="main" aria-labelledby="profile-title" aria-describedby="profile-description">
       <form
         @submit.prevent="handleSubmit"
         class="profile-form"
@@ -20,23 +20,23 @@
           <h2 id="basic-info-heading">基本信息</h2>
           <div class="form-group">
             <label for="name">姓名</label>
-            <input 
-              id="name" 
-              v-model="formData.name" 
-              type="text" 
-              readonly 
-              class="readonly-field"
-            >
+            <BaseInput
+              id="name"
+              v-model="formData.name"
+              type="text"
+              readonly
+              disabled
+            />
           </div>
           <div class="form-group">
             <label for="studentId">学号</label>
-            <input 
-              id="studentId" 
-              v-model="formData.studentId" 
-              type="text" 
-              readonly 
-              class="readonly-field"
-            >
+            <BaseInput
+              id="studentId"
+              v-model="formData.studentId"
+              type="text"
+              readonly
+              disabled
+            />
           </div>
         </CollapsibleSection>
 
@@ -48,99 +48,89 @@
           <h2 id="preferences-heading">个人偏好</h2>
           <div class="form-group">
             <label>性别</label>
-            <div class="radio-group">
-              <label class="radio-option">
-                <input 
-                  v-model="formData.gender" 
-                  type="radio" 
-                  value="male"
-                >
-                <span>男</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.gender" 
-                  type="radio" 
-                  value="female"
-                >
-                <span>女</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.gender" 
-                  type="radio" 
-                  value="other"
-                >
-                <span>其他</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.gender" 
-                  type="radio" 
-                  value="prefer_not_to_say"
-                >
-                <span>不便透露</span>
-              </label>
+            <div class="radio-group" role="radiogroup">
+              <BaseInput
+                type="radio"
+                v-model="formData.gender"
+                name="gender"
+                value="male"
+                label="男生"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.gender"
+                name="gender"
+                value="female"
+                label="女生"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.gender"
+                name="gender"
+                value="other"
+                label="其他"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.gender"
+                name="gender"
+                value="prefer_not_to_say"
+                label="不便透露"
+              />
             </div>
           </div>
 
           <div class="form-group">
             <label>匹配性别偏好</label>
-            <div class="radio-group">
-              <label class="radio-option">
-                <input 
-                  v-model="formData.matchGenderPreference" 
-                  type="radio" 
-                  value="male"
-                >
-                <span>男性</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.matchGenderPreference" 
-                  type="radio" 
-                  value="female"
-                >
-                <span>女性</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.matchGenderPreference" 
-                  type="radio" 
-                  value="no_preference"
-                >
-                <span>无偏好</span>
-              </label>
+            <div class="radio-group" role="radiogroup">
+              <BaseInput
+                type="radio"
+                v-model="formData.matchGenderPreference"
+                name="matchGenderPreference"
+                value="male"
+                label="男生"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.matchGenderPreference"
+                name="matchGenderPreference"
+                value="female"
+                label="女生"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.matchGenderPreference"
+                name="matchGenderPreference"
+                value="no_preference"
+                label="无偏好"
+              />
             </div>
           </div>
 
           <div class="form-group">
             <label>匹配类型偏好</label>
-            <div class="radio-group">
-              <label class="radio-option">
-                <input 
-                  v-model="formData.matchingTypePreference" 
-                  type="radio" 
-                  value="similar"
-                >
-                <span>相似兴趣</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.matchingTypePreference" 
-                  type="radio" 
-                  value="complementary"
-                >
-                <span>互补兴趣</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.matchingTypePreference" 
-                  type="radio" 
-                  value="no_preference"
-                >
-                <span>无偏好</span>
-              </label>
+            <div class="radio-group" role="radiogroup">
+              <BaseInput
+                type="radio"
+                v-model="formData.matchingTypePreference"
+                name="matchingTypePreference"
+                value="similar"
+                label="相似兴趣"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.matchingTypePreference"
+                name="matchingTypePreference"
+                value="complementary"
+                label="互补兴趣"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.matchingTypePreference"
+                name="matchingTypePreference"
+                value="no_preference"
+                label="无偏好"
+              />
             </div>
           </div>
         </CollapsibleSection>
@@ -159,27 +149,28 @@
               aria-labelledby="book-categories-label"
               aria-required="true"
             >
-              <label class="checkbox-option" v-for="category in bookCategoryOptions" :key="category.value">
-                <input 
-                  v-model="formData.bookCategories" 
-                  type="checkbox" 
-                  :value="category.value"
-                >
-                <span>{{ category.label }}</span>
-              </label>
+              <BaseInput
+                v-for="category in bookCategoryOptions"
+                :key="category.value"
+                type="checkbox"
+                v-model="formData.bookCategories"
+                :value="category.value"
+                :label="category.label"
+              />
             </div>
             <p class="help-text">请选择至少1个，最多7个书籍类别</p>
           </div>
 
           <div class="form-group">
             <label for="detailedPreferences">详细阅读偏好</label>
-            <textarea 
-              id="detailedPreferences" 
-              v-model="formData.detailedBookPreferences" 
+            <BaseInput
+              id="detailedPreferences"
+              v-model="formData.detailedBookPreferences"
+              type="textarea"
               placeholder="描述您的详细阅读偏好、喜欢的作者、不喜欢的类型等..."
-              rows="4"
+              :rows="4"
               maxlength="500"
-            ></textarea>
+            />
             <p class="help-text">{{ formData.detailedBookPreferences.length }}/500</p>
           </div>
 
@@ -192,31 +183,31 @@
               aria-required="true"
             >
               <div v-for="(book, index) in formData.favoriteBooks" :key="index" class="book-input-row">
-                <input 
-                  v-model="formData.favoriteBooks[index]" 
-                  type="text" 
+                <BaseInput
+                  v-model="formData.favoriteBooks[index]"
+                  type="text"
                   :placeholder="`第${index + 1}本书`"
                   maxlength="100"
-                >
-                <button
+                />
+                <BaseButton
                   type="button"
                   @click="removeFavoriteBook(index)"
-                  class="remove-btn"
+                  variant="text"
                   v-if="formData.favoriteBooks.length > 2"
                   :aria-label="`删除第${index + 1}本书`"
                 >
-                  <span aria-hidden="true">×</span>
-                </button>
+                  ×
+                </BaseButton>
               </div>
-              <button
+              <BaseButton
                 type="button"
                 @click="addFavoriteBook"
-                class="add-btn"
+                variant="secondary"
                 v-if="formData.favoriteBooks.length < 10"
                 aria-label="添加新的最爱书籍"
               >
-                <span aria-hidden="true">+</span> 添加书籍
-              </button>
+                + 添加书籍
+              </BaseButton>
             </div>
             <p class="help-text">请填写至少2本，最多10本您最喜欢的书籍</p>
           </div>
@@ -229,38 +220,34 @@
               aria-labelledby="reading-intensity-label"
               aria-required="true"
             >
-              <label class="radio-option">
-                <input 
-                  v-model="formData.readingCommitment" 
-                  type="radio" 
-                  value="light"
-                >
-                <span>轻松阅读 (每月1-2本)</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.readingCommitment" 
-                  type="radio" 
-                  value="medium"
-                >
-                <span>中等阅读 (每月3-4本)</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.readingCommitment" 
-                  type="radio" 
-                  value="intensive"
-                >
-                <span>深度阅读 (每月5-6本)</span>
-              </label>
-              <label class="radio-option">
-                <input 
-                  v-model="formData.readingCommitment" 
-                  type="radio" 
-                  value="epic"
-                >
-                <span>疯狂阅读 (每月7本以上)</span>
-              </label>
+              <BaseInput
+                type="radio"
+                v-model="formData.readingCommitment"
+                name="readingCommitment"
+                value="light"
+                label="轻松阅读 (每月1-2本)"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.readingCommitment"
+                name="readingCommitment"
+                value="medium"
+                label="中等阅读 (每月3-4本)"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.readingCommitment"
+                name="readingCommitment"
+                value="intensive"
+                label="深度阅读 (每月5-6本)"
+              />
+              <BaseInput
+                type="radio"
+                v-model="formData.readingCommitment"
+                name="readingCommitment"
+                value="epic"
+                label="疯狂阅读 (每月7本以上)"
+              />
             </div>
           </div>
         </CollapsibleSection>
@@ -294,24 +281,15 @@
 
         <!-- 提交按钮 -->
         <div class="form-actions">
-          <button
+          <BaseButton
             type="submit"
             :disabled="isLoading"
-            :class="{ 'btn-loading': isLoading }"
-            class="submit-btn"
-            :aria-busy="isLoading"
+            :loading="isLoading"
+            variant="primary"
             aria-label="保存个人资料"
           >
-            <span v-if="isLoading">
-              <i
-                class="spinner"
-                aria-hidden="true"
-                role="presentation"
-              ></i>
-              保存中...
-            </span>
-            <span v-else>保存修改</span>
-          </button>
+            {{ isLoading ? '保存中...' : '保存修改' }}
+          </BaseButton>
         </div>
 
         <!-- 错误提示 -->
@@ -335,24 +313,20 @@
             aria-live="polite"
           >
             <span>个人资料更新成功！</span>
-            <button
+            <BaseButton
               v-if="showUndoButton"
               @click="handleUndo"
-              class="undo-btn"
+              variant="text"
               :disabled="isLoading"
-              :aria-busy="isLoading"
+              :loading="isLoading"
               aria-label="撤销最近的修改"
             >
-              <span v-if="isLoading">
-                <i class="spinner" aria-hidden="true"></i>
-                撤销中...
-              </span>
-              <span v-else>撤销</span>
-            </button>
+              {{ isLoading ? '撤销中...' : '撤销' }}
+            </BaseButton>
           </div>
         </Transition>
       </form>
-    </div>
+    </BaseCard>
   </main>
 </template>
 
@@ -362,6 +336,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
 import { useAutoSave } from '@/composables/useAutoSave'
+import BaseCard from '@/components/base/BaseCard.vue'
+import BaseInput from '@/components/base/BaseInput.vue'
+import BaseButton from '@/components/base/BaseButton.vue'
 
 // 存储所有区块标题元素的引用
 const sectionHeaders = ref([])
@@ -370,7 +347,10 @@ let currentFocusIndex = -1
 export default {
   name: 'ProfileView',
   components: {
-    CollapsibleSection
+    CollapsibleSection,
+    BaseCard,
+    BaseInput,
+    BaseButton
   },
   setup() {
     const authStore = useAuthStore()
@@ -644,267 +624,109 @@ export default {
 .profile-container {
   max-width: 800px;
   margin: 0 auto;
-  padding: 20px;
-  background: #f8f9fa;
+  padding: var(--spacing-4);
   min-height: 100vh;
 }
 
 .profile-header {
   text-align: center;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #e9ecef;
+  margin-bottom: var(--spacing-8);
+  padding-bottom: var(--spacing-6);
+  border-bottom: 2px solid var(--glass-border);
 }
 
 .profile-header h1 {
-  color: #2c3e50;
-  margin-bottom: 8px;
-  font-size: 2rem;
+  margin-bottom: var(--spacing-2);
+  font-size: var(--font-size-3xl);
 }
 
 .subtitle {
-  color: #6c757d;
-  font-size: 1.1rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-lg);
   margin: 0;
 }
 
-.profile-content {
-  background: white;
-  border-radius: 10px;
-  padding: 30px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-6);
 }
 
 .form-group label {
   display: block;
-  font-weight: 600;
-  color: #495057;
-  margin-bottom: 8px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-2);
 }
 
 .required {
-  color: #dc3545;
-}
-
-.form-group input[type="text"],
-.form-group textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ced4da;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: border-color 0.3s ease;
-}
-
-.form-group input[type="text"]:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
-}
-
-.readonly-field {
-  background-color: #f8f9fa;
-  color: #6c757d;
-  cursor: not-allowed;
+  color: var(--color-danger);
 }
 
 .radio-group,
 .checkbox-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.radio-option,
-.checkbox-option {
-  position: relative;
-  cursor: pointer;
-  user-select: none;
-}
-
-.radio-option input,
-.checkbox-option input {
-  position: absolute;
-  opacity: 0;
-  cursor: pointer;
-  height: 0;
-  width: 0;
-}
-
-.radio-option span,
-.checkbox-option span {
-  display: inline-block;
-  padding: 8px 16px;
-  border: 2px solid #e0e0e0;
-  border-radius: 20px;
-  background-color: white;
-  color: #666;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.radio-option:hover span,
-.checkbox-option:hover span {
-  border-color: #007bff;
-  color: #007bff;
-}
-
-.radio-option input:checked + span,
-.checkbox-option input:checked + span {
-  background-color: #007bff;
-  border-color: #007bff;
-  color: white;
-}
-
-.radio-option input:focus + span,
-.checkbox-option input:focus + span {
-  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+  gap: var(--spacing-3);
 }
 
 .favorite-books {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--spacing-3);
 }
 
 .book-input-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: var(--spacing-3);
+  margin-bottom: var(--spacing-2);
 }
 
-.book-input-row input {
+.book-input-row :deep(.base-input) {
   flex: 1;
 }
 
-.remove-btn {
-  background: #dc3545;
-  color: white;
-  border: none;
-  border-radius: 50%;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-}
-
-.remove-btn:hover {
-  background: #c82333;
-}
-
-.add-btn {
-  background: #28a745;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  margin-top: 10px;
-}
-
-.add-btn:hover {
-  background: #218838;
-}
-
 .help-text {
-  font-size: 12px;
-  color: #6c757d;
-  margin-top: 5px;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-top: var(--spacing-1);
   margin-bottom: 0;
 }
 
 .form-actions {
   text-align: center;
-  margin-top: 30px;
-}
-
-.submit-btn {
-  background: #007bff;
-  color: white;
-  border: none;
-  padding: 15px 40px;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.submit-btn:hover:not(:disabled) {
-  background: #0056b3;
-}
-
-.submit-btn:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
+  margin-top: var(--spacing-8);
 }
 
 .error-message {
-  background: #f8d7da;
-  color: #721c24;
-  padding: 12px;
-  border-radius: 6px;
-  margin-top: 20px;
-  border: 1px solid #f5c6cb;
+  background: var(--glass-bg);
+  color: var(--color-danger);
+  padding: var(--spacing-3);
+  border-radius: var(--border-radius-md);
+  margin-top: var(--spacing-4);
+  border: 1px solid var(--color-danger);
 }
 
 .success-message {
-  background: #d4edda;
-  color: #155724;
-  padding: 12px;
-  border-radius: 6px;
-  margin-top: 20px;
-  border: 1px solid #c3e6cb;
+  background: var(--glass-bg);
+  color: var(--color-success);
+  padding: var(--spacing-3);
+  border-radius: var(--border-radius-md);
+  margin-top: var(--spacing-4);
+  border: 1px solid var(--color-success);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.undo-btn {
-  background: #155724;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.3s ease;
-}
-
-.undo-btn:hover {
-  background: #0f3d19;
-}
-
 @media (max-width: 768px) {
   .profile-container {
-    padding: 10px;
-  }
-  
-  .profile-content {
-    padding: 20px;
+    padding: var(--spacing-2);
   }
   
   .radio-group,
   .checkbox-group {
     justify-content: center;
-    gap: 8px;
-  }
-
-  .radio-option span,
-  .checkbox-option span {
-    padding: 6px 12px;
-    font-size: 13px;
+    gap: var(--spacing-2);
   }
 }
 </style>

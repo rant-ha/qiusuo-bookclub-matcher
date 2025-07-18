@@ -3,48 +3,94 @@
   <header>
     <nav class="navbar">
       <div class="nav-brand">
-        <router-link to="/" class="brand-link">KindredMinds</router-link>
+        <BaseButton
+          to="/"
+          variant="text"
+          class="brand-link"
+        >
+          KindredMinds
+        </BaseButton>
       </div>
       
       <div class="nav-menu">
-        <router-link to="/" class="nav-link">首页</router-link>
+        <BaseButton
+          to="/"
+          variant="text"
+          class="nav-link"
+        >
+          首页
+        </BaseButton>
         
         <!-- 已登录用户的导航链接 -->
         <template v-if="isAuthenticated">
-          <router-link to="/profile" class="nav-link">个人资料</router-link>
-          <router-link to="/match" class="nav-link">智能匹配</router-link>
-          <router-link v-if="isAdmin" to="/admin" class="nav-link">管理面板</router-link>
-          <button
+          <BaseButton
+            to="/profile"
+            variant="text"
+            class="nav-link"
+          >
+            个人资料
+          </BaseButton>
+          <BaseButton
+            to="/match"
+            variant="text"
+            class="nav-link"
+          >
+            智能匹配
+          </BaseButton>
+          <BaseButton
+            v-if="isAdmin"
+            to="/admin"
+            variant="text"
+            class="nav-link"
+          >
+            管理面板
+          </BaseButton>
+          <BaseButton
             @click="start"
-            class="nav-button help-btn"
+            variant="text"
+            class="help-btn"
             aria-label="重新查看新手引导"
             title="重新查看新手引导"
           >
             <span class="help-icon" aria-hidden="true">?</span>
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton
             @click="toggleHighContrast"
-            class="nav-button contrast-btn"
+            variant="text"
+            class="contrast-btn"
             :aria-label="isHighContrast ? '关闭高对比度模式' : '开启高对比度模式'"
             :title="isHighContrast ? '关闭高对比度模式' : '开启高对比度模式'"
           >
             <span class="contrast-icon" aria-hidden="true">
               {{ isHighContrast ? '🌙' : '☀️' }}
             </span>
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton
             @click="handleLogout"
-            class="nav-button logout-btn"
+            variant="secondary"
+            class="logout-btn"
             aria-label="退出登录"
           >
             退出登录
-          </button>
+          </BaseButton>
         </template>
         
         <!-- 未登录用户的导航链接 -->
         <template v-else>
-          <router-link to="/register" class="nav-link">注册</router-link>
-          <router-link to="/login" class="nav-link">登录</router-link>
+          <BaseButton
+            to="/register"
+            variant="text"
+            class="nav-link"
+          >
+            注册
+          </BaseButton>
+          <BaseButton
+            to="/login"
+            variant="primary"
+            class="nav-link"
+          >
+            登录
+          </BaseButton>
         </template>
       </div>
     </nav>
@@ -61,6 +107,7 @@ import { useAuthStore } from './stores/auth'
 import { useRouter } from 'vue-router'
 import { useOnboarding } from './composables/useOnboarding'
 import OnboardingGuide from './components/OnboardingGuide.vue'
+import BaseButton from './components/base/BaseButton.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -113,11 +160,10 @@ const handleLogout = async () => {
 <style>
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f8fafc;
+  background: var(--bg-gradient-primary);
 }
 
 #app {
@@ -127,8 +173,8 @@ body {
 }
 
 header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: var(--bg-gradient-primary);
+  box-shadow: var(--shadow-md);
   padding: 0;
 }
 
@@ -138,7 +184,7 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: var(--spacing-4);
 }
 
 .nav-brand {
@@ -146,103 +192,45 @@ header {
 }
 
 .brand-link {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: white;
-  text-decoration: none;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-white);
   letter-spacing: -0.5px;
-}
-
-.brand-link:hover {
-  opacity: 0.9;
 }
 
 .nav-menu {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--spacing-2);
 }
 
 .nav-link {
-  color: rgba(255, 255, 255, 0.9);
-  text-decoration: none;
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  font-weight: 500;
-  transition: all 0.3s ease;
+  font-weight: var(--font-weight-medium);
 }
 
-.nav-link:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  transform: translateY(-1px);
-}
-
-.nav-link.router-link-active {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.nav-button {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 0.5rem 1rem;
-  border-radius: 8px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.nav-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
-}
-
-.logout-btn:hover {
-  background: rgba(231, 76, 60, 0.2);
-  border-color: rgba(231, 76, 60, 0.5);
-}
-
-.help-btn {
-  padding: 0.5rem;
+.help-btn, .contrast-btn {
   width: 32px;
   height: 32px;
+  padding: var(--spacing-2) !important;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.help-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
 }
 
 .help-icon {
-  font-weight: bold;
-  font-size: 1.1rem;
-}
-
-.contrast-btn {
-  padding: 0.5rem;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-lg);
 }
 
 .contrast-icon {
-  font-size: 1.1rem;
+  font-size: var(--font-size-lg);
 }
 
 main {
   flex: 1;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: var(--spacing-8) var(--spacing-4);
   width: 100%;
   box-sizing: border-box;
 }
@@ -251,8 +239,8 @@ main {
 @media (max-width: 768px) {
   .navbar {
     flex-direction: column;
-    gap: 1rem;
-    padding: 1rem;
+    gap: var(--spacing-4);
+    padding: var(--spacing-4);
   }
   
   .nav-menu {
@@ -260,23 +248,23 @@ main {
     justify-content: center;
   }
   
-  .nav-link, .nav-button {
-    font-size: 0.9rem;
+  .nav-link {
+    font-size: var(--font-size-sm);
   }
 }
 
 @media (max-width: 480px) {
   .brand-link {
-    font-size: 1.2rem;
+    font-size: var(--font-size-xl);
   }
   
   .nav-menu {
-    gap: 0.25rem;
+    gap: var(--spacing-1);
   }
   
-  .nav-link, .nav-button {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
+  .nav-link {
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: var(--font-size-sm);
   }
 }
 </style>

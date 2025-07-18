@@ -3,25 +3,24 @@
     <h1>登录 KindredMinds</h1>
     
     <!-- 登录表单 -->
-    <form @submit.prevent="handleSubmit" class="login-form" aria-label="登录表单">
+    <BaseCard>
+      <form @submit.prevent="handleSubmit" class="login-form" aria-label="登录表单">
       <!-- 基本信息区域 -->
       <div class="form-group">
         <label for="name">姓名</label>
-        <input
+        <BaseInput
           id="name"
           v-model="formData.name"
           type="text"
-          class="form-control"
-          :class="{ 'error': errors.name }"
           placeholder="请输入姓名"
           required
           minlength="2"
           maxlength="50"
           aria-required="true"
-          :aria-invalid="!!errors.name"
+          :error="errors.name"
           :aria-describedby="['name-help', errors.name ? 'name-error' : undefined].filter(Boolean).join(' ')"
           @blur="validateField('name')"
-        >
+        />
         <span id="name-help" class="helper-text">请输入2-50个字符的姓名</span>
         <span
           v-if="errors.name"
@@ -33,20 +32,18 @@
 
       <div class="form-group">
         <label for="studentId">学号</label>
-        <input
+        <BaseInput
           id="studentId"
           v-model="formData.studentId"
           type="text"
-          class="form-control"
-          :class="{ 'error': errors.studentId }"
           placeholder="请输入学号"
           required
           pattern="[A-Za-z0-9]+"
           aria-required="true"
-          :aria-invalid="!!errors.studentId"
+          :error="errors.studentId"
           :aria-describedby="['studentId-help', errors.studentId ? 'studentId-error' : undefined].filter(Boolean).join(' ')"
           @blur="validateField('studentId')"
-        >
+        />
         <span id="studentId-help" class="helper-text">学号只能包含字母和数字</span>
         <span
           v-if="errors.studentId"
@@ -62,17 +59,15 @@
           管理员密码
           <span class="optional-text" id="password-description">(选填，仅管理员需要)</span>
         </label>
-        <input
+        <BaseInput
           id="password"
           v-model="formData.password"
           type="password"
-          class="form-control"
-          :class="{ 'error': errors.password }"
           placeholder="如果您是管理员，请输入密码"
           aria-required="false"
-          :aria-invalid="!!errors.password"
+          :error="errors.password"
           :aria-describedby="[errors.password ? 'password-error' : undefined, 'password-description'].filter(Boolean).join(' ')"
-        >
+        />
         <span
           v-if="errors.password"
           id="password-error"
@@ -83,20 +78,14 @@
 
       <!-- 提交按钮 -->
       <div class="form-actions">
-        <button
+        <BaseButton
           type="submit"
-          class="submit-button"
-          :class="{ 'btn-loading': isSubmitting }"
+          :loading="isSubmitting"
           :disabled="isSubmitting"
-          :aria-busy="isSubmitting"
           aria-label="登录按钮"
         >
-          <span v-if="isSubmitting">
-            <i class="spinner" aria-hidden="true"></i>
-            登录中...
-          </span>
-          <span v-else>登录</span>
-        </button>
+          {{ isSubmitting ? '登录中...' : '登录' }}
+        </BaseButton>
       </div>
 
       <!-- 错误提示 -->
@@ -114,9 +103,15 @@
       <!-- 注册链接 -->
       <div class="register-link">
         还没有账号？
-        <router-link to="/register">立即注册</router-link>
+        <BaseButton
+          to="/register"
+          variant="text"
+        >
+          立即注册
+        </BaseButton>
       </div>
-    </form>
+      </form>
+    </BaseCard>
   </div>
 </template>
 
@@ -124,6 +119,9 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import BaseCard from '../components/base/BaseCard.vue'
+import BaseInput from '../components/base/BaseInput.vue'
+import BaseButton from '../components/base/BaseButton.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -222,131 +220,75 @@ async function handleSubmit() {
 <style scoped>
 .login-view {
   max-width: 480px;
-  margin: 2rem auto;
-  padding: 2rem;
+  margin: var(--spacing-8) auto;
+  padding: var(--spacing-6);
 }
 
 .login-form {
-  background: #fff;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
 }
 
 label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
 }
 
 .optional-text {
-  font-size: 0.875rem;
-  color: #666;
-  font-weight: normal;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-normal);
 }
 
-.form-control {
-  width: 100%;
-  padding: 0.75rem;
-  font-size: 1rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  transition: border-color 0.2s;
-}
-
-.form-control:focus {
-  border-color: #4a90e2;
-  outline: none;
-}
-
-.form-control.error {
-  border-color: #dc3545;
-}
-
-.error-message {
-  display: block;
-  color: #dc3545;
-  font-size: 0.875rem;
-  margin-top: 0.25rem;
+.helper-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .form-actions {
-  margin-top: 2rem;
-}
-
-.submit-button {
-  width: 100%;
-  padding: 0.75rem;
-  font-size: 1rem;
-  color: #fff;
-  background: #4a90e2;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.submit-button:hover {
-  background: #357abd;
-}
-
-.submit-button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
+  margin-top: var(--spacing-4);
 }
 
 .alert {
-  margin: 1rem 0;
-  padding: 0.75rem;
-  border-radius: 4px;
+  margin: var(--spacing-4) 0;
+  padding: var(--spacing-3);
+  border-radius: var(--border-radius-md);
   text-align: center;
 }
 
 .alert-error {
-  color: #721c24;
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
+  color: var(--color-danger);
+  background-color: rgba(255, 107, 107, 0.1);
+  border: 1px solid var(--color-danger);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
 }
 
 .error-icon {
   font-size: 1.2em;
-  color: #dc3545;
+  color: var(--color-danger);
 }
 
 .register-link {
-  margin-top: 1rem;
+  margin-top: var(--spacing-4);
   text-align: center;
-  font-size: 0.875rem;
-}
-
-.register-link a {
-  color: #4a90e2;
-  text-decoration: none;
-}
-
-.register-link a:hover {
-  text-decoration: underline;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 /* 移动端适配 */
 @media (max-width: 480px) {
   .login-view {
-    padding: 1rem;
-  }
-
-  .login-form {
-    padding: 1.5rem;
-  }
-
-  .form-control {
-    font-size: 16px; /* 防止iOS缩放 */
+    padding: var(--spacing-4);
   }
 }
 </style>
