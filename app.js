@@ -1253,14 +1253,13 @@ function showLoggedInView() {
        document.getElementById('userProfileSection').style.display = 'block';
        
        try {
-           // 确保用户数据已迁移到最新版本
+           // 第一步：数据迁移 - 确保用户数据已迁移到最新版本
            const migratedUser = migrateUserData(currentUser);
-           // 渲染用户资料
-           renderUserProfile();
            
-           // 重置所有表单字段
+           // 第二步：清空表单 - 在填充数据前清空表单，确保是干净的画布
            resetFormFields();
            
+           // 第三步：填充数据 - 使用迁移后的用户数据填充所有表单字段
            // 填充基本用户信息
            const nameInput = document.getElementById('name');
            const studentIdInput = document.getElementById('studentId');
@@ -1380,6 +1379,9 @@ function showLoggedInView() {
            }
            
            Logger.info('表单预填充完成');
+           
+           // 第四步：渲染资料视图 - 在所有数据填充完成后渲染"我的资料"视图
+           renderUserProfile();
            
        } catch (error) {
            Logger.error('表单预填充过程中发生错误:', error);
