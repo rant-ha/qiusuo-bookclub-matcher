@@ -829,6 +829,7 @@ async function handleLogin(e) {
             sessionStorage.removeItem('adminRole');
             sessionStorage.removeItem('adminPermissions');
             showLoggedInView();
+            addProfileEventListeners();
         } else {
             alert('您的账号正在审核中，请耐心等待。');
         }
