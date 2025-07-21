@@ -1259,7 +1259,9 @@ function showLoggedInView() {
            // 第二步：清空表单 - 在填充数据前清空表单，确保是干净的画布
            resetFormFields();
            
-           // 第三步：填充数据 - 使用迁移后的用户数据填充所有表单字段
+           // 确保DOM操作完成后再进行数据填充
+           setTimeout(() => {
+               // 第三步：填充数据 - 使用迁移后的用户数据填充所有表单字段
            // 填充基本用户信息
            const nameInput = document.getElementById('name');
            const studentIdInput = document.getElementById('studentId');
@@ -1382,6 +1384,7 @@ function showLoggedInView() {
            
            // 第四步：渲染资料视图 - 在所有数据填充完成后渲染"我的资料"视图
            renderUserProfile();
+           }, 100); // 给DOM操作100ms缓冲时间
            
        } catch (error) {
            Logger.error('表单预填充过程中发生错误:', error);
