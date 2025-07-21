@@ -1201,6 +1201,7 @@ function showLoginView() {
    document.getElementById('loginSection').style.display = 'block';
    document.getElementById('memberSection').style.display = 'none';
    document.getElementById('adminSection').style.display = 'none';
+   document.getElementById('userProfileSection').style.display = 'none';
 }
 
 function showLoggedInView() {
