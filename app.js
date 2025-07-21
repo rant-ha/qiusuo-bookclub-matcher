@@ -1,60 +1,675 @@
+// 角色和权限定义
+const ROLES = {
+    SUPER_ADMIN: 'super_admin',
+    REGULAR_ADMIN: 'regular_admin',
+    LEGACY_ADMIN: 'legacy_admin'
+};
+
+const PERMISSIONS = {
+    USER_MANAGEMENT: 'user_management',
+    SYSTEM_MONITORING: 'system_monitoring',
+    API_MANAGEMENT: 'api_management',
+    CACHE_MANAGEMENT: 'cache_management',
+    MEMBER_MANAGEMENT: 'member_management',
+    MATCHING_FUNCTIONS: 'matching_functions',
+    DATA_REFRESH: 'data_refresh'
+};
+
+// 管理员角色配置
+const ADMIN_ROLE_CONFIG = {
+    [ROLES.SUPER_ADMIN]: {
+        icon: '👑',
+        text: '超级管理员',
+        description: '拥有所有系统权限'
+    },
+    [ROLES.REGULAR_ADMIN]: {
+        icon: '⚙️',
+        text: '管理员',
+        description: '拥有管理权限'
+    },
+    [ROLES.LEGACY_ADMIN]: {
+        icon: '⚙️',
+        text: '管理员',
+        description: '拥有管理权限'
+    }
+};
+
+// 更新管理员角色指示器
+function updateAdminRoleIndicator() {
+    const indicator = document.getElementById('adminRoleIndicator');
+    if (!indicator) return;
+
+    // 更新角色主题
+    updateAdminTheme();
+
+    if (currentAdminRole && ADMIN_ROLE_CONFIG[currentAdminRole]) {
+        const config = ADMIN_ROLE_CONFIG[currentAdminRole];
+        indicator.innerHTML = `
+            <div class="admin-role-content">
+                <span class="admin-role-icon">${config.icon}</span>
+                <span class="admin-role-text">${config.text}</span>
+                <span class="admin-role-description">${config.description}</span>
+            </div>
+        `;
+        indicator.style.display = 'inline-flex';
+    } else {
+        indicator.style.display = 'none';
+    }
+}
+
+// 新增：更新管理员主题
+function updateAdminTheme() {
+    const body = document.body;
+    const themes = {
+        [ROLES.SUPER_ADMIN]: 'super-admin-theme',
+        [ROLES.REGULAR_ADMIN]: 'regular-admin-theme',
+        [ROLES.LEGACY_ADMIN]: 'legacy-admin-theme'
+    };
+
+    // 移除所有可能的主题
+    Object.values(themes).forEach(theme => body.classList.remove(theme));
+
+    // 添加当前角色主题
+    if (currentAdminRole && themes[currentAdminRole]) {
+        body.classList.add(themes[currentAdminRole]);
+    }
+}
+
 // GitHub Gist 配置 - 构建时替换
 let GITHUB_TOKEN = 'BUILD_TIME_GITHUB_TOKEN';
 let GIST_ID = 'BUILD_TIME_GIST_ID';
 let ADMIN_PASSWORD = 'BUILD_TIME_ADMIN_PASSWORD';
+let SUPER_ADMIN_PASSWORD = 'BUILD_TIME_SUPER_ADMIN_PASSWORD';
+let REGULAR_ADMIN_PASSWORD = 'BUILD_TIME_REGULAR_ADMIN_PASSWORD';
 let AI_BASE_URL = 'BUILD_TIME_AI_BASE_URL';
 let AI_API_KEY = 'BUILD_TIME_AI_API_KEY';
 let AI_MODEL_NAME = 'BUILD_TIME_AI_MODEL_NAME';
 const GIST_FILENAME = 'bookclub_members.json';
 
+
+const ROLE_PERMISSIONS = {
+    [ROLES.SUPER_ADMIN]: [
+        PERMISSIONS.USER_MANAGEMENT,
+        PERMISSIONS.SYSTEM_MONITORING,
+        PERMISSIONS.API_MANAGEMENT,
+        PERMISSIONS.CACHE_MANAGEMENT,
+        PERMISSIONS.MEMBER_MANAGEMENT,
+        PERMISSIONS.MATCHING_FUNCTIONS,
+        PERMISSIONS.DATA_REFRESH
+    ],
+    [ROLES.REGULAR_ADMIN]: [
+        PERMISSIONS.USER_MANAGEMENT,
+        PERMISSIONS.MEMBER_MANAGEMENT,
+        PERMISSIONS.MATCHING_FUNCTIONS,
+        PERMISSIONS.DATA_REFRESH
+    ],
+    [ROLES.LEGACY_ADMIN]: [ // 兼容旧版管理员
+        PERMISSIONS.USER_MANAGEMENT,
+        PERMISSIONS.SYSTEM_MONITORING,
+        PERMISSIONS.API_MANAGEMENT,
+        PERMISSIONS.MEMBER_MANAGEMENT,
+        PERMISSIONS.MATCHING_FUNCTIONS,
+        PERMISSIONS.DATA_REFRESH
+    ]
+};
+
+
 // 存储所有成员数据
 let members = [];
 let currentUser = null; // 当前登录用户
 let isAdmin = false;
+let currentAdminRole = null; // 新增：当前管理员角色
+let currentAdminPermissions = []; // 新增：当前管理员权限
+let aiAnalysisEnabled = true; // AI分析开关状态
 
-// 页面加载时初始化
-window.onload = async function() {
-   // 优先使用构建时注入的配置
-   const isBuiltWithEnv = GITHUB_TOKEN !== 'BUILD_TIME_GITHUB_TOKEN' && ADMIN_PASSWORD !== 'BUILD_TIME_ADMIN_PASSWORD' && GIST_ID !== 'BUILD_TIME_GIST_ID';
-   if (!isBuiltWithEnv) {
-       // 降级到手动配置
-       GITHUB_TOKEN = localStorage.getItem('github_token') || '';
-       GIST_ID = localStorage.getItem('gist_id') || '';
-       ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
-   }
-
-   // 如果是注册页面，则不需要执行登录逻辑
-   if (window.location.pathname.endsWith('register.html')) {
-       return;
-   }
-   
-   // 自动加载Gist数据
-   if (GIST_ID) {
-       await loadMembersFromGist();
-   }
-
-   // 检查本地存储的登录状态
-   const loggedInUser = sessionStorage.getItem('currentUser');
-   if (loggedInUser) {
-       currentUser = JSON.parse(loggedInUser);
-       isAdmin = sessionStorage.getItem('isAdmin') === 'true';
-       showLoggedInView();
-   } else {
-       showLoginView();
-   }
-
-   // 绑定登录表单事件
-   const loginForm = document.getElementById('loginForm');
-   if(loginForm) {
-       loginForm.addEventListener('submit', handleLogin);
-   }
-
-   // 绑定成员信息更新表单事件
-   const memberForm = document.getElementById('memberForm');
-   if(memberForm) {
-       memberForm.addEventListener('submit', handleUpdateMemberInfo);
-   }
+// 日志级别配置
+const LOG_LEVELS = {
+    ERROR: 0,
+    WARN: 1,
+    INFO: 2,
+    DEBUG: 3
 };
+
+let currentLogLevel = LOG_LEVELS.INFO; // 默认日志级别
+
+// 智能日志记录系统
+const Logger = {
+    error: (message, ...args) => {
+        if (currentLogLevel >= LOG_LEVELS.ERROR) {
+            console.error('❌', message, ...args);
+        }
+    },
+    warn: (message, ...args) => {
+        if (currentLogLevel >= LOG_LEVELS.WARN) {
+            console.warn('⚠️', message, ...args);
+        }
+    },
+    info: (message, ...args) => {
+        if (currentLogLevel >= LOG_LEVELS.INFO) {
+            console.log('ℹ️', message, ...args);
+        }
+    },
+    debug: (message, ...args) => {
+        if (currentLogLevel >= LOG_LEVELS.DEBUG) {
+            console.log('🔍', message, ...args);
+        }
+    },
+    monitoring: (message, ...args) => {
+        // 监控日志只在调试模式下显示
+        if (currentLogLevel >= LOG_LEVELS.DEBUG) {
+            console.log('📊', message, ...args);
+        }
+    }
+};
+
+// 验证规则配置
+const VALIDATION_RULES = {
+    gender: {
+        required: false,
+        enum: ['male', 'female', 'other', 'prefer_not_to_say']
+    },
+    matchGenderPreference: {
+        required: false,
+        enum: ['male', 'female', 'no_preference']
+    },
+    matchingTypePreference: {
+        required: false,
+        enum: ['similar', 'complementary', 'no_preference']
+    },
+    bookCategories: {
+        required: true,
+        minItems: 1,
+        maxItems: 7,
+        allowedValues: [
+            'literature_fiction', 'mystery_detective', 'sci_fi_fantasy',
+            'history_biography', 'social_science_philosophy', 
+            'psychology_self_help', 'art_design_lifestyle'
+        ]
+    },
+    detailedBookPreferences: {
+        required: false,
+        maxLength: 500
+    },
+    favoriteBooks: {
+        required: true,
+        minItems: 2,
+        maxItems: 10,
+        itemMaxLength: 100
+    },
+    readingCommitment: {
+        required: true,
+        enum: ['light', 'medium', 'intensive', 'epic']
+    }
+};
+
+// 数据迁移函数：将老用户数据升级到新版本
+function migrateUserData(user) {
+    if (!user.questionnaire || user.questionnaire.version !== '2.0') {
+        return {
+            ...user,
+            // 确保所有现有字段都被保留
+            studentId: user.studentId || 'N/A',
+            status: user.status || 'approved',
+            
+            questionnaire: {
+                version: '2.0',
+                completedAt: user.questionnaire?.completedAt || '',
+                lastUpdated: new Date().toISOString(),
+                
+                // 将旧用户的数据迁移到questionnaire对象内
+                hobbies: user.hobbies || [],
+                books: user.books || [],
+                
+                // 新增字段，使用默认值
+                gender: user.gender || '',
+                matchGenderPreference: user.matchGenderPreference || '',
+                matchingTypePreference: user.matchingTypePreference || '',
+                bookCategories: user.bookCategories || [],
+                detailedBookPreferences: user.detailedBookPreferences || '',
+                favoriteBooks: user.favoriteBooks || (user.books ? [...user.books] : []), // 将旧书籍数据迁移到最爱书籍
+                readingCommitment: user.readingCommitment || '',
+                readingHabits: user.readingHabits || {
+                    weeklyHours: '',
+                    preferredTimes: [],
+                    readingMethods: [],
+                    preferredLocations: []
+                }
+            }
+        };
+    }
+    return user;
+}
+
+// 增强表单验证函数
+function validateEnhancedForm(formData) {
+    const errors = [];
+    
+    // 性别验证
+    if (formData.gender && !VALIDATION_RULES.gender.enum.includes(formData.gender)) {
+        errors.push('请选择有效的性别选项');
+    }
+    
+    // 书籍类别验证
+    if (!formData.bookCategories || formData.bookCategories.length === 0) {
+        errors.push('请至少选择一个书籍类别');
+    }
+    if (formData.bookCategories && formData.bookCategories.length > VALIDATION_RULES.bookCategories.maxItems) {
+        errors.push('书籍类别选择不能超过7个');
+    }
+    
+    // 详细偏好验证
+    if (formData.detailedBookPreferences && formData.detailedBookPreferences.length > VALIDATION_RULES.detailedBookPreferences.maxLength) {
+        errors.push('详细偏好描述不能超过500字符');
+    }
+    
+    // 最爱书籍验证
+    if (!formData.favoriteBooks || formData.favoriteBooks.length < VALIDATION_RULES.favoriteBooks.minItems) {
+        errors.push('请至少输入2本最爱的书籍');
+    }
+    if (formData.favoriteBooks && formData.favoriteBooks.length > VALIDATION_RULES.favoriteBooks.maxItems) {
+        errors.push('最爱书籍不能超过10本');
+    }
+    
+    // 验证每本书的长度
+    if (formData.favoriteBooks) {
+        for (const book of formData.favoriteBooks) {
+            if (book.length > VALIDATION_RULES.favoriteBooks.itemMaxLength) {
+                errors.push(`书名"${book}"超过100字符限制`);
+                break;
+            }
+        }
+    }
+    
+    // 阅读承诺验证
+    if (!formData.readingCommitment) {
+        errors.push('请选择您的阅读承诺期望');
+    }
+    if (formData.readingCommitment && !VALIDATION_RULES.readingCommitment.enum.includes(formData.readingCommitment)) {
+        errors.push('请选择有效的阅读承诺选项');
+    }
+    
+    return errors;
+}
+
+// 增强注册处理函数
+async function handleEnhancedRegistration(enhancedFormData) {
+    await loadMembersFromGist(); // 确保数据最新
+
+    const userExists = members.some(m => m.name === enhancedFormData.name || m.studentId === enhancedFormData.studentId);
+    if (userExists) {
+        alert('该姓名或学号已被注册！');
+        return;
+    }
+
+    const newUser = {
+        id: Date.now().toString(),
+        name: enhancedFormData.name,
+        studentId: enhancedFormData.studentId,
+        hobbies: [], // Keep for backward compatibility
+        books: [],  // Keep for backward compatibility
+        status: 'pending', // 'pending', 'approved'
+        joinDate: new Date().toLocaleDateString('zh-CN'),
+        
+        // New enhanced fields
+        gender: enhancedFormData.gender || '',
+        bookCategories: enhancedFormData.bookCategories || [],
+        detailedBookPreferences: enhancedFormData.detailedBookPreferences || '',
+        favoriteBooks: enhancedFormData.favoriteBooks || [],
+        readingCommitment: enhancedFormData.readingCommitment || '',
+        readingHabits: enhancedFormData.readingHabits || {
+            weeklyHours: '',
+            preferredTimes: [],
+            readingMethods: [],
+            preferredLocations: []
+        },
+        questionnaire: {
+            version: '2.0',
+            completedAt: new Date().toISOString(),
+            lastUpdated: new Date().toISOString()
+        }
+    };
+
+    members.push(newUser);
+    await saveMembersToGist();
+    alert('注册申请已提交，请等待管理员审核！');
+    window.location.href = 'index.html';
+}
+
+// 添加用户资料视图的事件监听器
+function addProfileEventListeners() {
+    const editProfileBtn = document.getElementById('editProfileBtn');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+    const userProfileSection = document.getElementById('userProfileSection');
+    const memberSection = document.getElementById('memberSection');
+
+    if (editProfileBtn) {
+        editProfileBtn.addEventListener('click', () => {
+            userProfileSection.style.display = 'none';
+            memberSection.style.display = 'block';
+        });
+    }
+
+    if (cancelEditBtn) {
+        cancelEditBtn.addEventListener('click', () => {
+            memberSection.style.display = 'none';
+            userProfileSection.style.display = 'block';
+        });
+    }
+}
+
+// 渲染用户个人资料
+function renderUserProfile() {
+    const profileContent = document.getElementById('userProfileContent');
+    if (!currentUser || !profileContent) return;
+
+    // 确保用户数据已迁移到最新版本
+    const user = migrateUserData(currentUser);
+    const questionnaire = user.questionnaire || {};
+
+    // 格式化性别显示
+    const formatGender = () => {
+        const genderMap = {
+            'male': '男',
+            'female': '女',
+            'other': '其他',
+            'prefer_not_to_say': '不愿透露'
+        };
+        const gender = questionnaire.gender || user.gender || '';
+        return gender ? genderMap[gender] || gender : '未填写';
+    };
+
+    // 格式化匹配性别偏好
+    const formatMatchGenderPreference = () => {
+        const preferenceMap = {
+            'male': '男生',
+            'female': '女生',
+            'no_preference': '不介意'
+        };
+        const preference = questionnaire.matchGenderPreference || user.matchGenderPreference || '';
+        return preference ? preferenceMap[preference] || preference : '未设置';
+    };
+
+    // 格式化匹配类型偏好
+    const formatMatchingTypePreference = () => {
+        const preferenceMap = {
+            'similar': '🎯 相似型搭档',
+            'complementary': '🌈 互补型搭档',
+            'no_preference': '✨ 都可以'
+        };
+        const preference = questionnaire.matchingTypePreference || user.matchingTypePreference || '';
+        return preference ? preferenceMap[preference] || preference : '未设置';
+    };
+
+    // 格式化书籍类别
+    const formatBookCategories = () => {
+        const categories = questionnaire.bookCategories || user.bookCategories || [];
+        if (categories.length > 0) {
+            const categoryMap = {
+                'literature_fiction': '文学/当代小说',
+                'mystery_detective': '悬疑侦探/推理',
+                'sci_fi_fantasy': '科幻奇幻',
+                'history_biography': '历史传记/记实',
+                'social_science_philosophy': '社科思想/哲学',
+                'psychology_self_help': '心理成长/自助',
+                'art_design_lifestyle': '艺术设计/生活方式'
+            };
+            return categories.map(cat => categoryMap[cat] || cat).join('、');
+        }
+        return '未填写';
+    };
+
+    // 格式化阅读预期
+    const formatReadingCommitment = () => {
+        const commitmentMap = {
+            'light': '短篇轻量 (5w-10w字)',
+            'medium': '中篇适中 (10w-25w字)',
+            'intensive': '长篇投入 (25w-50w字)',
+            'epic': '史诗巨著 (50w+字)'
+        };
+        const commitment = questionnaire.readingCommitment || user.readingCommitment || '';
+        return commitment ? commitmentMap[commitment] || commitment : '未填写';
+    };
+
+    // 生成HTML
+    profileContent.innerHTML = `
+        <div class="profile-info" style="background: #f8f9fa; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+            <h3 style="margin-bottom: 15px; color: #2c3e50;">📚 ${user.name} 的读书档案</h3>
+            
+            <div style="display: grid; gap: 12px;">
+                <div><strong>学号：</strong>${user.studentId}</div>
+                <div><strong>性别：</strong>${formatGender()}</div>
+                <div><strong>匹配性别偏好：</strong>${formatMatchGenderPreference()}</div>
+                <div><strong>匹配类型偏好：</strong>${formatMatchingTypePreference()}</div>
+                <div><strong>书籍类别：</strong>${formatBookCategories()}</div>
+                <div><strong>兴趣爱好：</strong>${(questionnaire.hobbies || user.hobbies || []).join('、') || '未填写'}</div>
+                <div><strong>读过的书：</strong>${(questionnaire.books || user.books || []).join('、') || '未填写'}</div>
+                <div><strong>最爱书籍：</strong>${(questionnaire.favoriteBooks || user.favoriteBooks || []).join('、') || '未填写'}</div>
+                <div><strong>阅读预期：</strong>${formatReadingCommitment()}</div>
+                ${questionnaire.detailedBookPreferences ?
+                    `<div><strong>详细偏好：</strong>${questionnaire.detailedBookPreferences}</div>` :
+                    ''}
+            </div>
+        </div>
+    `;
+}
+
+window.onload = async function() {
+    // 优先使用构建时注入的配置
+    const isBuiltWithEnv = GITHUB_TOKEN !== 'BUILD_TIME_GITHUB_TOKEN' && ADMIN_PASSWORD !== 'BUILD_TIME_ADMIN_PASSWORD' && GIST_ID !== 'BUILD_TIME_GIST_ID';
+    if (!isBuiltWithEnv) {
+        // 降级到手动配置
+        GITHUB_TOKEN = localStorage.getItem('github_token') || '';
+        GIST_ID = localStorage.getItem('gist_id') || '';
+        ADMIN_PASSWORD = localStorage.getItem('admin_password') || '';
+    }
+
+    // 初始化AI分析开关状态
+    const savedAiState = localStorage.getItem('ai_analysis_enabled');
+    if (savedAiState !== null) {
+        aiAnalysisEnabled = savedAiState === 'true';
+    }
+    
+    // 初始化AI开关UI状态（如果存在）
+    updateAiToggleUI();
+
+    // 如果是注册页面，则不需要执行登录逻辑
+    if (window.location.pathname.endsWith('register.html')) {
+        return;
+    }
+    
+    // 自动加载Gist数据
+    if (GIST_ID) {
+        await loadMembersFromGist();
+    }
+
+    // 检查本地存储的登录状态
+    const loggedInUser = sessionStorage.getItem('currentUser');
+    if (loggedInUser) {
+        currentUser = JSON.parse(loggedInUser);
+        isAdmin = sessionStorage.getItem('isAdmin') === 'true';
+        currentAdminRole = sessionStorage.getItem('adminRole');
+        currentAdminPermissions = JSON.parse(sessionStorage.getItem('adminPermissions') || '[]');
+        
+        if (isAdmin) {
+            if (!validateAdminSession()) {
+                alert('会话已过期，请重新登录。');
+                logout();
+                return;
+            }
+        }
+        
+        showLoggedInView();
+        // 添加用户资料视图的事件监听器
+        addProfileEventListeners();
+    } else {
+        showLoginView();
+    }
+
+    // 绑定登录表单事件
+    const loginForm = document.getElementById('loginForm');
+    if(loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
+    }
+
+    // 绑定成员信息更新表单事件
+    const memberForm = document.getElementById('memberForm');
+    if(memberForm) {
+        memberForm.addEventListener('submit', handleUpdateMemberInfo);
+    }
+};
+
+// AI分析开关管理函数
+function toggleAiAnalysis() {
+    if (!hasPermission('api_management')) {
+        alert('权限不足');
+        return;
+    }
+    aiAnalysisEnabled = !aiAnalysisEnabled;
+    localStorage.setItem('ai_analysis_enabled', aiAnalysisEnabled.toString());
+    updateAiToggleUI();
+    Logger.info(`AI分析已${aiAnalysisEnabled ? '启用' : '禁用'}`);
+}
+
+// 日志级别控制管理函数
+function toggleLogLevel() {
+    const levels = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
+    const currentIndex = levels.findIndex(level => LOG_LEVELS[level] === currentLogLevel);
+    const nextIndex = (currentIndex + 1) % levels.length;
+    currentLogLevel = LOG_LEVELS[levels[nextIndex]];
+    
+    localStorage.setItem('log_level', levels[nextIndex]);
+    updateLogLevelUI();
+    Logger.info(`日志级别已切换到: ${levels[nextIndex]}`);
+}
+
+// 更新日志级别UI状态
+function updateLogLevelUI() {
+    const logLevelBtn = document.getElementById('logLevelBtn');
+    if (logLevelBtn) {
+        const levelNames = { 0: 'ERROR', 1: 'WARN', 2: 'INFO', 3: 'DEBUG' };
+        const currentLevelName = levelNames[currentLogLevel];
+        logLevelBtn.textContent = `📝 日志级别：${currentLevelName}`;
+        
+        const levelColors = {
+            'ERROR': 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)',
+            'WARN': 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)',
+            'INFO': 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)',
+            'DEBUG': 'linear-gradient(135deg, #6f42c1 0%, #59359a 100%)'
+        };
+        logLevelBtn.style.background = levelColors[currentLevelName];
+    }
+}
+
+// 更新AI开关UI状态
+function updateAiToggleUI() {
+    const aiToggleBtn = document.getElementById('aiToggleBtn');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    
+    if (aiToggleBtn) {
+        aiToggleBtn.textContent = aiAnalysisEnabled ? '🤖 AI分析：开启' : '📊 AI分析：关闭';
+        aiToggleBtn.style.background = aiAnalysisEnabled ? 
+            'linear-gradient(135deg, #00b894 0%, #00a085 100%)' : 
+            'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)';
+    }
+    
+    if (loadingIndicator) {
+        const baseText = aiAnalysisEnabled ? '🧠 正在进行AI智能分析，请稍候...' : '📊 正在进行传统匹配分析，请稍候...';
+        loadingIndicator.textContent = baseText;
+    }
+}
+
+// 进度条管理函数
+function showProgress() {
+    const progressContainer = document.getElementById('progressContainer');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        progressContainer.classList.add('progress-pulse');
+    }
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'block';
+    }
+    
+    // 重置进度条
+    updateProgress(0, 0, 0, '准备开始匹配分析...');
+}
+
+function hideProgress() {
+    const progressContainer = document.getElementById('progressContainer');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    
+    if (progressContainer) {
+        progressContainer.style.display = 'none';
+        progressContainer.classList.remove('progress-pulse');
+    }
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+    }
+}
+
+function updateProgress(currentBatch, totalBatches, completedPairs, statusText, startTime = null) {
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const progressDetails = document.getElementById('progressDetails');
+    const estimatedTime = document.getElementById('estimatedTime');
+    
+    if (!progressBar || !progressText || !progressPercentage || !progressDetails || !estimatedTime) {
+        return; // 如果元素不存在，直接返回
+    }
+    
+    // 计算进度百分比
+    const percentage = totalBatches > 0 ? Math.round((currentBatch / totalBatches) * 100) : 0;
+    
+    // 更新进度条
+    progressBar.style.width = `${percentage}%`;
+    
+    // 更新文本信息
+    progressText.textContent = statusText;
+    progressPercentage.textContent = `${percentage}%`;
+    progressDetails.textContent = `第 ${currentBatch}/${totalBatches} 批 (已完成 ${completedPairs} 个配对)`;
+    
+    // 计算预估时间
+    if (startTime && currentBatch > 0) {
+        const elapsed = (Date.now() - startTime) / 1000; // 已耗时（秒）
+        const avgTimePerBatch = elapsed / currentBatch; // 每批平均时间
+        const remainingBatches = totalBatches - currentBatch;
+        const estimatedRemaining = Math.round(remainingBatches * avgTimePerBatch);
+        
+        if (estimatedRemaining > 0) {
+            if (estimatedRemaining < 60) {
+                estimatedTime.textContent = `预估剩余: ${estimatedRemaining}秒`;
+            } else {
+                const minutes = Math.floor(estimatedRemaining / 60);
+                const seconds = estimatedRemaining % 60;
+                estimatedTime.textContent = `预估剩余: ${minutes}分${seconds}秒`;
+            }
+        } else {
+            estimatedTime.textContent = '即将完成...';
+        }
+    } else {
+        estimatedTime.textContent = '计算中...';
+    }
+    
+    // 当完成时，添加完成效果
+    if (percentage >= 100) {
+        progressText.textContent = '🎉 匹配分析完成！';
+        progressDetails.textContent = `共完成 ${completedPairs} 个配对分析`;
+        estimatedTime.textContent = '已完成';
+        
+        // 移除脉冲效果
+        const progressContainer = document.getElementById('progressContainer');
+        if (progressContainer) {
+            progressContainer.classList.remove('progress-pulse');
+        }
+        
+        // 3秒后自动隐藏进度条
+        setTimeout(() => {
+            hideProgress();
+        }, 3000);
+    }
+}
 
 // 处理注册
 async function handleRegistration(name, studentId) {
@@ -70,10 +685,28 @@ async function handleRegistration(name, studentId) {
        id: Date.now().toString(),
        name: name,
        studentId: studentId,
-       hobbies: [],
-       books: [],
+       hobbies: [], // Keep for backward compatibility
+       books: [],  // Keep for backward compatibility
        status: 'pending', // 'pending', 'approved'
-       joinDate: new Date().toLocaleDateString('zh-CN')
+       joinDate: new Date().toLocaleDateString('zh-CN'),
+       
+       // New enhanced fields
+       gender: '', // 'male', 'female', 'other', 'prefer_not_to_say'
+       bookCategories: [], // Array of selected categories
+       detailedBookPreferences: '', // Free text description
+       favoriteBooks: [], // Array of favorite books
+       readingCommitment: '', // 'light', 'medium', 'intensive', 'epic'
+       readingHabits: {
+           weeklyHours: '',
+           preferredTimes: [],
+           readingMethods: [],
+           preferredLocations: []
+       },
+       questionnaire: {
+           version: '2.0',
+           completedAt: '',
+           lastUpdated: new Date().toISOString()
+       }
    };
 
    members.push(newUser);
@@ -82,50 +715,105 @@ async function handleRegistration(name, studentId) {
    window.location.href = 'index.html';
 }
 
+// 权限检查函数
+function hasPermission(requiredPermission) {
+    if (!isAdmin || !currentAdminRole) return false;
+    return currentAdminPermissions.includes(requiredPermission);
+}
+
 // 处理登录
 async function handleLogin(e) {
-   e.preventDefault();
-   const name = document.getElementById('loginName').value.trim();
-   const studentId = document.getElementById('loginStudentId').value.trim();
-   const password = document.getElementById('loginPassword').value.trim();
+    e.preventDefault();
+    const name = document.getElementById('loginName').value.trim();
+    const studentId = document.getElementById('loginStudentId').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
 
-   // 管理员登录
-   if (password) {
-       if (password === ADMIN_PASSWORD) {
-           isAdmin = true;
-           currentUser = { name: 'Admin' };
-           sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-           sessionStorage.setItem('isAdmin', 'true');
-           showLoggedInView();
-           alert('管理员登录成功！');
-       } else {
-           alert('管理员密码错误！');
-       }
-       return;
-   }
+    // 优先处理超级管理员登录，无需姓名和学号
+    if (password && SUPER_ADMIN_PASSWORD && password === SUPER_ADMIN_PASSWORD) {
+        const authResult = {
+            role: ROLES.SUPER_ADMIN,
+            permissions: ROLE_PERMISSIONS[ROLES.SUPER_ADMIN]
+        };
+        isAdmin = true;
+        currentUser = { name: 'Super Admin', role: authResult.role };
+        currentAdminRole = authResult.role;
+        currentAdminPermissions = authResult.permissions;
 
-   // 普通用户登录
-   if (!name || !studentId) {
-       alert('请输入姓名和学号');
-       return;
-   }
+        // 存储会话信息
+        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        sessionStorage.setItem('isAdmin', 'true');
+        sessionStorage.setItem('adminRole', currentAdminRole);
+        sessionStorage.setItem('adminPermissions', JSON.stringify(currentAdminPermissions));
+        sessionStorage.setItem('adminLoginTime', Date.now());
 
-   await loadMembersFromGist();
-   const foundUser = members.find(m => m.name === name && m.studentId === studentId);
+        showLoggedInView();
+        alert(`管理员 (${authResult.role}) 登录成功！`);
+        return;
+    }
 
-   if (foundUser) {
-       if (foundUser.status === 'approved') {
-           currentUser = foundUser;
-           isAdmin = false;
-           sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-           sessionStorage.setItem('isAdmin', 'false');
-           showLoggedInView();
-       } else {
-           alert('您的账号正在审核中，请耐心等待。');
-       }
-   } else {
-       alert('姓名或学号不正确，请检查或先注册。');
-   }
+    // 对于其他登录（普通用户、普通管理员），姓名和学号是必需的
+    if (!name || !studentId) {
+        alert('请输入姓名和学号进行登录。');
+        return;
+    }
+
+    // 普通管理员或旧版管理员登录逻辑
+    if (password) {
+        let authResult = null;
+        if (REGULAR_ADMIN_PASSWORD && password === REGULAR_ADMIN_PASSWORD) {
+            authResult = {
+                role: ROLES.REGULAR_ADMIN,
+                permissions: ROLE_PERMISSIONS[ROLES.REGULAR_ADMIN]
+            };
+        } else if (ADMIN_PASSWORD && password === ADMIN_PASSWORD) {
+            authResult = {
+                role: ROLES.LEGACY_ADMIN,
+                permissions: ROLE_PERMISSIONS[ROLES.LEGACY_ADMIN]
+            };
+        }
+
+        if (authResult) {
+            isAdmin = true;
+            currentUser = { name: 'Admin', role: authResult.role };
+            currentAdminRole = authResult.role;
+            currentAdminPermissions = authResult.permissions;
+
+            // 存储会话信息
+            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            sessionStorage.setItem('isAdmin', 'true');
+            sessionStorage.setItem('adminRole', currentAdminRole);
+            sessionStorage.setItem('adminPermissions', JSON.stringify(currentAdminPermissions));
+            sessionStorage.setItem('adminLoginTime', Date.now());
+
+            showLoggedInView();
+            alert(`管理员 (${authResult.role}) 登录成功！`);
+        } else {
+            alert('管理员密码错误！');
+        }
+        return;
+    }
+
+    // 普通用户登录
+    await loadMembersFromGist();
+    const foundUser = members.find(m => m.name === name && m.studentId === studentId);
+
+    if (foundUser) {
+        if (foundUser.status === 'approved') {
+            currentUser = foundUser;
+            isAdmin = false;
+            currentAdminRole = null;
+            currentAdminPermissions = [];
+            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            sessionStorage.setItem('isAdmin', 'false');
+            sessionStorage.removeItem('adminRole');
+            sessionStorage.removeItem('adminPermissions');
+            showLoggedInView();
+        } else {
+            alert('您的账号正在审核中，请耐心等待。');
+        }
+    } else {
+        alert('姓名或学号不正确，请检查或先注册。');
+    }
 }
 
 // 退出登录
@@ -134,7 +822,18 @@ function logout() {
    isAdmin = false;
    sessionStorage.removeItem('currentUser');
    sessionStorage.removeItem('isAdmin');
+   sessionStorage.removeItem('adminRole');
+   sessionStorage.removeItem('adminPermissions');
+   
+   // 退出时移除主题
+   updateAdminTheme();
+
    showLoginView();
+}
+
+// 管理员退出登录
+function adminLogout() {
+   logout(); // 调用通用退出登录函数
 }
 
 // 从 Gist 加载成员数据
@@ -156,15 +855,15 @@ async function loadMembersFromGist() {
            let needsSave = false;
            members = JSON.parse(content);
            
-           // 数据迁移：为没有status的老数据自动添加 'approved' 状态
+           // 数据迁移：为老数据添加新字段并保持向下兼容
            members = members.map(member => {
-               if (typeof member.status === 'undefined') {
+               const needsMigration = typeof member.status === 'undefined' || 
+                                    !member.questionnaire || 
+                                    member.questionnaire.version !== '2.0';
+               
+               if (needsMigration) {
                    needsSave = true;
-                   return {
-                       ...member,
-                       studentId: member.studentId || 'N/A', // 如果没有学号，则添加占位符
-                       status: 'approved'
-                   };
+                   return migrateUserData(member);
                }
                return member;
            });
@@ -220,13 +919,67 @@ async function handleUpdateMemberInfo(e) {
    e.preventDefault();
    if (!currentUser) return;
 
+   // Collect all form data including new enhanced fields
    const hobbiesText = document.getElementById('hobbies').value.trim();
    const booksText = document.getElementById('books').value.trim();
+   
+   // New enhanced fields (if they exist in the form)
+   const gender = document.querySelector('input[name="gender"]:checked')?.value || currentUser.gender || '';
+   const matchGenderPreference = document.querySelector('input[name="matchGenderPreference"]:checked')?.value || currentUser.matchGenderPreference || '';
+   const matchingTypePreference = document.querySelector('input[name="matchingTypePreference"]:checked')?.value || currentUser.matchingTypePreference || '';
+   const bookCategories = Array.from(document.querySelectorAll('input[name="bookCategories"]:checked') || [])
+       .map(cb => cb.value);
+   const detailedPreferences = document.getElementById('detailedPreferences')?.value.trim() || currentUser.detailedBookPreferences || '';
+   const favoriteBooks = Array.from(document.querySelectorAll('#favoriteBooks input') || [])
+       .map(input => input.value.trim())
+       .filter(book => book);
+   const readingCommitment = document.querySelector('input[name="readingCommitment"]:checked')?.value || currentUser.readingCommitment || '';
+
+   // Basic validation for enhanced fields (if they exist)
+   const enhancedFormData = {
+       gender: gender,
+       matchGenderPreference: matchGenderPreference,
+       matchingTypePreference: matchingTypePreference,
+       bookCategories: bookCategories.length > 0 ? bookCategories : currentUser.bookCategories || [],
+       detailedBookPreferences: detailedPreferences,
+       favoriteBooks: favoriteBooks.length > 0 ? favoriteBooks : currentUser.favoriteBooks || [],
+       readingCommitment: readingCommitment
+   };
+
+   // Only validate enhanced fields if they are being updated (form elements exist)
+   const hasEnhancedFields = document.querySelector('input[name="bookCategories"]') !== null;
+   if (hasEnhancedFields) {
+       const errors = validateEnhancedForm(enhancedFormData);
+       if (errors.length > 0) {
+           alert('请修正以下错误：\n' + errors.join('\n'));
+           return;
+       }
+   }
 
    const userIndex = members.findIndex(m => m.id === currentUser.id);
    if (userIndex > -1) {
+       // Update traditional fields
        members[userIndex].hobbies = hobbiesText ? hobbiesText.split(/[，,]/).map(item => item.trim()).filter(item => item) : [];
        members[userIndex].books = booksText ? booksText.split(/[，,]/).map(item => item.trim()).filter(item => item) : [];
+       
+       // Update enhanced fields if form has them, otherwise preserve existing values
+       if (hasEnhancedFields) {
+           members[userIndex].gender = enhancedFormData.gender;
+           members[userIndex].matchGenderPreference = enhancedFormData.matchGenderPreference;
+           members[userIndex].matchingTypePreference = enhancedFormData.matchingTypePreference;
+           members[userIndex].bookCategories = enhancedFormData.bookCategories;
+           members[userIndex].detailedBookPreferences = enhancedFormData.detailedBookPreferences;
+           members[userIndex].favoriteBooks = enhancedFormData.favoriteBooks;
+           members[userIndex].readingCommitment = enhancedFormData.readingCommitment;
+           
+           // Update questionnaire metadata
+           if (!members[userIndex].questionnaire) {
+               members[userIndex].questionnaire = { version: '2.0' };
+           }
+           members[userIndex].questionnaire.completedAt = new Date().toISOString();
+           members[userIndex].questionnaire.lastUpdated = new Date().toISOString();
+           members[userIndex].questionnaire.version = '2.0';
+       }
        
        await saveMembersToGist();
        // 更新本地 currentUser
@@ -234,7 +987,6 @@ async function handleUpdateMemberInfo(e) {
        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
        
        alert('信息更新成功！');
-       toggleProfileEdit(false); // 保存成功后切换回查看模式
    }
 }
 
@@ -287,18 +1039,126 @@ function renderMemberList() {
    }
 
    memberCountSpan.textContent = `(共 ${approvedMembers.length} 人)`;
-   memberListDiv.innerHTML = approvedMembers.map(member => `
-       <div class="member-item">
-           <div class="member-info">
-               <h3>${member.name} (学号: ${member.studentId})</h3>
-               <div class="member-details">
-                   <div>兴趣：${member.hobbies.join('、') || '未填写'}</div>
-                   <div>读过：${member.books.join('、') || '未填写'}</div>
+   memberListDiv.innerHTML = approvedMembers.map(member => {
+       // 确保用户数据已迁移到最新版本
+       const migratedMember = migrateUserData(member);
+       const questionnaire = migratedMember.questionnaire;
+       
+       // 显示信息的辅助函数
+       const formatHobbies = () => {
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const hobbies = questionnaire.hobbies || migratedMember.hobbies || [];
+           if (hobbies && hobbies.length > 0) {
+               return hobbies.join('、');
+           }
+           return '未填写';
+       };
+       
+       const formatBooks = () => {
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const books = questionnaire.books || migratedMember.books || [];
+           if (books && books.length > 0) {
+               return books.join('、');
+           }
+           return '未填写';
+       };
+       
+       const formatGender = () => {
+           const genderMap = {
+               'male': '男',
+               'female': '女', 
+               'other': '其他',
+               'prefer_not_to_say': '不愿透露'
+           };
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const gender = questionnaire.gender || migratedMember.gender || '';
+           return gender ? genderMap[gender] || gender : '未填写';
+       };
+       
+       const formatBookCategories = () => {
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const bookCategories = questionnaire.bookCategories || migratedMember.bookCategories || [];
+           if (bookCategories && bookCategories.length > 0) {
+               const categoryMap = {
+                   'literature_fiction': '文学/当代小说',
+                   'mystery_detective': '悬疑侦探/推理',
+                   'sci_fi_fantasy': '科幻奇幻',
+                   'history_biography': '历史传记/记实',
+                   'social_science_philosophy': '社科思想/哲学',
+                   'psychology_self_help': '心理成长/自助',
+                   'art_design_lifestyle': '艺术设计/生活方式'
+               };
+               return bookCategories.map(cat => categoryMap[cat] || cat).join('、');
+           }
+           return '未填写';
+       };
+       
+       const formatFavoriteBooks = () => {
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const favoriteBooks = questionnaire.favoriteBooks || migratedMember.favoriteBooks || [];
+           if (favoriteBooks && favoriteBooks.length > 0) {
+               return favoriteBooks.join('、');
+           }
+           return '未填写';
+       };
+       
+       const formatMatchGenderPreference = () => {
+           const preferenceMap = {
+               'male': '男生',
+               'female': '女生',
+               'no_preference': '不介意'
+           };
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const matchGenderPreference = questionnaire.matchGenderPreference || migratedMember.matchGenderPreference || '';
+           return matchGenderPreference ? preferenceMap[matchGenderPreference] || matchGenderPreference : '未设置';
+       };
+       
+       const formatMatchingTypePreference = () => {
+           const preferenceMap = {
+               'similar': '🎯 相似型搭档',
+               'complementary': '🌈 互补型搭档', 
+               'no_preference': '✨ 都可以'
+           };
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const matchingTypePreference = questionnaire.matchingTypePreference || migratedMember.matchingTypePreference || '';
+           return matchingTypePreference ? preferenceMap[matchingTypePreference] || matchingTypePreference : '未设置';
+       };
+       
+       const formatReadingCommitment = () => {
+           const commitmentMap = {
+               'light': '轻量阅读(5w-10w字)',
+               'medium': '适中阅读(10w-25w字)', 
+               'intensive': '投入阅读(25w-50w字)',
+               'epic': '史诗阅读(50w+字)'
+           };
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const readingCommitment = questionnaire.readingCommitment || migratedMember.readingCommitment || '';
+           return readingCommitment ? commitmentMap[readingCommitment] || readingCommitment : '未填写';
+       };
+       
+       return `
+           <div class="member-item">
+               <div class="member-info">
+                   <h3>${migratedMember.name} (学号: ${migratedMember.studentId})</h3>
+                   <div class="member-details">
+                       <div><strong>性别：</strong>${formatGender()}</div>
+                       <div><strong>性别偏好：</strong>${formatMatchGenderPreference()}</div>
+                       <div><strong>匹配偏好：</strong>${formatMatchingTypePreference()}</div>
+                       <div><strong>书目类型：</strong>${formatBookCategories()}</div>
+                       <div><strong>兴趣爱好：</strong>${formatHobbies()}</div>
+                       <div><strong>读过的书：</strong>${formatBooks()}</div>
+                       <div><strong>最爱书籍：</strong>${formatFavoriteBooks()}</div>
+                       <div><strong>阅读预期：</strong>${formatReadingCommitment()}</div>
+                       ${(() => {
+                           const detailedPreferences = questionnaire.detailedBookPreferences || migratedMember.detailedBookPreferences || '';
+                           return detailedPreferences ? `<div><strong>详细偏好：</strong>${detailedPreferences}</div>` : '';
+                       })()}
+                   </div>
                </div>
+               <button class="delete-btn" onclick="deleteMember('${migratedMember.id}')">删除</button>
            </div>
-           <button class="delete-btn" onclick="deleteMember('${member.id}')">删除</button>
-       </div>
-   `).join('');
+       `;
+   }).join('');
 }
 
 // 删除成员（管理员操作，可删除任何状态的用户）
@@ -326,50 +1186,135 @@ function showLoggedInView() {
     if (isAdmin) {
         document.getElementById('adminSection').style.display = 'block';
         document.getElementById('memberSection').style.display = 'none';
-        renderPendingList();
-        renderMemberList();
-    } else {
-        document.getElementById('adminSection').style.display = 'none';
-        document.getElementById('memberSection').style.display = 'block';
+        document.getElementById('userProfileSection').style.display = 'none';
         
-        // 填充查看模式的信息
-        document.getElementById('viewName').textContent = currentUser.name;
-        document.getElementById('viewStudentId').textContent = currentUser.studentId;
-        document.getElementById('viewHobbies').textContent = currentUser.hobbies.join('、');
-        document.getElementById('viewBooks').textContent = currentUser.books.join('、');
-        
-        // 同时填充编辑模式的表单（但默认隐藏）
-        document.getElementById('name').value = currentUser.name;
-        document.getElementById('studentId').value = currentUser.studentId;
-        document.getElementById('hobbies').value = currentUser.hobbies.join('、');
-        document.getElementById('books').value = currentUser.books.join('、');
-        
-        // 显示查看模式，隐藏编辑模式
-        document.getElementById('profileView').style.display = 'block';
-        document.getElementById('memberForm').style.display = 'none';
-    }
+        // 更新管理员角色指示器
+        updateAdminRoleIndicator();
+       
+       // 根据权限显示监控面板
+       const monitoringPanel = document.getElementById('monitoringPanel');
+       if (monitoringPanel) {
+           const restrictedPanel = monitoringPanel.querySelector('.permission-restricted');
+           if (hasPermission('system_monitoring')) {
+               monitoringPanel.style.display = 'block';
+               if (restrictedPanel) {
+                   restrictedPanel.style.display = 'none';
+               }
+           } else {
+               monitoringPanel.style.display = 'none';
+               if (restrictedPanel) {
+                   restrictedPanel.style.display = 'block';
+               }
+           }
+       }
+       
+       // 根据权限显示或隐藏技术相关按钮
+       const apiStatusBtn = document.getElementById('apiStatusBtn');
+       const resetApiBtn = document.getElementById('resetApiBtn');
+       const aiToggleBtnContainer = document.getElementById('aiToggleBtnContainer');
+
+       if (hasPermission('api_management')) {
+           if (apiStatusBtn) apiStatusBtn.style.display = 'inline-block';
+           if (resetApiBtn) resetApiBtn.style.display = 'inline-block';
+           if (aiToggleBtnContainer) aiToggleBtnContainer.style.display = 'flex';
+       } else {
+           if (apiStatusBtn) apiStatusBtn.style.display = 'none';
+           if (resetApiBtn) resetApiBtn.style.display = 'none';
+           if (aiToggleBtnContainer) aiToggleBtnContainer.style.display = 'none';
+       }
+       
+       renderPendingList();
+       renderMemberList();
+   } else {
+       document.getElementById('adminSection').style.display = 'none';
+       document.getElementById('memberSection').style.display = 'none';
+       document.getElementById('userProfileSection').style.display = 'block';
+       
+       // 确保用户数据已迁移到最新版本
+       const migratedUser = migrateUserData(currentUser);
+       currentUser = migratedUser;
+
+       // 渲染用户资料
+       renderUserProfile();
+       
+       // 填充基本用户信息
+       document.getElementById('name').value = currentUser.name;
+       document.getElementById('studentId').value = currentUser.studentId;
+       
+       // 填充问卷信息
+       const questionnaire = currentUser.questionnaire;
+       
+       // 填充性别
+       if (questionnaire.gender) {
+           const genderRadio = document.querySelector(`input[name="gender"][value="${questionnaire.gender}"]`);
+           if (genderRadio) genderRadio.checked = true;
+       }
+       
+       // 填充匹配性别偏好
+       if (questionnaire.matchGenderPreference) {
+           const matchGenderRadio = document.querySelector(`input[name="matchGenderPreference"][value="${questionnaire.matchGenderPreference}"]`);
+           if (matchGenderRadio) matchGenderRadio.checked = true;
+       }
+       
+       // 填充匹配类型偏好
+       if (questionnaire.matchingTypePreference) {
+           const matchingTypeRadio = document.querySelector(`input[name="matchingTypePreference"][value="${questionnaire.matchingTypePreference}"]`);
+           if (matchingTypeRadio) matchingTypeRadio.checked = true;
+       }
+       
+       // 填充书目类型（多选）
+       if (questionnaire.bookCategories && questionnaire.bookCategories.length > 0) {
+           questionnaire.bookCategories.forEach(category => {
+               const checkbox = document.querySelector(`input[name="bookCategories"][value="${category}"]`);
+               if (checkbox) checkbox.checked = true;
+           });
+       }
+       
+       // 填充兴趣爱好和读过的书
+       document.getElementById('hobbies').value = (questionnaire.hobbies || []).join(', ');
+       document.getElementById('books').value = (questionnaire.books || []).join(', ');
+       
+       // 填充详细偏好
+       if (questionnaire.detailedBookPreferences) {
+           document.getElementById('detailedPreferences').value = questionnaire.detailedBookPreferences;
+           // 触发字符计数器更新
+           const event = new Event('input');
+           document.getElementById('detailedPreferences').dispatchEvent(event);
+       }
+       
+       // 填充最爱书籍
+       populateFavoriteBooks(questionnaire.favoriteBooks || []);
+       
+       // 填充阅读预期
+       if (questionnaire.readingCommitment) {
+           const commitmentRadio = document.querySelector(`input[name="readingCommitment"][value="${questionnaire.readingCommitment}"]`);
+           if (commitmentRadio) commitmentRadio.checked = true;
+       }
+   }
 }
 
-// 切换个人资料的编辑/查看模式
-function toggleProfileEdit(isEditing) {
-    const profileView = document.getElementById('profileView');
-    const memberForm = document.getElementById('memberForm');
-    
-    if (isEditing) {
-        // 切换到编辑模式
-        profileView.style.display = 'none';
-        memberForm.style.display = 'block';
-    } else {
-        // 切换回查看模式，同时更新显示的信息
-        profileView.style.display = 'block';
-        memberForm.style.display = 'none';
-        
-        // 取消编辑时，重新显示当前保存的信息
-        document.getElementById('viewName').textContent = currentUser.name;
-        document.getElementById('viewStudentId').textContent = currentUser.studentId;
-        document.getElementById('viewHobbies').textContent = currentUser.hobbies.join('、');
-        document.getElementById('viewBooks').textContent = currentUser.books.join('、');
-    }
+// 填充最爱书籍的辅助函数
+function populateFavoriteBooks(favoriteBooks) {
+   const container = document.getElementById('favoriteBooks');
+   
+   // 清空现有输入框
+   container.innerHTML = '';
+   
+   // 确保至少有2个输入框
+   const booksToShow = Math.max(2, favoriteBooks.length);
+   
+   for (let i = 0; i < booksToShow; i++) {
+       const bookGroup = document.createElement('div');
+       bookGroup.className = 'book-input-group';
+       bookGroup.innerHTML = `
+           <input type="text" placeholder="请输入书名" maxlength="100" value="${favoriteBooks[i] || ''}">
+           <button type="button" class="remove-book" onclick="removeFavoriteBook(this)" style="display: none;">删除</button>
+       `;
+       container.appendChild(bookGroup);
+   }
+   
+   // 更新删除按钮的显示状态
+   updateBookInputsVisibility();
 }
 
 // 兴趣爱好分类和同义词库
@@ -445,27 +1390,611 @@ async function getAiSimilarity(word1, word2) {
     }
 }
 
-async function calculateSimilarity(member1, member2) {
+// ===== 深度AI语义分析系统 =====
+
+// 阅读人格画像分析
+async function getReadingPersonalityProfile(userText, favoriteBooks = []) {
+    if (!AI_BASE_URL || !AI_API_KEY || (!userText.trim() && favoriteBooks.length === 0)) {
+        return { 
+            personality_dimensions: {},
+            reading_motivations: [],
+            cognitive_style: 'unknown',
+            confidence_score: 0
+        };
+    }
+
+    const systemPrompt = `You are a reading psychology expert specializing in personality analysis through literary preferences. 
+
+Analyze the user's reading personality based on their book preferences and descriptions. Evaluate these key dimensions:
+
+1. **EXPLORATION vs CERTAINTY** (0.0-1.0): 
+   - 0.0 = Prefers familiar genres/authors, sticks to proven favorites
+   - 1.0 = Constantly seeks new genres, experimental works, diverse perspectives
+
+2. **EMOTIONAL vs RATIONAL** (0.0-1.0):
+   - 0.0 = Logic-driven, prefers factual/analytical content
+   - 1.0 = Emotion-driven, seeks feeling and empathy in literature
+
+3. **INTROSPECTIVE vs SOCIAL** (0.0-1.0):
+   - 0.0 = Focuses on personal growth, inner psychological exploration
+   - 1.0 = Interested in social issues, interpersonal dynamics, community
+
+4. **ESCAPIST vs REALISTIC** (0.0-1.0):
+   - 0.0 = Prefers realistic, contemporary settings
+   - 1.0 = Seeks fantasy, sci-fi, alternative worlds for escape
+
+5. **FAST_PACED vs CONTEMPLATIVE** (0.0-1.0):
+   - 0.0 = Slow, meditative reading, philosophical depth
+   - 1.0 = Action-packed, quick plot progression
+
+Return JSON with:
+{
+  "personality_dimensions": {
+    "exploration_vs_certainty": float,
+    "emotional_vs_rational": float,
+    "introspective_vs_social": float,
+    "escapist_vs_realistic": float,
+    "fast_paced_vs_contemplative": float
+  },
+  "reading_motivations": [array of motivation strings],
+  "cognitive_style": "analytical|intuitive|creative|systematic",
+  "aesthetic_preferences": {
+    "language_style": "classical|modern|experimental",
+    "narrative_structure": "linear|non_linear|fragmented",
+    "emotional_tone": "light|serious|varied"
+  },
+  "cultural_orientation": "eastern|western|global|local",
+  "confidence_score": float (0.0-1.0)
+}`;
+
+    const userPrompt = JSON.stringify({
+        user_description: userText,
+        favorite_books: favoriteBooks,
+        analysis_focus: "deep_personality_profiling"
+    });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI Personality Analysis Error:', response.status, await response.text());
+            return { personality_dimensions: {}, reading_motivations: [], cognitive_style: 'unknown', confidence_score: 0 };
+        }
+
+        const result = await response.json();
+        const analysis = result.choices[0]?.message?.content;
+        
+        if (analysis) {
+            return JSON.parse(analysis);
+        }
+        return { personality_dimensions: {}, reading_motivations: [], cognitive_style: 'unknown', confidence_score: 0 };
+    } catch (error) {
+        console.error('Failed to fetch personality analysis:', error);
+        return { personality_dimensions: {}, reading_motivations: [], cognitive_style: 'unknown', confidence_score: 0 };
+    }
+}
+
+// 隐含偏好挖掘分析
+async function getImplicitPreferenceAnalysis(userText, favoriteBooks = [], bookCategories = []) {
+    if (!AI_BASE_URL || !AI_API_KEY) {
+        return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+    }
+
+    const systemPrompt = `You are a literary data scientist expert in uncovering hidden reading patterns and implicit preferences.
+
+Analyze the user's implicit preferences beyond obvious genre choices. Look for:
+
+1. **HIDDEN THEMATIC PATTERNS**: Underlying themes that connect diverse book choices
+2. **TEMPORAL PREFERENCES**: Historical periods, eras, time settings the user gravitates toward
+3. **GEOGRAPHICAL/CULTURAL AFFINITIES**: Specific regions, cultures, or perspectives
+4. **NARRATIVE ARCHETYPES**: Character types, story structures, conflict patterns
+5. **PHILOSOPHICAL LEANINGS**: Worldviews, value systems reflected in book choices
+6. **SENSORY/AESTHETIC PREFERENCES**: Language texture, pacing, atmospheric qualities
+
+Return JSON with:
+{
+  "implicit_themes": [array of subtle themes user is drawn to],
+  "hidden_patterns": [array of non-obvious connection patterns],
+  "temporal_preferences": {
+    "historical_periods": [preferred time periods],
+    "contemporary_vs_classic": float (0.0=classic, 1.0=contemporary)
+  },
+  "cultural_affinities": [array of cultural/geographic preferences],
+  "narrative_archetypes": [character types, story patterns user prefers],
+  "philosophical_leanings": [underlying worldviews and values],
+  "aesthetic_dna": {
+    "language_texture": "sparse|rich|poetic|conversational",
+    "emotional_register": "subtle|intense|varied|controlled",
+    "complexity_preference": float (0.0=simple, 1.0=complex)
+  },
+  "confidence_score": float (0.0-1.0)
+}`;
+
+    const userPrompt = JSON.stringify({
+        user_description: userText,
+        favorite_books: favoriteBooks,
+        selected_categories: bookCategories,
+        analysis_depth: "implicit_pattern_mining"
+    });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI Implicit Analysis Error:', response.status, await response.text());
+            return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+        }
+
+        const result = await response.json();
+        const analysis = result.choices[0]?.message?.content;
+        
+        if (analysis) {
+            return JSON.parse(analysis);
+        }
+        return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+    } catch (error) {
+        console.error('Failed to fetch implicit analysis:', error);
+        return { implicit_themes: [], hidden_patterns: [], literary_dna: {}, confidence_score: 0 };
+    }
+}
+
+// 深度兼容性匹配分析
+async function getDeepCompatibilityAnalysis(user1Profile, user2Profile, user1Implicit, user2Implicit) {
+    if (!AI_BASE_URL || !AI_API_KEY) {
+        return { 
+            compatibility_score: 0, 
+            compatibility_dimensions: {},
+            synergy_potential: [],
+            growth_opportunities: [],
+            reading_chemistry: 'unknown'
+        };
+    }
+
+    const systemPrompt = `You are an expert in reading compatibility and literary relationship dynamics.
+
+Analyze deep compatibility between two readers based on their personality profiles and implicit preferences. Calculate sophisticated compatibility across multiple dimensions:
+
+1. **COGNITIVE SYNERGY**: How well their thinking styles complement each other
+2. **AESTHETIC HARMONY**: Alignment in literary taste and style preferences  
+3. **INTELLECTUAL GROWTH POTENTIAL**: Capacity to learn from each other
+4. **EMOTIONAL RESONANCE**: Shared emotional wavelengths and empathy
+5. **EXPLORATORY COMPATIBILITY**: Balance between similar interests and complementary differences
+
+Calculate these compatibility types:
+- **MIRROR COMPATIBILITY**: Similar personalities/preferences (comfort zone)
+- **COMPLEMENTARY COMPATIBILITY**: Different but synergistic (growth zone)
+- **BRIDGE COMPATIBILITY**: One can introduce the other to new territories
+
+Return JSON with:
+{
+  "compatibility_score": float (0.0-1.0),
+  "compatibility_dimensions": {
+    "cognitive_synergy": float (0.0-1.0),
+    "aesthetic_harmony": float (0.0-1.0),
+    "growth_potential": float (0.0-1.0),
+    "emotional_resonance": float (0.0-1.0),
+    "exploratory_balance": float (0.0-1.0)
+  },
+  "compatibility_type": "mirror|complementary|bridge|complex",
+  "synergy_potential": [array of potential benefits from this pairing],
+  "growth_opportunities": [array of ways they could expand each other's horizons],
+  "reading_chemistry": "explosive|steady|gentle|challenging|inspiring",
+  "recommendation_confidence": float (0.0-1.0),
+  "relationship_dynamics": "mentor_mentee|equal_explorers|complementary_guides|kindred_spirits"
+}`;
+
+    const userPrompt = JSON.stringify({
+        user1: {
+            personality: user1Profile,
+            implicit_preferences: user1Implicit
+        },
+        user2: {
+            personality: user2Profile,
+            implicit_preferences: user2Implicit
+        },
+        analysis_type: "deep_compatibility_assessment"
+    });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI Deep Compatibility Error:', response.status, await response.text());
+            return { compatibility_score: 0, compatibility_dimensions: {}, synergy_potential: [], growth_opportunities: [], reading_chemistry: 'unknown' };
+        }
+
+        const result = await response.json();
+        const analysis = result.choices[0]?.message?.content;
+        
+        if (analysis) {
+            return JSON.parse(analysis);
+        }
+        return { compatibility_score: 0, compatibility_dimensions: {}, synergy_potential: [], growth_opportunities: [], reading_chemistry: 'unknown' };
+    } catch (error) {
+        console.error('Failed to fetch deep compatibility analysis:', error);
+        return { compatibility_score: 0, compatibility_dimensions: {}, synergy_potential: [], growth_opportunities: [], reading_chemistry: 'unknown' };
+    }
+}
+
+// 智能文本偏好分析（升级版）
+async function getAiTextPreferenceAnalysis(text1, text2) {
+    if (!AI_BASE_URL || !AI_API_KEY || !text1.trim() || !text2.trim()) {
+        return { similarity_score: 0, common_elements: [] };
+    }
+
+    const systemPrompt = `You are an expert in analyzing reading preferences and literary tastes with deep semantic understanding.
+
+Analyze two users' detailed book preferences and determine their compatibility using advanced semantic analysis:
+
+1. **SURFACE SIMILARITIES**: Direct matches in authors, genres, themes
+2. **DEEP SEMANTIC CONNECTIONS**: Conceptual relationships, thematic resonances
+3. **STYLISTIC AFFINITIES**: Shared appreciation for narrative techniques, language styles
+4. **PSYCHOLOGICAL RESONANCES**: Similar emotional needs fulfilled by reading
+5. **CULTURAL/TEMPORAL ALIGNMENTS**: Shared historical/geographic interests
+
+Provide both quantitative scores and qualitative insights.
+
+Return JSON with:
+{
+  "similarity_score": float (0.0-1.0),
+  "semantic_depth_score": float (0.0-1.0),
+  "common_elements": [array of shared preferences],
+  "deep_connections": [array of non-obvious thematic/stylistic links],
+  "analysis_details": "detailed explanation of compatibility",
+  "recommendation_reasons": [specific reasons why they'd be good reading partners],
+  "potential_book_recommendations": [books both might enjoy together],
+  "growth_potential": "how they could expand each other's reading horizons"
+}`;
+
+    const userPrompt = JSON.stringify({ 
+        preference1: text1, 
+        preference2: text2,
+        analysis_mode: "deep_semantic_compatibility"
+    });
+
+    try {
+        const response = await fetch(AI_BASE_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: AI_MODEL_NAME,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                response_format: { type: "json_object" }
+            })
+        });
+
+        if (!response.ok) {
+            console.error('AI Text Preference API Error:', response.status, await response.text());
+            return { similarity_score: 0, common_elements: [] };
+        }
+
+        const result = await response.json();
+        const analysis = result.choices[0]?.message?.content;
+        
+        if (analysis) {
+            const parsedAnalysis = JSON.parse(analysis);
+            return {
+                similarity_score: parsedAnalysis.similarity_score || 0,
+                semantic_depth_score: parsedAnalysis.semantic_depth_score || 0,
+                common_elements: parsedAnalysis.common_elements || [],
+                deep_connections: parsedAnalysis.deep_connections || [],
+                analysis_details: parsedAnalysis.analysis_details || '',
+                recommendation_reasons: parsedAnalysis.recommendation_reasons || [],
+                potential_book_recommendations: parsedAnalysis.potential_book_recommendations || [],
+                growth_potential: parsedAnalysis.growth_potential || ''
+            };
+        }
+        return { similarity_score: 0, common_elements: [] };
+    } catch (error) {
+        console.error('Failed to fetch AI text preference analysis:', error);
+        return { similarity_score: 0, common_elements: [] };
+    }
+}
+
+// 阅读承诺兼容性评分
+function calculateReadingCommitmentCompatibility(commitment1, commitment2) {
+    if (!commitment1 || !commitment2) {
+        return { score: 0, compatibility: 'unknown' };
+    }
+
+    // 阅读承诺等级映射
+    const commitmentLevels = {
+        'light': 1,      // 轻松阅读
+        'medium': 2,     // 适中阅读  
+        'intensive': 3,  // 深度阅读
+        'epic': 4        // 史诗阅读
+    };
+
+    const level1 = commitmentLevels[commitment1];
+    const level2 = commitmentLevels[commitment2];
+    
+    if (!level1 || !level2) {
+        return { score: 0, compatibility: 'unknown' };
+    }
+
+    const difference = Math.abs(level1 - level2);
+    
+    // 基于差异计算兼容性分数和描述
+    switch (difference) {
+        case 0:
+            return { 
+                score: 1.0, 
+                compatibility: 'perfect',
+                description: '完全一致的阅读量期望'
+            };
+        case 1:
+            return { 
+                score: 0.7, 
+                compatibility: 'good',
+                description: '相近的阅读量期望'
+            };
+        case 2:
+            return { 
+                score: 0.4, 
+                compatibility: 'moderate',
+                description: '中等程度的阅读量差异'
+            };
+        case 3:
+            return { 
+                score: 0.1, 
+                compatibility: 'poor',
+                description: '较大的阅读量期望差异'
+            };
+        default:
+            return { score: 0, compatibility: 'incompatible' };
+    }
+}
+
+// 深度智能匹配算法（升级版）
+// ===== 已弃用的匹配算法 (保留用于向后兼容) =====
+// 注意：此函数已被 calculateAICompatibility 替代，不建议使用
+async function calculateSimilarity_deprecated(member1, member2) {
     const result = {
         score: 0,
         commonHobbies: [],
         commonBooks: [],
-        detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }
+        detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
+        readingCommitmentCompatibility: null,
+        textPreferenceAnalysis: null,
+        // 新增深度分析结果
+        personalityProfiles: {
+            member1: null,
+            member2: null
+        },
+        implicitAnalysis: {
+            member1: null,
+            member2: null
+        },
+        deepCompatibilityAnalysis: null,
+        matchingDimensions: {
+            traditional_similarity: 0,      // 传统相似度
+            personality_compatibility: 0,   // 人格兼容度
+            implicit_resonance: 0,         // 隐含共鸣
+            growth_potential: 0,           // 成长潜力
+            overall_chemistry: 0           // 整体化学反应
+        }
     };
 
-    const hobbyResult = await calculateSmartMatches(member1.hobbies, member2.hobbies, INTEREST_CATEGORIES);
+    // 确保用户数据已迁移到最新版本
+    const migratedMember1 = migrateUserData(member1);
+    const migratedMember2 = migrateUserData(member2);
+
+    // ===== 数据完整性检查 =====
+    const hobbies1 = migratedMember1.questionnaire.hobbies || migratedMember1.hobbies || [];
+    const hobbies2 = migratedMember2.questionnaire.hobbies || migratedMember2.hobbies || [];
+    const books1 = migratedMember1.questionnaire.books || migratedMember1.books || [];
+    const books2 = migratedMember2.questionnaire.books || migratedMember2.books || [];
+    const text1 = migratedMember1.questionnaire.detailedBookPreferences || migratedMember1.detailedBookPreferences || '';
+    const text2 = migratedMember2.questionnaire.detailedBookPreferences || migratedMember2.detailedBookPreferences || '';
+    
+    // 计算数据完整性分数（0-1之间）
+    const dataCompleteness1 = (
+        (hobbies1.length > 0 ? 0.3 : 0) +
+        (books1.length > 0 ? 0.3 : 0) + 
+        (text1.trim().length > 0 ? 0.4 : 0)
+    );
+    const dataCompleteness2 = (
+        (hobbies2.length > 0 ? 0.3 : 0) +
+        (books2.length > 0 ? 0.3 : 0) + 
+        (text2.trim().length > 0 ? 0.4 : 0)
+    );
+    
+    // 如果两个用户的数据完整性都很低，直接返回低分
+    const minDataCompleteness = Math.min(dataCompleteness1, dataCompleteness2);
+    if (minDataCompleteness < 0.3) {
+        result.score = minDataCompleteness * 2; // 最多给0.6分
+        return result;
+    }
+
+    // ===== 阶段1: 传统匹配分析 =====
+    
+    // 1. 传统兴趣爱好匹配
+    const hobbyResult = await calculateSmartMatches(
+        hobbies1,
+        hobbies2, 
+        INTEREST_CATEGORIES
+    );
     result.commonHobbies = hobbyResult.matches;
-    result.score += hobbyResult.score;
     result.detailLevel.exactMatches += hobbyResult.exactMatches;
     result.detailLevel.semanticMatches += hobbyResult.semanticMatches;
     result.detailLevel.categoryMatches += hobbyResult.categoryMatches;
 
-    const bookResult = await calculateSmartMatches(member1.books, member2.books, BOOK_CATEGORIES);
+    // 2. 传统书籍匹配
+    const bookResult = await calculateSmartMatches(
+        books1,
+        books2, 
+        BOOK_CATEGORIES
+    );
     result.commonBooks = bookResult.matches;
-    result.score += bookResult.score;
     result.detailLevel.exactMatches += bookResult.exactMatches;
     result.detailLevel.semanticMatches += bookResult.semanticMatches;
     result.detailLevel.categoryMatches += bookResult.categoryMatches;
+
+    // 3. 最爱书籍匹配（增强字段）
+    if (migratedMember1.questionnaire.favoriteBooks && migratedMember2.questionnaire.favoriteBooks) {
+        const favoriteBookResult = await calculateSmartMatches(
+            migratedMember1.questionnaire.favoriteBooks,
+            migratedMember2.questionnaire.favoriteBooks,
+            BOOK_CATEGORIES
+        );
+        result.commonBooks.push(...favoriteBookResult.matches.map(m => ({ ...m, source: 'favorite' })));
+        result.detailLevel.exactMatches += favoriteBookResult.exactMatches;
+        result.detailLevel.semanticMatches += favoriteBookResult.semanticMatches;
+        result.detailLevel.categoryMatches += favoriteBookResult.categoryMatches;
+    }
+
+    // 4. 阅读承诺兼容性匹配
+    result.readingCommitmentCompatibility = calculateReadingCommitmentCompatibility(
+        migratedMember1.questionnaire.readingCommitment || migratedMember1.readingCommitment,
+        migratedMember2.questionnaire.readingCommitment || migratedMember2.readingCommitment
+    );
+
+    // 5. 升级版详细书籍偏好AI文本分析（仅在AI启用时）
+    if (text1.trim() && text2.trim() && aiAnalysisEnabled) {
+        result.textPreferenceAnalysis = await getAiTextPreferenceAnalysis(text1, text2);
+    }
+
+    // 计算传统维度分数
+    result.matchingDimensions.traditional_similarity = 
+        (hobbyResult.score + bookResult.score + 
+         (result.commonBooks.filter(b => b.source === 'favorite').length * 1.2) +
+         (result.readingCommitmentCompatibility?.score || 0) * 0.8 +
+         (result.textPreferenceAnalysis?.similarity_score || 0) * 1.5);
+
+    // ===== 阶段2: 深度AI人格分析（仅在AI启用时） =====
+    
+    if (aiAnalysisEnabled) {
+        // 构建每个用户的完整阅读档案
+        const getUserReadingProfile = (member) => ({
+            description: member.questionnaire.detailedBookPreferences || member.detailedBookPreferences || '',
+            favoriteBooks: member.questionnaire.favoriteBooks || member.favoriteBooks || [],
+            bookCategories: member.questionnaire.bookCategories || member.bookCategories || [],
+            hobbies: member.questionnaire.hobbies || member.hobbies || []
+        });
+
+        const profile1 = getUserReadingProfile(migratedMember1);
+        const profile2 = getUserReadingProfile(migratedMember2);
+
+        // 并行执行深度AI分析以提高性能
+        const [personality1, personality2, implicit1, implicit2] = await Promise.all([
+            getReadingPersonalityProfile(profile1.description, profile1.favoriteBooks),
+            getReadingPersonalityProfile(profile2.description, profile2.favoriteBooks),
+            getImplicitPreferenceAnalysis(profile1.description, profile1.favoriteBooks, profile1.bookCategories),
+            getImplicitPreferenceAnalysis(profile2.description, profile2.favoriteBooks, profile2.bookCategories)
+        ]);
+
+        result.personalityProfiles.member1 = personality1;
+        result.personalityProfiles.member2 = personality2;
+        result.implicitAnalysis.member1 = implicit1;
+        result.implicitAnalysis.member2 = implicit2;
+
+        // ===== 阶段3: 深度兼容性分析 =====
+        
+        if (personality1.confidence_score > 0.3 && personality2.confidence_score > 0.3) {
+            result.deepCompatibilityAnalysis = await getDeepCompatibilityAnalysis(
+                personality1, personality2, implicit1, implicit2
+            );
+
+            // 计算各个深度维度分数
+            if (result.deepCompatibilityAnalysis.compatibility_score > 0) {
+                const compatDimensions = result.deepCompatibilityAnalysis.compatibility_dimensions || {};
+                
+                result.matchingDimensions.personality_compatibility = 
+                    (compatDimensions.cognitive_synergy || 0) * 2 +
+                    (compatDimensions.emotional_resonance || 0) * 1.5;
+                    
+                result.matchingDimensions.implicit_resonance = 
+                    (compatDimensions.aesthetic_harmony || 0) * 2 +
+                    (compatDimensions.exploratory_balance || 0) * 1.3;
+                    
+                result.matchingDimensions.growth_potential = 
+                    (compatDimensions.growth_potential || 0) * 2.5;
+                    
+                result.matchingDimensions.overall_chemistry = 
+                    result.deepCompatibilityAnalysis.compatibility_score * 3;
+            }
+        }
+        // ===== 阶段4: 智能权重计算最终分数 =====
+        
+        // 数据完整性调节因子（基于两个用户的平均数据完整性）
+        const avgDataCompleteness = (dataCompleteness1 + dataCompleteness2) / 2;
+        const dataCompletenessMultiplier = Math.min(avgDataCompleteness + 0.2, 1.0); // 最低0.2，最高1.0
+        
+        // 动态权重分配（基于数据质量和置信度）
+        const weights = {
+            traditional: 1.0 * dataCompletenessMultiplier,
+            personality: (result.personalityProfiles.member1?.confidence_score || 0) * (result.personalityProfiles.member2?.confidence_score || 0) * 1.5 * dataCompletenessMultiplier,
+            implicit: ((result.implicitAnalysis.member1?.confidence_score || 0) + (result.implicitAnalysis.member2?.confidence_score || 0)) / 2 * 1.2 * dataCompletenessMultiplier,
+            growth: (result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5) * dataCompletenessMultiplier,
+            chemistry: (result.deepCompatibilityAnalysis?.recommendation_confidence || 0.5) * dataCompletenessMultiplier
+        };
+
+        // 计算加权总分
+        result.score =
+            result.matchingDimensions.traditional_similarity * weights.traditional +
+            result.matchingDimensions.personality_compatibility * weights.personality +
+            result.matchingDimensions.implicit_resonance * weights.implicit +
+            result.matchingDimensions.growth_potential * weights.growth +
+            result.matchingDimensions.overall_chemistry * weights.chemistry;
+
+        // 应用数据完整性最终调节
+        result.score = result.score * dataCompletenessMultiplier;
+        
+    } else {
+        // AI关闭时的传统分数计算
+        result.score = result.matchingDimensions.traditional_similarity;
+    }
+
+    // 标准化分数到合理范围
+    result.score = Math.min(result.score, 10); // 设置上限
 
     return result;
 }
@@ -490,26 +2019,28 @@ async function calculateSmartMatches(list1, list2, categories) {
         }
     }
 
-    // 2. AI 语义匹配 (权重: AI分数 * 0.8)
-    const SIMILARITY_THRESHOLD = 0.6; // 相似度阈值
-    for (const item1 of list1) {
-        for (const item2 of list2) {
-            const pairKey1 = `${item1}|${item2}`;
-            const pairKey2 = `${item2}|${item1}`;
-            if (item1 !== item2 && !processedPairs.has(pairKey1) && !processedPairs.has(pairKey2)) {
-                const aiScore = await getAiSimilarity(item1, item2);
-                if (aiScore > SIMILARITY_THRESHOLD) {
-                    const weightedScore = aiScore * 0.8;
-                    matches.push({
-                        item: `${item1} ≈ ${item2} (${aiScore.toFixed(2)})`,
-                        type: 'semantic',
-                        weight: weightedScore
-                    });
-                    score += weightedScore;
-                    semanticMatches++;
+    // 2. AI 语义匹配 (权重: AI分数 * 0.8) - 仅在AI启用时执行
+    if (aiAnalysisEnabled) {
+        const SIMILARITY_THRESHOLD = 0.6; // 相似度阈值
+        for (const item1 of list1) {
+            for (const item2 of list2) {
+                const pairKey1 = `${item1}|${item2}`;
+                const pairKey2 = `${item2}|${item1}`;
+                if (item1 !== item2 && !processedPairs.has(pairKey1) && !processedPairs.has(pairKey2)) {
+                    const aiScore = await getAiSimilarity(item1, item2);
+                    if (aiScore > SIMILARITY_THRESHOLD) {
+                        const weightedScore = aiScore * 0.8;
+                        matches.push({
+                            item: `${item1} ≈ ${item2} (${aiScore.toFixed(2)})`,
+                            type: 'semantic',
+                            weight: weightedScore
+                        });
+                        score += weightedScore;
+                        semanticMatches++;
+                    }
+                    processedPairs.add(pairKey1);
+                    processedPairs.add(pairKey2);
                 }
-                processedPairs.add(pairKey1);
-                processedPairs.add(pairKey2);
             }
         }
     }
@@ -541,51 +2072,2222 @@ async function calculateSmartMatches(list1, list2, categories) {
     return { matches, score, exactMatches, semanticMatches, categoryMatches };
 }
 
-// 寻找相似搭档（仅管理员）
-async function findSimilarMatches() {
-    if (!isAdmin) {
-        alert('只有管理员可以进行匹配');
-        return;
+// 检查两个用户是否符合性别偏好匹配
+function checkGenderPreferenceMatch(user1, user2) {
+    // 确保用户数据已迁移
+    const migratedUser1 = migrateUserData(user1);
+    const migratedUser2 = migrateUserData(user2);
+    
+    const user1Gender = migratedUser1.questionnaire.gender;
+    const user2Gender = migratedUser2.questionnaire.gender;
+    const user1Preference = migratedUser1.questionnaire.matchGenderPreference;
+    const user2Preference = migratedUser2.questionnaire.matchGenderPreference;
+    
+    // 如果任一用户没有设置偏好，则不进行过滤
+    if (!user1Preference || !user2Preference) {
+        return true;
     }
-    if (members.length < 2) {
-        alert('需要至少2个成员才能进行匹配');
-        return;
+    
+    // 如果任一用户偏好是"不介意"，则匹配
+    if (user1Preference === 'no_preference' || user2Preference === 'no_preference') {
+        return true;
     }
-
-    document.getElementById('loadingIndicator').style.display = 'block';
-    const matches = [];
-    const promises = [];
-
-    for (let i = 0; i < members.length; i++) {
-        for (let j = i + 1; j < members.length; j++) {
-            promises.push(
-                calculateSimilarity(members[i], members[j]).then(similarity => {
-                    if (similarity.score > 0) {
-                        matches.push({
-                            member1: members[i],
-                            member2: members[j],
-                            score: similarity.score,
-                            commonHobbies: similarity.commonHobbies,
-                            commonBooks: similarity.commonBooks,
-                            detailLevel: similarity.detailLevel,
-                            type: 'similar'
-                        });
-                    }
-                })
-            );
-        }
+    
+    // 如果任一用户没有填写性别，则不进行过滤（避免排除没填性别的用户）
+    if (!user1Gender || !user2Gender) {
+        return true;
     }
-
-    await Promise.all(promises);
-    matches.sort((a, b) => b.score - a.score);
-    document.getElementById('loadingIndicator').style.display = 'none';
-    displayMatches(matches.slice(0, 10), '相似搭档推荐');
+    
+    // 检查双向匹配：user1希望匹配user2的性别，且user2希望匹配user1的性别
+    const user1WantsUser2 = (user1Preference === user2Gender);
+    const user2WantsUser1 = (user2Preference === user1Gender);
+    
+    return user1WantsUser2 && user2WantsUser1;
 }
 
-// 寻找互补搭档（仅管理员）
-async function findComplementaryMatches() {
-    if (!isAdmin) {
-        alert('只有管理员可以进行匹配');
+// ===== 降级策略辅助函数 =====
+
+/**
+ * 获取分析模式标签
+ */
+function getAnalysisModeLabel(result) {
+    if (result.degraded) {
+        return `AI降级→传统`;
+    } else if (result.traditionalMode) {
+        return '传统';
+    } else if (result.healthDegraded) {
+        return '传统(降级)';
+    } else if (result.analysis?.ai_analysis) {
+        return 'AI智能';
+    }
+    return '传统';
+}
+
+/**
+ * 获取分析模式
+ */
+function getAnalysisMode(result) {
+    if (result.analysis?.ai_analysis && !result.degraded) {
+        return 'ai';
+    } else if (result.degraded) {
+        return 'ai_degraded';
+    } else if (result.healthDegraded) {
+        return 'traditional_degraded';
+    }
+    return 'traditional';
+}
+
+/**
+ * 从结果中获取字段（兼容AI和传统模式）
+ */
+function getFieldFromResult(result, fieldName) {
+    if (result.analysis?.[fieldName]) {
+        return result.analysis[fieldName];
+    } else if (result[fieldName]) {
+        return result[fieldName];
+    }
+    
+    // 默认值
+    const defaults = {
+        'commonHobbies': [],
+        'commonBooks': [],
+        'detailLevel': { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 }
+    };
+    
+    return defaults[fieldName] || null;
+}
+
+/**
+ * 获取匹配类型
+ */
+function getMatchTypeFromResult(result) {
+    if (result.analysis?.ai_analysis?.match_type) {
+        return result.analysis.ai_analysis.match_type;
+    } else if (result.degraded) {
+        return '降级匹配';
+    } else if (result.traditionalMode) {
+        return '传统匹配';
+    }
+    return '未知类型';
+}
+
+/**
+ * 手动重置API健康状态（管理员功能）
+ */
+function resetApiHealth() {
+    if (!hasPermission('api_management')) {
+        alert('权限不足');
+        return;
+    }
+    
+    const confirmed = confirm('确定要重置API健康状态吗？这将清除所有错误记录并退出降级模式。');
+    if (confirmed) {
+        apiHealthMonitor.forceReset();
+        alert('API健康状态已重置');
+    }
+}
+
+/**
+ * 检查和显示API健康状态（管理员功能）
+ */
+function showApiHealthStatus() {
+    if (!hasPermission('api_management')) {
+        alert('权限不足');
+        return;
+    }
+    
+    const status = apiHealthMonitor.getDegradationStatus();
+    const healthInfo = `
+📊 API健康状态报告
+================
+🔧 总体状态: ${status.degraded ? '⚠️ 降级模式' : '✅ 正常'}
+🎯 AI分析开关: ${aiAnalysisEnabled ? '🟢 开启' : '🔴 关闭'}
+📈 成功请求: ${apiHealthMonitor.successCount}
+❌ 失败请求: ${apiHealthMonitor.errorCount}
+🔄 连续错误: ${status.consecutiveErrors}
+📊 错误率: ${(status.errorRate * 100).toFixed(1)}%
+⏱️ 当前批次大小: ${apiHealthMonitor.currentBatchSize}
+
+${status.degraded ? `
+⚠️ 降级模式详情:
+📅 开始时间: ${new Date(status.startTime).toLocaleString()}
+⏰ 持续时间: ${Math.round(status.duration / 1000)}秒
+🔄 可恢复: ${status.canRecover ? '是' : '否'}
+` : ''}
+================
+    `.trim();
+    
+    alert(healthInfo);
+}
+
+// ===== 匹配标题和状态生成函数 =====
+
+/**
+ * 生成智能匹配标题（考虑降级状态）
+ */
+function getMatchingTitle(matches, type) {
+    const status = apiHealthMonitor.getDegradationStatus();
+    const degradedCount = matches.filter(m => m.degraded).length;
+    const traditionalCount = matches.filter(m => m.traditionalMode || m.healthDegraded).length;
+    
+    let baseTitle = type === 'similar' ? '🎯 相似搭档推荐' : '🌱 互补搭档推荐';
+    let subtitle = '';
+    
+    if (status.degraded) {
+        baseTitle = `⚠️ ${baseTitle} (降级模式)`;
+        subtitle = `系统已切换到传统算法 | 降级时长: ${Math.round(status.duration/1000)}秒`;
+    } else if (!aiAnalysisEnabled) {
+        baseTitle = `📊 传统算法${baseTitle.substring(2)}`;
+        subtitle = 'AI分析已关闭，使用传统匹配算法';
+    } else if (degradedCount > 0) {
+        baseTitle = `🔀 混合模式${baseTitle.substring(2)}`;
+        subtitle = `智能AI分析 + 传统算法降级 | ${degradedCount}/${matches.length} 个配对降级`;
+    } else {
+        baseTitle = `🧠 深度智能${baseTitle.substring(2)}`;
+        subtitle = 'AI驱动的高级语义分析匹配';
+    }
+    
+    return { title: baseTitle, subtitle };
+}
+
+/**
+ * 获取匹配项的样式类
+ */
+function getMatchItemClass(match) {
+    let classes = ['match-item'];
+    
+    if (match.degraded) {
+        classes.push('degraded-match');
+    } else if (match.traditionalMode || match.healthDegraded) {
+        classes.push('traditional-match');
+    }
+    
+    return classes.join(' ');
+}
+
+/**
+ * 生成匹配状态标签
+ */
+function generateMatchStatusTags(match) {
+    let tags = [];
+    
+    if (match.degraded) {
+        tags.push(`<span class="tag degraded-tag">AI降级→传统</span>`);
+    } else if (match.healthDegraded) {
+        tags.push(`<span class="tag traditional-degraded-tag">传统(降级)</span>`);
+    } else if (match.traditionalMode) {
+        tags.push(`<span class="tag category-tag">传统算法</span>`);
+    } else if (match.aiAnalysis) {
+        tags.push(`<span class="tag ai-analysis-tag">AI智能</span>`);
+        if (match.confidenceLevel) {
+            tags.push(`<span class="tag score-tag">置信度: ${(match.confidenceLevel * 100).toFixed(0)}%</span>`);
+        }
+    }
+    
+    if (match.analysisMode) {
+        const modeLabels = {
+            'ai': '🧠 AI模式',
+            'ai_degraded': '🔀 AI降级',
+            'traditional_degraded': '📊 传统降级',
+            'traditional': '📊 传统模式',
+            'error': '❌ 分析错误'
+        };
+        const modeLabel = modeLabels[match.analysisMode] || match.analysisMode;
+        // 只在没有其他状态标签时显示模式标签
+        if (tags.length === 0) {
+            tags.push(`<span class="tag ai-element-tag">${modeLabel}</span>`);
+        }
+    }
+    
+    return tags.join(' ');
+}
+
+// ===== 用户匹配类型偏好调整AI分析分数 =====
+
+// 用户画像缓存
+const userProfileCache = new Map();
+
+/**
+ * 创建标准化的用户画像，用于AI匹配分析
+ * @param {Object} user - 用户数据
+ * @returns {Object} 标准化的用户画像
+ */
+function createUserProfile(user) {
+    // 检查缓存
+    const userId = user.id || user.name;
+    if (userProfileCache.has(userId)) {
+        return userProfileCache.get(userId);
+    }
+    
+    const migratedUser = migrateUserData(user);
+    const questionnaire = migratedUser.questionnaire || {};
+    
+    // 数据完整性评估
+    const hasBasicInfo = !!(migratedUser.name && migratedUser.studentId);
+    const hasInterests = !!(questionnaire.hobbies && questionnaire.hobbies.length > 0) || 
+                        !!(migratedUser.hobbies && migratedUser.hobbies.length > 0);
+    const hasBooks = !!(questionnaire.books && questionnaire.books.length > 0) || 
+                    !!(migratedUser.books && migratedUser.books.length > 0);
+    const hasFavoriteBooks = !!(questionnaire.favoriteBooks && questionnaire.favoriteBooks.length > 0);
+    const hasDetailedPrefs = !!(questionnaire.detailedBookPreferences && questionnaire.detailedBookPreferences.trim());
+    const hasReadingCommitment = !!questionnaire.readingCommitment;
+    const hasGender = !!questionnaire.gender;
+    const hasBookCategories = !!(questionnaire.bookCategories && questionnaire.bookCategories.length > 0);
+    
+    // 计算数据完整性分数 (0-1)
+    const completenessScore = (
+        (hasBasicInfo ? 0.1 : 0) +
+        (hasInterests ? 0.15 : 0) +
+        (hasBooks ? 0.15 : 0) +
+        (hasFavoriteBooks ? 0.2 : 0) +
+        (hasDetailedPrefs ? 0.2 : 0) +
+        (hasReadingCommitment ? 0.1 : 0) +
+        (hasGender ? 0.05 : 0) +
+        (hasBookCategories ? 0.05 : 0)
+    );
+    
+    const profile = {
+        // 基本信息
+        basic_info: {
+            name: migratedUser.name || '',
+            student_id: migratedUser.studentId || '',
+            gender: questionnaire.gender || '',
+            join_date: migratedUser.joinDate || ''
+        },
+        
+        // 兴趣爱好
+        interests: {
+            hobbies: questionnaire.hobbies || migratedUser.hobbies || [],
+            count: (questionnaire.hobbies || migratedUser.hobbies || []).length
+        },
+        
+        // 阅读偏好
+        reading_preferences: {
+            book_categories: questionnaire.bookCategories || [],
+            favorite_books: questionnaire.favoriteBooks || [],
+            general_books: questionnaire.books || migratedUser.books || [],
+            detailed_preferences: questionnaire.detailedBookPreferences || '',
+            reading_commitment: questionnaire.readingCommitment || '',
+            reading_habits: questionnaire.readingHabits || {}
+        },
+        
+        // 匹配偏好
+        matching_preferences: {
+            gender_preference: questionnaire.matchGenderPreference || '',
+            matching_type_preference: questionnaire.matchingTypePreference || ''
+        },
+        
+        // 数据质量指标
+        data_quality: {
+            completeness_score: completenessScore,
+            has_basic_info: hasBasicInfo,
+            has_interests: hasInterests,
+            has_reading_data: hasBooks || hasFavoriteBooks,
+            has_detailed_preferences: hasDetailedPrefs,
+            data_version: questionnaire.version || '1.0'
+        }
+    };
+    
+    // 缓存用户画像
+    userProfileCache.set(userId, profile);
+    
+    return profile;
+}
+
+// ===== API优化工具函数 =====
+
+// 请求缓存管理
+const requestCache = new Map();
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24小时缓存
+
+// ===== 内存使用优化配置 =====
+const MEMORY_CONFIG = {
+    MAX_CACHE_SIZE: 1000,        // 最大缓存条目数
+    MAX_PROFILE_CACHE_SIZE: 500, // 最大用户画像缓存数
+    CHUNK_SIZE: 50,              // 每个处理块的大小
+    GC_INTERVAL: 10 * 60 * 1000, // 垃圾回收间隔（10分钟）
+    MEMORY_WARNING_THRESHOLD: 0.8 // 内存警告阈值（80%）
+};
+
+// 内存使用监控
+const memoryMonitor = {
+    lastGCTime: Date.now(),
+    cacheHits: 0,
+    cacheMisses: 0,
+    
+    checkMemoryUsage() {
+        // 检查缓存大小
+        if (requestCache.size > MEMORY_CONFIG.MAX_CACHE_SIZE) {
+            this.cleanupOldestEntries(requestCache, MEMORY_CONFIG.MAX_CACHE_SIZE * 0.7);
+        }
+        
+        if (userProfileCache.size > MEMORY_CONFIG.MAX_PROFILE_CACHE_SIZE) {
+            this.cleanupOldestEntries(userProfileCache, MEMORY_CONFIG.MAX_PROFILE_CACHE_SIZE * 0.7);
+        }
+        
+        // 定期垃圾回收
+        if (Date.now() - this.lastGCTime > MEMORY_CONFIG.GC_INTERVAL) {
+            this.performGarbageCollection();
+            this.lastGCTime = Date.now();
+        }
+    },
+    
+    cleanupOldestEntries(cache, targetSize) {
+        const entries = Array.from(cache.entries());
+        // 如果是requestCache，按时间戳排序
+        if (cache === requestCache) {
+            entries.sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+        }
+        
+        // 删除最旧的条目
+        const deleteCount = cache.size - targetSize;
+        for (let i = 0; i < deleteCount; i++) {
+            cache.delete(entries[i][0]);
+        }
+        
+        console.log(`清理缓存：删除了 ${deleteCount} 个旧条目`);
+        
+        // 如果删除的条目过多，记录内存警告
+        if (deleteCount > targetSize * 0.5) {
+            errorMonitoringSystem.logError('MEMORY_WARNING', {
+                deletedItems: deleteCount,
+                targetSize,
+                cacheType: cache === requestCache ? 'requestCache' : 'profileCache'
+            });
+        }
+    },
+    
+    performGarbageCollection() {
+        // 清理过期的请求缓存
+        const now = Date.now();
+        let expiredCount = 0;
+        
+        for (const [key, value] of requestCache.entries()) {
+            if (!isValidCache(value)) {
+                requestCache.delete(key);
+                expiredCount++;
+            }
+        }
+        
+        if (expiredCount > 0) {
+            console.log(`垃圾回收：清理了 ${expiredCount} 个过期缓存条目`);
+        }
+        
+        // 强制垃圾回收（如果可用），移除对Node.js `global` 的引用以修复浏览器错误
+        if (typeof window !== 'undefined' && typeof window.gc === 'function') {
+            window.gc();
+        }
+    },
+    
+    getCacheStats() {
+        const hitRate = this.cacheHits + this.cacheMisses > 0 
+            ? (this.cacheHits / (this.cacheHits + this.cacheMisses) * 100).toFixed(2)
+            : 0;
+            
+        return {
+            requestCacheSize: requestCache.size,
+            profileCacheSize: userProfileCache.size,
+            cacheHitRate: `${hitRate}%`,
+            cacheHits: this.cacheHits,
+            cacheMisses: this.cacheMisses
+        };
+    }
+};
+
+// ===== 高级错误监控与恢复系统 =====
+
+// 错误类型分类
+const ERROR_TYPES = {
+    NETWORK_ERROR: 'network_error',
+    RATE_LIMIT: 'rate_limit', 
+    API_UNAVAILABLE: 'api_unavailable',
+    TIMEOUT: 'timeout',
+    AUTHENTICATION: 'authentication',
+    QUOTA_EXCEEDED: 'quota_exceeded',
+    SERVER_ERROR: 'server_error',
+    PARSING_ERROR: 'parsing_error',
+    UNKNOWN: 'unknown'
+};
+
+// 错误恢复策略配置
+const RECOVERY_STRATEGIES = {
+    [ERROR_TYPES.NETWORK_ERROR]: {
+        maxRetries: 3,
+        baseDelay: 2000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'medium'
+    },
+    [ERROR_TYPES.RATE_LIMIT]: {
+        maxRetries: 5,
+        baseDelay: 5000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'high'
+    },
+    [ERROR_TYPES.API_UNAVAILABLE]: {
+        maxRetries: 2,
+        baseDelay: 10000,
+        backoffMultiplier: 3,
+        canRecover: false,
+        criticalLevel: 'critical'
+    },
+    [ERROR_TYPES.TIMEOUT]: {
+        maxRetries: 2,
+        baseDelay: 3000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'medium'
+    },
+    [ERROR_TYPES.AUTHENTICATION]: {
+        maxRetries: 1,
+        baseDelay: 1000,
+        backoffMultiplier: 1,
+        canRecover: false,
+        criticalLevel: 'critical'
+    },
+    [ERROR_TYPES.QUOTA_EXCEEDED]: {
+        maxRetries: 0,
+        baseDelay: 30000,
+        backoffMultiplier: 1,
+        canRecover: false,
+        criticalLevel: 'critical'
+    },
+    [ERROR_TYPES.SERVER_ERROR]: {
+        maxRetries: 2,
+        baseDelay: 5000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'high'
+    },
+    [ERROR_TYPES.PARSING_ERROR]: {
+        maxRetries: 1,
+        baseDelay: 1000,
+        backoffMultiplier: 1,
+        canRecover: true,
+        criticalLevel: 'low'
+    },
+    [ERROR_TYPES.UNKNOWN]: {
+        maxRetries: 2,
+        baseDelay: 2000,
+        backoffMultiplier: 2,
+        canRecover: true,
+        criticalLevel: 'medium'
+    }
+};
+
+
+// ===== 全面错误监控与恢复系统 =====
+
+/**
+ * 增强型错误监控系统 - 阶段3.2
+ * 提供全面的错误分类、健康监控、自动恢复和实时统计
+ */
+const errorMonitoringSystem = {
+    // 错误分类与计数
+    errorCategories: {
+        API_RATE_LIMIT: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'high',
+            description: 'API速率限制',
+            recoveryAction: 'exponential_backoff'
+        },
+        API_NETWORK_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'medium',
+            description: 'API网络错误',
+            recoveryAction: 'retry_with_delay'
+        },
+        AI_PARSING_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'medium',
+            description: 'AI返回解析错误',
+            recoveryAction: 'fallback_traditional'
+        },
+        AI_TIMEOUT_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'high',
+            description: 'AI请求超时',
+            recoveryAction: 'reduce_batch_size'
+        },
+        CACHE_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'low',
+            description: '缓存系统错误',
+            recoveryAction: 'cache_cleanup'
+        },
+        MEMORY_WARNING: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'medium',
+            description: '内存使用警告',
+            recoveryAction: 'garbage_collection'
+        },
+        USER_DATA_ERROR: { 
+            count: 0, 
+            lastOccurred: null, 
+            severity: 'low',
+            description: '用户数据不完整',
+            recoveryAction: 'skip_processing'
+        }
+    },
+    
+    // 实时系统健康状态
+    systemHealth: {
+        overall: 'healthy',        // healthy, degraded, critical, maintenance
+        api: 'operational',        // operational, degraded, down
+        cache: 'operational',      // operational, degraded, disabled
+        memory: 'optimal',         // optimal, warning, critical
+        lastHealthCheck: Date.now(),
+        consecutiveHealthChecks: 0,
+        isRecovering: false,
+        recoveryStartTime: null
+    },
+    
+    // 监控配置
+    config: {
+        HEALTH_CHECK_INTERVAL: 2 * 60 * 1000,     // 2分钟健康检查
+        ERROR_WINDOW_SIZE: 100,               // 错误率计算窗口
+        CRITICAL_ERROR_THRESHOLD: 10,         // 严重错误阈值
+        RECOVERY_SUCCESS_THRESHOLD: 5,        // 恢复成功阈值
+        MEMORY_WARNING_THRESHOLD: 0.8,        // 内存警告阈值
+        CACHE_HIT_RATE_WARNING: 0.3,          // 缓存命中率警告线
+        MAX_ERROR_LOG_SIZE: 1000              // 错误日志最大条目
+    },
+    
+    // 错误日志存储
+    errorLog: [],
+    performanceMetrics: {
+        totalRequests: 0,
+        successfulRequests: 0,
+        averageResponseTime: 0,
+        responseTimeHistory: [],
+        lastMetricsReset: Date.now()
+    },
+    
+    // 自动恢复策略配置
+    recoveryStrategies: {
+        exponential_backoff: {
+            name: '指数退避',
+            execute: async (errorDetails) => {
+                const delay = Math.min(1000 * Math.pow(2, errorDetails.retryCount || 0), 30000);
+                console.log(`执行指数退避策略，延迟 ${delay}ms`);
+                await sleep(delay);
+                return { success: true, nextRetryDelay: delay * 2 };
+            }
+        },
+        fallback_traditional: {
+            name: '降级到传统算法',
+            execute: async (errorDetails) => {
+                console.log('AI不可用，自动切换到传统匹配算法');
+                aiAnalysisEnabled = false;
+                return { success: true, switchedMode: 'traditional' };
+            }
+        },
+        cache_cleanup: {
+            name: '缓存清理',
+            execute: async (errorDetails) => {
+                console.log('执行缓存清理恢复策略');
+                memoryMonitor.performGarbageCollection();
+                advancedCacheSystem.cleanupCache(advancedCacheSystem.aiAnalysisCache, 
+                    advancedCacheSystem.config.MAX_AI_CACHE_SIZE * 0.5);
+                return { success: true, cleanedItems: 'cache' };
+            }
+        },
+        reduce_batch_size: {
+            name: '减少批处理大小',
+            execute: async (errorDetails) => {
+                const oldSize = apiHealthMonitor.currentBatchSize;
+                apiHealthMonitor.currentBatchSize = Math.max(1, Math.floor(oldSize / 2));
+                console.log(`降低批处理大小: ${oldSize} -> ${apiHealthMonitor.currentBatchSize}`);
+                return { success: true, oldSize, newSize: apiHealthMonitor.currentBatchSize };
+            }
+        },
+        garbage_collection: {
+            name: '强制垃圾回收',
+            execute: async (errorDetails) => {
+                console.log('执行内存垃圾回收');
+                memoryMonitor.performGarbageCollection();
+                return { success: true, action: 'gc_performed' };
+            }
+        }
+    },
+    
+    // 记录错误的核心方法
+    logError(errorType, errorDetails = {}) {
+        const timestamp = Date.now();
+        const errorCategory = this.errorCategories[errorType];
+        
+        if (errorCategory) {
+            errorCategory.count++;
+            errorCategory.lastOccurred = timestamp;
+        }
+        
+        // 添加到错误日志
+        const logEntry = {
+            timestamp,
+            type: errorType,
+            severity: errorCategory?.severity || 'unknown',
+            details: errorDetails,
+            userAgent: navigator?.userAgent || 'unknown',
+            url: window?.location?.href || 'unknown'
+        };
+        
+        this.errorLog.push(logEntry);
+        
+        // 限制日志大小
+        if (this.errorLog.length > this.config.MAX_ERROR_LOG_SIZE) {
+            this.errorLog = this.errorLog.slice(-this.config.MAX_ERROR_LOG_SIZE);
+        }
+        
+        // 更新系统健康状态
+        this.updateSystemHealth();
+        
+        // 输出到控制台（带颜色标识）
+        const severityColors = {
+            'high': 'color: #dc3545; font-weight: bold;',
+            'medium': 'color: #fd7e14; font-weight: bold;',
+            'low': 'color: #6c757d;'
+        };
+        
+        console.log(
+            `%c[ERROR-MONITOR] ${errorType}: ${errorCategory?.description || 'Unknown error'}`,
+            severityColors[errorCategory?.severity] || '',
+            errorDetails
+        );
+        
+        // 触发自动恢复机制
+        this.handleAutoRecovery(errorType, errorDetails);
+    },
+    
+    // 自动恢复处理
+    async handleAutoRecovery(errorType, errorDetails) {
+        const errorCategory = this.errorCategories[errorType];
+        if (!errorCategory || !errorCategory.recoveryAction) {
+            return;
+        }
+        
+        const strategy = this.recoveryStrategies[errorCategory.recoveryAction];
+        if (strategy) {
+            try {
+                console.log(`🔧 开始执行自动恢复策略: ${strategy.name}`);
+                const result = await strategy.execute({ 
+                    ...errorDetails, 
+                    errorType, 
+                    timestamp: Date.now() 
+                });
+                
+                console.log(`✅ 恢复策略执行成功:`, result);
+                
+                // 记录恢复成功
+                this.logRecoveryAction(errorType, strategy.name, result, true);
+            } catch (recoveryError) {
+                console.error(`❌ 恢复策略执行失败:`, recoveryError);
+                this.logRecoveryAction(errorType, strategy.name, recoveryError, false);
+            }
+        }
+    },
+    
+    // 记录恢复操作
+    logRecoveryAction(errorType, strategyName, result, success) {
+        this.errorLog.push({
+            timestamp: Date.now(),
+            type: 'RECOVERY_ACTION',
+            severity: 'info',
+            details: {
+                originalError: errorType,
+                strategy: strategyName,
+                result: result,
+                success: success
+            }
+        });
+    },
+    
+    // 更新系统健康状态
+    updateSystemHealth() {
+        const now = Date.now();
+        const recentErrors = this.getRecentErrors(5 * 60 * 1000); // 5分钟内的错误
+        
+        // 计算整体健康状态
+        const highSeverityErrors = recentErrors.filter(e => 
+            this.errorCategories[e.type]?.severity === 'high').length;
+        const totalRecentErrors = recentErrors.length;
+        
+        let overallHealth = 'healthy';
+        if (highSeverityErrors >= 3 || totalRecentErrors >= 10) {
+            overallHealth = 'critical';
+        } else if (highSeverityErrors >= 1 || totalRecentErrors >= 5) {
+            overallHealth = 'degraded';
+        }
+        
+        // 更新API状态
+        const apiErrors = recentErrors.filter(e => 
+            e.type.startsWith('API_') || e.type.startsWith('AI_')).length;
+        let apiStatus = 'operational';
+        if (apiErrors >= 5) {
+            apiStatus = 'down';
+        } else if (apiErrors >= 2) {
+            apiStatus = 'degraded';
+        }
+        
+        // 更新缓存状态
+        const cacheErrors = recentErrors.filter(e => e.type === 'CACHE_ERROR').length;
+        let cacheStatus = 'operational';
+        if (cacheErrors >= 3) {
+            cacheStatus = 'disabled';
+        } else if (cacheErrors >= 1) {
+            cacheStatus = 'degraded';
+        }
+        
+        // 更新内存状态
+        const memoryErrors = recentErrors.filter(e => e.type === 'MEMORY_WARNING').length;
+        let memoryStatus = 'optimal';
+        if (memoryErrors >= 3) {
+            memoryStatus = 'critical';
+        } else if (memoryErrors >= 1) {
+            memoryStatus = 'warning';
+        }
+        
+        // 保存旧状态用于比较
+        const oldHealth = { ...this.systemHealth };
+        
+        // 更新健康状态
+        this.systemHealth = {
+            overall: overallHealth,
+            api: apiStatus,
+            cache: cacheStatus,
+            memory: memoryStatus,
+            lastHealthCheck: now,
+            consecutiveHealthChecks: this.systemHealth.consecutiveHealthChecks + 1,
+            isRecovering: this.systemHealth.isRecovering,
+            recoveryStartTime: this.systemHealth.recoveryStartTime
+        };
+        
+        // 检查状态变化
+        if (oldHealth.overall !== overallHealth) {
+            console.log(`🏥 系统健康状态变化: ${oldHealth.overall} -> ${overallHealth}`);
+        }
+        
+        // 更新UI显示（如果存在）
+        this.updateMonitoringUI();
+    },
+    
+    // 获取最近的错误
+    getRecentErrors(timeWindow = 5 * 60 * 1000) {
+        const cutoff = Date.now() - timeWindow;
+        return this.errorLog.filter(entry => entry.timestamp > cutoff);
+    },
+    
+    // 获取错误统计
+    getErrorStats() {
+        const now = Date.now();
+        const last24h = now - 24 * 60 * 60 * 1000;
+        const lastHour = now - 60 * 60 * 1000;
+        const last5min = now - 5 * 60 * 1000;
+        
+        const recent24h = this.errorLog.filter(e => e.timestamp > last24h);
+        const recentHour = this.errorLog.filter(e => e.timestamp > lastHour);
+        const recent5min = this.errorLog.filter(e => e.timestamp > last5min);
+        
+        return {
+            total: this.errorLog.length,
+            last24h: recent24h.length,
+            lastHour: recentHour.length,
+            last5min: recent5min.length,
+            // 修正：直接使用 apiHealthMonitor 的准确错误率
+            overallErrorRate: apiHealthMonitor.getErrorRate(),
+            byCategory: Object.fromEntries(
+                Object.entries(this.errorCategories).map(([key, value]) => [
+                    key,
+                    { count: value.count, lastOccurred: value.lastOccurred }
+                ])
+            ),
+            bySeverity: {
+                high: recent24h.filter(e => this.errorCategories[e.type]?.severity === 'high').length,
+                medium: recent24h.filter(e => this.errorCategories[e.type]?.severity === 'medium').length,
+                low: recent24h.filter(e => this.errorCategories[e.type]?.severity === 'low').length
+            }
+        };
+    },
+    
+    // 更新监控UI（如果存在监控面板）
+    updateMonitoringUI() {
+        // 更新API状态指示器
+        const apiStatusElement = document.getElementById('apiStatus');
+        const apiStatusText = document.getElementById('apiStatusText');
+        
+        if (apiStatusElement && apiStatusText) {
+            const statusStyles = {
+                'operational': { color: '#28a745', text: '正常' },
+                'degraded': { color: '#ffc107', text: '降级' },
+                'down': { color: '#dc3545', text: '故障' }
+            };
+            
+            const style = statusStyles[this.systemHealth.api] || statusStyles['down'];
+            apiStatusElement.style.color = style.color;
+            apiStatusText.textContent = style.text;
+        }
+        
+        // 更新错误率显示
+        const errorRateElement = document.getElementById('errorRate');
+        if (errorRateElement) {
+            const errorRate = apiHealthMonitor.getErrorRate();
+            errorRateElement.textContent = `${(errorRate * 100).toFixed(2)}%`;
+            
+            // 根据错误率设置颜色
+            if (errorRate > 0.1) { // 10%
+                errorRateElement.style.color = '#dc3545';
+            } else if (errorRate > 0.05) { // 5%
+                errorRateElement.style.color = '#ffc107';
+            } else {
+                errorRateElement.style.color = '#28a745';
+            }
+        }
+        
+        // 更新缓存命中率
+        const cacheHitRateElement = document.getElementById('cacheHitRate');
+        if (cacheHitRateElement) {
+            const cacheStats = advancedCacheSystem.getCacheStats();
+            const hitRate = cacheStats.aiAnalysis?.hitRate || '0%';
+            cacheHitRateElement.textContent = hitRate;
+            
+            // 根据命中率设置颜色
+            const hitRateNum = parseFloat(hitRate);
+            if (hitRateNum < 30) {
+                cacheHitRateElement.style.color = '#dc3545';
+            } else if (hitRateNum < 60) {
+                cacheHitRateElement.style.color = '#ffc107';
+            } else {
+                cacheHitRateElement.style.color = '#28a745';
+            }
+        }
+    },
+    
+    // 获取系统健康报告
+    getHealthReport() {
+        const stats = this.getErrorStats();
+        const cacheStats = advancedCacheSystem.getCacheStats();
+        const memoryStats = memoryMonitor.getCacheStats();
+        
+        return {
+            timestamp: Date.now(),
+            systemHealth: this.systemHealth,
+            errorStats: stats,
+            performance: {
+                totalRequests: this.performanceMetrics.totalRequests,
+                successRate: this.performanceMetrics.totalRequests > 0 ? 
+                    (this.performanceMetrics.successfulRequests / this.performanceMetrics.totalRequests * 100).toFixed(2) + '%' : '0%',
+                averageResponseTime: this.performanceMetrics.averageResponseTime + 'ms'
+            },
+            cacheHealth: {
+                aiCacheSize: cacheStats.aiAnalysis?.size || 0,
+                aiCacheHitRate: cacheStats.aiAnalysis?.hitRate || '0%',
+                userProfilesSize: cacheStats.userProfiles?.size || 0,
+                requestCacheSize: cacheStats.requestCache?.size || 0
+            },
+            memoryHealth: {
+                requestCacheSize: memoryStats.requestCacheSize,
+                profileCacheSize: memoryStats.profileCacheSize,
+                cacheHitRate: memoryStats.cacheHitRate
+            },
+            recommendations: this.generateRecommendations()
+        };
+    },
+    
+    // 生成优化建议
+    generateRecommendations() {
+        const recommendations = [];
+        const stats = this.getErrorStats();
+        
+        if (stats.errorRate5min > 1) {
+            recommendations.push({
+                priority: 'high',
+                message: '错误率过高，建议检查API配置和网络连接',
+                action: 'check_api_config'
+            });
+        }
+        
+        if (this.systemHealth.cache === 'degraded') {
+            recommendations.push({
+                priority: 'medium',
+                message: '缓存系统性能下降，建议清理缓存',
+                action: 'cleanup_cache'
+            });
+        }
+        
+        if (this.systemHealth.memory === 'warning') {
+            recommendations.push({
+                priority: 'medium',
+                message: '内存使用过高，建议执行垃圾回收',
+                action: 'garbage_collection'
+            });
+        }
+        
+        const cacheStats = advancedCacheSystem.getCacheStats();
+        const aiHitRate = parseFloat(cacheStats.aiAnalysis?.hitRate) || 0;
+        if (aiHitRate < 30) {
+            recommendations.push({
+                priority: 'low',
+                message: 'AI分析缓存命中率较低，建议优化缓存策略',
+                action: 'optimize_cache_strategy'
+            });
+        }
+        
+        return recommendations;
+    },
+    
+    // 手动触发健康检查
+    performHealthCheck() {
+        console.log('🏥 执行手动健康检查...');
+        this.updateSystemHealth();
+        const report = this.getHealthReport();
+        console.log('健康检查报告:', report);
+        return report;
+    },
+    
+    // 重置监控数据
+    resetMonitoring() {
+        console.log('🔄 重置监控数据...');
+        
+        // 重置错误计数器
+        Object.keys(this.errorCategories).forEach(key => {
+            this.errorCategories[key].count = 0;
+            this.errorCategories[key].lastOccurred = null;
+        });
+        
+        // 清空错误日志
+        this.errorLog = [];
+        
+        // 重置性能指标
+        this.performanceMetrics = {
+            totalRequests: 0,
+            successfulRequests: 0,
+            averageResponseTime: 0,
+            responseTimeHistory: [],
+            lastMetricsReset: Date.now()
+        };
+        
+        // 重置健康状态
+        this.systemHealth = {
+            overall: 'healthy',
+            api: 'operational',
+            cache: 'operational',
+            memory: 'optimal',
+            lastHealthCheck: Date.now(),
+            consecutiveHealthChecks: 0,
+            isRecovering: false,
+            recoveryStartTime: null
+        };
+        
+        console.log('✅ 监控数据重置完成');
+    }
+};
+
+// 定期健康检查
+setInterval(() => {
+    errorMonitoringSystem.updateSystemHealth();
+}, errorMonitoringSystem.config.HEALTH_CHECK_INTERVAL);
+
+// ===== API健康监控和降级管理 =====
+const apiHealthMonitor = {
+    errorCount: 0,
+    successCount: 0,
+    consecutiveErrors: 0,
+    lastErrorTime: null,
+    currentBatchSize: 3,
+    degradedMode: false,
+    degradationStartTime: null,
+    degradationThreshold: 5,          // 连续错误阈值
+    recoveryThreshold: 3,             // 恢复检测阈值
+    degradationCooldown: 5 * 60 * 1000, // 5分钟冷却期
+    
+    recordSuccess() {
+        this.successCount++;
+        this.consecutiveErrors = 0;
+        
+        // 同步更新性能指标
+        errorMonitoringSystem.performanceMetrics.totalRequests++;
+        errorMonitoringSystem.performanceMetrics.successfulRequests++;
+
+        // 集成错误监控系统
+        if (this.systemHealth?.isRecovering) {
+            errorMonitoringSystem.systemHealth.consecutiveHealthChecks++;
+        }
+        
+        // 检查是否可以从降级模式恢复
+        if (this.degradedMode) {
+            this.checkRecovery();
+        }
+    },
+    
+    recordError() {
+        this.errorCount++;
+        this.consecutiveErrors++;
+        this.lastErrorTime = Date.now();
+        
+        // 同步更新性能指标
+        errorMonitoringSystem.performanceMetrics.totalRequests++;
+        
+        // 检查是否需要进入降级模式
+        if (!this.degradedMode && this.consecutiveErrors >= this.degradationThreshold) {
+            this.enterDegradedMode();
+        }
+    },
+    
+    getErrorRate() {
+        const total = this.errorCount + this.successCount;
+        return total > 0 ? this.errorCount / total : 0;
+    },
+    
+    shouldUseAI() {
+        // 检查AI分析总开关
+        if (!aiAnalysisEnabled) {
+            return false;
+        }
+        
+        // 检查是否在降级模式
+        if (this.degradedMode) {
+            return false;
+        }
+        
+        // 检查连续错误数
+        return this.consecutiveErrors < this.degradationThreshold;
+    },
+    
+    getDynamicBatchSize() {
+        const errorRate = this.getErrorRate();
+        if (errorRate > 0.3) {
+            this.currentBatchSize = Math.max(1, this.currentBatchSize - 1);
+        } else if (errorRate < 0.1 && this.consecutiveErrors === 0) {
+            this.currentBatchSize = Math.min(5, this.currentBatchSize + 1);
+        }
+        return this.currentBatchSize;
+    },
+    
+    // 进入降级模式
+    enterDegradedMode() {
+        this.degradedMode = true;
+        this.degradationStartTime = Date.now();
+        
+        console.warn(`⚠️ AI服务降级：连续${this.consecutiveErrors}次错误，切换到传统匹配算法`);
+        
+        // 更新UI提示
+        this.updateDegradationUI(true);
+        
+        // 发送通知
+        this.notifyDegradation('进入降级模式', 'warning');
+    },
+    
+    // 检查恢复条件
+    checkRecovery() {
+        if (!this.degradedMode) return;
+        
+        const now = Date.now();
+        const timeSinceDegradation = now - this.degradationStartTime;
+        
+        // 必须满足时间冷却期和连续成功条件
+        if (timeSinceDegradation >= this.degradationCooldown && this.consecutiveErrors === 0) {
+            this.exitDegradedMode();
+        }
+    },
+    
+    // 退出降级模式
+    exitDegradedMode() {
+        this.degradedMode = false;
+        this.degradationStartTime = null;
+        
+        console.log(`✅ AI服务恢复：退出降级模式，重新启用AI智能匹配`);
+        
+        // 更新UI提示
+        this.updateDegradationUI(false);
+        
+        // 发送通知
+        this.notifyDegradation('AI服务已恢复', 'success');
+    },
+    
+    // 手动重置降级状态
+    forceReset() {
+        this.degradedMode = false;
+        this.degradationStartTime = null;
+        this.consecutiveErrors = 0;
+        this.errorCount = 0;
+        this.successCount = 0;
+        this.currentBatchSize = 3;
+        
+        console.log('🔄 API健康监控已手动重置');
+        this.updateDegradationUI(false);
+    },
+    
+    // 更新降级状态UI
+    updateDegradationUI(isDegraded) {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const aiToggleBtn = document.getElementById('aiToggleBtn');
+        
+        if (loadingIndicator) {
+            if (isDegraded) {
+                loadingIndicator.style.background = '#fff3cd';
+                loadingIndicator.style.color = '#856404';
+                loadingIndicator.style.border = '1px solid #ffeaa7';
+                loadingIndicator.innerHTML = '⚠️ AI服务暂时不可用，已切换到传统匹配算法';
+            } else {
+                loadingIndicator.style.background = '';
+                loadingIndicator.style.color = '#007bff';
+                loadingIndicator.style.border = '';
+                const baseText = aiAnalysisEnabled ? '🧠 正在进行AI智能分析，请稍候...' : '📊 正在进行传统匹配分析，请稍候...';
+                loadingIndicator.innerHTML = baseText;
+            }
+        }
+        
+        if (aiToggleBtn && isDegraded) {
+            // 在AI开关按钮上显示降级状态
+            const originalText = aiToggleBtn.textContent;
+            if (!originalText.includes('(降级)')) {
+                aiToggleBtn.textContent = originalText + ' (降级中)';
+                aiToggleBtn.style.background = 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)';
+            }
+        } else if (aiToggleBtn && !isDegraded) {
+            // 恢复正常状态
+            aiToggleBtn.textContent = aiToggleBtn.textContent.replace(' (降级中)', '');
+            updateAiToggleUI(); // 恢复正常样式
+        }
+    },
+    
+    // 发送降级通知
+    notifyDegradation(message, type = 'info') {
+        // 创建临时通知元素
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            z-index: 10000;
+            animation: slideInRight 0.3s ease-out;
+            min-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        `;
+        
+        switch (type) {
+            case 'warning':
+                notification.style.background = 'linear-gradient(135deg, #f39c12 0%, #e67e22 100%)';
+                break;
+            case 'success':
+                notification.style.background = 'linear-gradient(135deg, #00b894 0%, #00a085 100%)';
+                break;
+            default:
+                notification.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        }
+        
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        // 3秒后自动移除
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }
+        }, 3000);
+    },
+    
+    // 获取降级状态信息
+    getDegradationStatus() {
+        return {
+            degraded: this.degradedMode,
+            startTime: this.degradationStartTime,
+            duration: this.degradedMode ? Date.now() - this.degradationStartTime : 0,
+            consecutiveErrors: this.consecutiveErrors,
+            errorRate: this.getErrorRate(),
+            canRecover: this.degradedMode && 
+                       (Date.now() - this.degradationStartTime) >= this.degradationCooldown
+        };
+    }
+};
+
+// 智能重试配置
+const RETRY_CONFIG = {
+    maxRetries: 3,
+    baseDelay: 1000,      // 1秒基础延迟
+    maxDelay: 30000,      // 最大30秒延迟
+    backoffMultiplier: 2, // 指数增长倍数
+    jitterRange: 0.1      // 10%的随机抖动
+};
+
+/**
+ * 生成缓存键
+ */
+function generateCacheKey(user1, user2) {
+    const id1 = user1.id || user1.name;
+    const id2 = user2.id || user2.name;
+    // 确保键的一致性，无论用户顺序
+    return id1 < id2 ? `${id1}-${id2}` : `${id2}-${id1}`;
+}
+
+/**
+ * 分块处理函数 - 将大数组分成小块处理，避免内存峰值
+ * @param {Array} array - 要处理的数组
+ * @param {number} chunkSize - 每块的大小
+ * @returns {Array} 分块后的数组
+ */
+function chunkArray(array, chunkSize = MEMORY_CONFIG.CHUNK_SIZE) {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+        chunks.push(array.slice(i, i + chunkSize));
+    }
+    return chunks;
+}
+
+/**
+ * 异步分块处理器 - 逐块处理数据，释放内存压力
+ * @param {Array} items - 要处理的项目
+ * @param {Function} processor - 处理函数
+ * @param {Object} options - 配置选项
+ * @returns {Array} 处理结果
+ */
+async function processInChunks(items, processor, options = {}) {
+    const {
+        chunkSize = MEMORY_CONFIG.CHUNK_SIZE,
+        onProgress = null,
+        delayBetweenChunks = 100
+    } = options;
+    
+    const chunks = chunkArray(items, chunkSize);
+    const results = [];
+    let processedCount = 0;
+    
+    for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const chunkResults = await Promise.all(
+            chunk.map(item => processor(item))
+        );
+        
+        results.push(...chunkResults);
+        processedCount += chunk.length;
+        
+        // 进度回调
+        if (onProgress) {
+            onProgress(processedCount, items.length, i + 1, chunks.length);
+        }
+        
+        // 检查内存使用
+        memoryMonitor.checkMemoryUsage();
+        
+        // 块间延迟，让出CPU时间
+        if (i < chunks.length - 1 && delayBetweenChunks > 0) {
+            await sleep(delayBetweenChunks);
+        }
+    }
+    
+    return results;
+}
+
+// ===== 用户预过滤优化 =====
+
+/**
+ * 快速预过滤函数 - 在AI分析前过滤明显不合适的配对
+ * @param {Object} user1 - 第一个用户
+ * @param {Object} user2 - 第二个用户
+ * @returns {Object} 过滤结果 {shouldMatch: boolean, reason: string}
+ */
+function preFilterPair(user1, user2) {
+    // 1. 性别偏好检查（已存在，但这里明确列出）
+    if (!checkGenderPreferenceMatch(user1, user2)) {
+        return {
+            shouldMatch: false,
+            reason: "性别偏好不匹配"
+        };
+    }
+    
+    // 2. 数据完整性检查 - 如果两个用户数据都极其不完整，直接过滤
+    const profile1 = createUserProfile(user1);
+    const profile2 = createUserProfile(user2);
+    
+    // 如果两个用户的数据完整性都低于10%，直接跳过
+    if (profile1.data_quality.completeness_score < 0.1 && 
+        profile2.data_quality.completeness_score < 0.1) {
+        return {
+            shouldMatch: false,
+            reason: "用户数据过于缺失"
+        };
+    }
+    
+    // 3. 阅读承诺差异检查 - 如果阅读量期望差异太大（3级以上），直接过滤
+    const commitment1 = user1.questionnaire?.readingCommitment || user1.readingCommitment;
+    const commitment2 = user2.questionnaire?.readingCommitment || user2.readingCommitment;
+    
+    if (commitment1 && commitment2) {
+        const commitmentLevels = {
+            'light': 1,
+            'medium': 2,
+            'intensive': 3,
+            'epic': 4
+        };
+        const level1 = commitmentLevels[commitment1];
+        const level2 = commitmentLevels[commitment2];
+        
+        if (level1 && level2 && Math.abs(level1 - level2) >= 3) {
+            return {
+                shouldMatch: false,
+                reason: "阅读量期望差异过大"
+            };
+        }
+    }
+    
+    // 4. 匹配类型偏好冲突检查 - 如果双方偏好明确冲突，提前过滤
+    const pref1 = user1.questionnaire?.matchingTypePreference || user1.matchingTypePreference;
+    const pref2 = user2.questionnaire?.matchingTypePreference || user2.matchingTypePreference;
+    
+    if (pref1 && pref2 && 
+        pref1 !== 'no_preference' && pref2 !== 'no_preference' && 
+        pref1 !== pref2) {
+        // 如果一方要相似型，另一方要互补型，可能不太合适
+        // 但这里只是降低优先级，不是完全过滤
+        return {
+            shouldMatch: true,
+            priority: 0.7,  // 降低优先级
+            reason: "匹配类型偏好不同"
+        };
+    }
+    
+    // 5. 书籍类别兼容性检查 - 如果完全没有交集，降低优先级
+    const categories1 = user1.questionnaire?.bookCategories || user1.bookCategories || [];
+    const categories2 = user2.questionnaire?.bookCategories || user2.bookCategories || [];
+    
+    if (categories1.length > 0 && categories2.length > 0) {
+        const hasCommonCategory = categories1.some(cat => categories2.includes(cat));
+        if (!hasCommonCategory) {
+            // 没有共同的书籍类别，但不完全过滤（可能是互补型匹配）
+            return {
+                shouldMatch: true,
+                priority: 0.8,  // 略微降低优先级
+                reason: "书籍类别无交集"
+            };
+        }
+    }
+    
+    // 6. 活跃度检查 - 如果用户状态不是approved，过滤
+    if (user1.status !== 'approved' || user2.status !== 'approved') {
+        return {
+            shouldMatch: false,
+            reason: "用户状态未审核"
+        };
+    }
+    
+    // 通过所有过滤条件
+    return {
+        shouldMatch: true,
+        priority: 1.0,
+        reason: "通过预过滤"
+    };
+}
+
+/**
+ * 批量预过滤函数 - 对所有配对进行预过滤和优先级排序
+ * @param {Array} members - 所有成员
+ * @returns {Array} 过滤并排序后的配对列表
+ */
+function preFilterAndPrioritizePairs(members) {
+    const pairings = [];
+    
+    // 收集所有可能的配对并进行预过滤
+    for (let i = 0; i < members.length; i++) {
+        for (let j = i + 1; j < members.length; j++) {
+            const filterResult = preFilterPair(members[i], members[j]);
+            
+            if (filterResult.shouldMatch) {
+                pairings.push({
+                    user1: members[i],
+                    user2: members[j],
+                    priority: filterResult.priority || 1.0,
+                    filterReason: filterResult.reason
+                });
+            }
+        }
+    }
+    
+    // 按优先级排序，高优先级的先处理
+    pairings.sort((a, b) => b.priority - a.priority);
+    
+    console.log(`预过滤完成：从 ${members.length * (members.length - 1) / 2} 个可能配对中筛选出 ${pairings.length} 个有效配对`);
+    
+    return pairings;
+}
+
+// ===== 轻量级数据结构优化 =====
+
+/**
+ * 创建用户的轻量级引用，减少内存使用
+ * @param {Object} user - 原始用户对象
+ * @returns {Object} 轻量级用户引用
+ */
+function createLightweightUserRef(user) {
+    return {
+        id: user.id,
+        name: user.name,
+        studentId: user.studentId,
+        status: user.status,
+        // 只保留必要的问卷数据引用
+        questionnaire: user.questionnaire ? {
+            gender: user.questionnaire.gender,
+            matchGenderPreference: user.questionnaire.matchGenderPreference,
+            matchingTypePreference: user.questionnaire.matchingTypePreference,
+            readingCommitment: user.questionnaire.readingCommitment,
+            bookCategories: user.questionnaire.bookCategories,
+            version: user.questionnaire.version
+        } : null,
+        // 保留传统字段的引用
+        hobbies: user.hobbies,
+        books: user.books,
+        gender: user.gender,
+        readingCommitment: user.readingCommitment,
+        bookCategories: user.bookCategories,
+        matchGenderPreference: user.matchGenderPreference,
+        matchingTypePreference: user.matchingTypePreference
+    };
+}
+
+/**
+ * 优化的预过滤函数 - 使用轻量级数据结构
+ */
+function optimizedPreFilterPair(lightUser1, lightUser2) {
+    // 1. 性别偏好检查（简化版）
+    const genderPrefMatch = checkGenderPreferenceMatch(lightUser1, lightUser2);
+    if (!genderPrefMatch) {
+        return { shouldMatch: false, reason: "性别偏好不匹配" };
+    }
+    
+    // 2. 状态检查
+    if (lightUser1.status !== 'approved' || lightUser2.status !== 'approved') {
+        return { shouldMatch: false, reason: "用户状态未审核" };
+    }
+    
+    // 3. 阅读承诺差异检查
+    const commitment1 = lightUser1.questionnaire?.readingCommitment || lightUser1.readingCommitment;
+    const commitment2 = lightUser2.questionnaire?.readingCommitment || lightUser2.readingCommitment;
+    
+    if (commitment1 && commitment2) {
+        const commitmentLevels = { 'light': 1, 'medium': 2, 'intensive': 3, 'epic': 4 };
+        const level1 = commitmentLevels[commitment1];
+        const level2 = commitmentLevels[commitment2];
+        
+        if (level1 && level2 && Math.abs(level1 - level2) >= 3) {
+            return { shouldMatch: false, reason: "阅读量期望差异过大" };
+        }
+    }
+    
+    return { shouldMatch: true, priority: 1.0, reason: "通过预过滤" };
+}
+
+// ===== 高级缓存策略系统 =====
+
+// 多层缓存架构
+const advancedCacheSystem = {
+    // 第1层：用户画像缓存（已存在）
+    userProfiles: userProfileCache,
+    
+    // 第2层：AI分析结果缓存
+    aiAnalysisCache: new Map(),
+    
+    // 第3层：匹配结果缓存
+    matchResultsCache: new Map(),
+    
+    // 第4层：批次结果缓存
+    batchResultsCache: new Map(),
+    
+    // 缓存配置
+    config: {
+        AI_ANALYSIS_TTL: 7 * 24 * 60 * 60 * 1000,    // AI分析缓存7天
+        MATCH_RESULTS_TTL: 24 * 60 * 60 * 1000,      // 匹配结果缓存24小时
+        BATCH_RESULTS_TTL: 60 * 60 * 1000,           // 批次结果缓存1小时
+        MAX_AI_CACHE_SIZE: 2000,                     // AI分析缓存最大条目
+        MAX_MATCH_CACHE_SIZE: 1000,                  // 匹配结果缓存最大条目
+        MAX_BATCH_CACHE_SIZE: 100,                   // 批次缓存最大条目
+    },
+    
+    // 缓存统计
+    stats: {
+        aiCacheHits: 0,
+        aiCacheMisses: 0,
+        matchCacheHits: 0,
+        matchCacheMisses: 0,
+        batchCacheHits: 0,
+        batchCacheMisses: 0
+    },
+    
+    // 智能缓存键生成
+    generateAIAnalysisKey(profile1, profile2) {
+        // 基于用户画像内容生成哈希键
+        const content1 = JSON.stringify({
+            interests: profile1.interests,
+            reading: profile1.reading_preferences,
+            matching: profile1.matching_preferences
+        });
+        const content2 = JSON.stringify({
+            interests: profile2.interests,
+            reading: profile2.reading_preferences,
+            matching: profile2.matching_preferences
+        });
+        
+        // --- DEBUG LOGGING START ---
+        Logger.debug(`[Cache Key Gen] Profile 1 Content for ${profile1.basic_info.name}:`, content1);
+        Logger.debug(`[Cache Key Gen] Profile 2 Content for ${profile2.basic_info.name}:`, content2);
+        // --- DEBUG LOGGING END ---
+        
+        // 确保键的一致性
+        const sortedContents = [content1, content2].sort();
+        const finalKey = `ai_${this.simpleHash(sortedContents.join('|'))}`;
+
+        // --- DEBUG LOGGING START ---
+        Logger.debug(`[Cache Key Gen] Generated Key for ${profile1.basic_info.name} & ${profile2.basic_info.name}:`, finalKey);
+        // --- DEBUG LOGGING END ---
+
+        return finalKey;
+    },
+    
+    generateMatchKey(userIds, matchType) {
+        const sortedIds = userIds.sort();
+        return `match_${matchType}_${sortedIds.join('-')}`;
+    },
+    
+    generateBatchKey(userIdsList, matchType) {
+        const signature = userIdsList
+            .map(ids => ids.sort().join('-'))
+            .sort()
+            .join('|');
+        return `batch_${matchType}_${this.simpleHash(signature)}`;
+    },
+    
+    // 简单哈希函数
+    simpleHash(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // 转为32位整数
+        }
+        return Math.abs(hash).toString(36);
+    },
+    
+    // AI分析结果缓存操作
+    setAIAnalysis(profile1, profile2, result) {
+        const key = this.generateAIAnalysisKey(profile1, profile2);
+        this.aiAnalysisCache.set(key, {
+            data: result,
+            timestamp: Date.now(),
+            profiles: [profile1.basic_info, profile2.basic_info] // 仅存储基本信息用于调试
+        });
+        
+        // 检查缓存大小
+        if (this.aiAnalysisCache.size > this.config.MAX_AI_CACHE_SIZE) {
+            this.cleanupCache(this.aiAnalysisCache, this.config.MAX_AI_CACHE_SIZE * 0.8);
+        }
+    },
+    
+    getAIAnalysis(profile1, profile2) {
+        const key = this.generateAIAnalysisKey(profile1, profile2);
+        const cached = this.aiAnalysisCache.get(key);
+        
+        if (cached && this.isValidCache(cached, this.config.AI_ANALYSIS_TTL)) {
+            this.stats.aiCacheHits++;
+            console.log(`AI分析缓存命中: ${key}`);
+            return cached.data;
+        }
+        
+        if (cached) {
+            this.aiAnalysisCache.delete(key); // 删除过期缓存
+        }
+        
+        this.stats.aiCacheMisses++;
+        return null;
+    },
+    
+    // 通用缓存管理
+    isValidCache(cacheEntry, ttl) {
+        return cacheEntry && (Date.now() - cacheEntry.timestamp) < ttl;
+    },
+    
+    cleanupCache(cache, targetSize) {
+        const entries = Array.from(cache.entries());
+        entries.sort((a, b) => a[1].timestamp - b[1].timestamp); // 按时间排序
+        
+        const deleteCount = cache.size - targetSize;
+        for (let i = 0; i < deleteCount; i++) {
+            cache.delete(entries[i][0]);
+        }
+        
+        console.log(`缓存清理: 删除了 ${deleteCount} 个旧条目`);
+    },
+    
+    // 缓存预热
+    async preheatUserProfiles(users) {
+        console.log(`开始预热 ${users.length} 个用户画像...`);
+        const startTime = Date.now();
+        
+        for (const user of users) {
+            createUserProfile(user); // 这会自动缓存到userProfileCache
+        }
+        
+        const duration = Date.now() - startTime;
+        console.log(`用户画像预热完成，耗时 ${duration}ms`);
+    },
+    
+    // 获取缓存统计信息
+    getCacheStats() {
+        const aiHitRate = this.stats.aiCacheHits + this.stats.aiCacheMisses > 0 
+            ? (this.stats.aiCacheHits / (this.stats.aiCacheHits + this.stats.aiCacheMisses) * 100).toFixed(2)
+            : 0;
+        
+        return {
+            userProfiles: {
+                size: userProfileCache.size,
+                maxSize: MEMORY_CONFIG.MAX_PROFILE_CACHE_SIZE
+            },
+            aiAnalysis: {
+                size: this.aiAnalysisCache.size,
+                maxSize: this.config.MAX_AI_CACHE_SIZE,
+                hitRate: `${aiHitRate}%`,
+                hits: this.stats.aiCacheHits,
+                misses: this.stats.aiCacheMisses
+            },
+            requestCache: {
+                size: requestCache.size,
+                maxSize: MEMORY_CONFIG.MAX_CACHE_SIZE
+            }
+        };
+    },
+    
+    // 智能缓存失效
+    invalidateUserCaches(userId) {
+        // 清理相关的用户画像缓存
+        userProfileCache.delete(userId);
+        
+        // 清理包含该用户的AI分析缓存
+        for (const [key, value] of this.aiAnalysisCache.entries()) {
+            if (value.profiles && value.profiles.some(p => p.student_id === userId || p.name === userId)) {
+                this.aiAnalysisCache.delete(key);
+            }
+        }
+        
+        // 清理匹配结果缓存（如果有的话）
+        for (const [key] of requestCache.entries()) {
+            if (key.includes(userId)) {
+                requestCache.delete(key);
+            }
+        }
+        
+        console.log(`已清理用户 ${userId} 相关的所有缓存`);
+    },
+    
+    // 全面缓存清理
+    clearAllCaches() {
+        userProfileCache.clear();
+        this.aiAnalysisCache.clear();
+        requestCache.clear();
+        
+        // 重置统计
+        this.stats = {
+            aiCacheHits: 0,
+            aiCacheMisses: 0,
+            matchCacheHits: 0,
+            matchCacheMisses: 0,
+            batchCacheHits: 0,
+            batchCacheMisses: 0
+        };
+        
+        console.log('所有缓存已清理');
+    }
+};
+
+/**
+ * 检查缓存是否有效
+ */
+function isValidCache(cacheEntry) {
+    return cacheEntry && (Date.now() - cacheEntry.timestamp) < CACHE_TTL;
+}
+
+/**
+ * 智能延迟函数 - 指数退避 + 随机抖动
+ */
+function calculateDelay(retryCount) {
+    const exponentialDelay = Math.min(
+        RETRY_CONFIG.baseDelay * Math.pow(RETRY_CONFIG.backoffMultiplier, retryCount),
+        RETRY_CONFIG.maxDelay
+    );
+    
+    // 添加随机抖动，避免请求同时发送
+    const jitter = exponentialDelay * RETRY_CONFIG.jitterRange * (Math.random() - 0.5);
+    return Math.max(0, Math.round(exponentialDelay + jitter));
+}
+
+/**
+ * 睡眠函数
+ */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * 新一代AI驱动的用户匹配引擎
+ * 使用单次AI调用完成全面的匹配分析，替代原有的多层次计算
+ * @param {Object} user1 - 第一个用户
+ * @param {Object} user2 - 第二个用户  
+ * @returns {Object} 详细的匹配分析结果
+ */
+async function calculateAICompatibility(user1, user2) {
+    // 检查缓存
+    const cacheKey = generateCacheKey(user1, user2);
+    const cachedResult = requestCache.get(cacheKey);
+    if (isValidCache(cachedResult)) {
+        console.log(`使用缓存结果: ${cacheKey}`);
+        memoryMonitor.cacheHits++; // 增加requestCache命中计数
+        return cachedResult.data;
+    }
+    memoryMonitor.cacheMisses++;
+    
+    // 首先检查性别偏好匹配
+    if (!checkGenderPreferenceMatch(user1, user2)) {
+        const result = {
+            score: 0,
+            reason: "性别偏好不匹配",
+            gender_preference_compatible: false,
+            analysis: null
+        };
+        // 缓存不匹配结果
+        requestCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
+    }
+    
+    // 创建标准化用户画像
+    const profile1 = createUserProfile(user1);
+    const profile2 = createUserProfile(user2);
+    
+    // 检查高级AI分析缓存
+    const cachedAIAnalysis = advancedCacheSystem.getAIAnalysis(profile1, profile2);
+    if (cachedAIAnalysis) {
+        console.log(`使用AI分析缓存结果: ${user1.name} - ${user2.name}`);
+        advancedCacheSystem.stats.aiCacheHits++; // 增加AI缓存命中计数
+        return {
+            score: cachedAIAnalysis.compatibility_score,
+            reason: cachedAIAnalysis.summary || "AI缓存分析完成",
+            gender_preference_compatible: true,
+            data_completeness_issue: false,
+            analysis: {
+                ai_analysis: cachedAIAnalysis,
+                user1_completeness: profile1.data_quality.completeness_score,
+                user2_completeness: profile2.data_quality.completeness_score,
+                commonHobbies: cachedAIAnalysis.shared_interests || [],
+                commonBooks: cachedAIAnalysis.shared_books || [],
+                detailLevel: {
+                    exactMatches: cachedAIAnalysis.exact_matches || 0,
+                    semanticMatches: cachedAIAnalysis.semantic_matches || 0,
+                    categoryMatches: cachedAIAnalysis.category_matches || 0
+                }
+            }
+        };
+    }
+    
+    // 数据质量检查 - 如果两个用户的数据都很少，返回低分
+    const minCompleteness = Math.min(profile1.data_quality.completeness_score, profile2.data_quality.completeness_score);
+    if (minCompleteness < 0.2) {
+        const result = {
+            score: minCompleteness * 2, // 最多0.4分
+            reason: "用户数据不足，无法进行有效匹配",
+            gender_preference_compatible: true,
+            data_completeness_issue: true,
+            analysis: {
+                user1_completeness: profile1.data_quality.completeness_score,
+                user2_completeness: profile2.data_quality.completeness_score
+            }
+        };
+        // 缓存数据不足结果
+        requestCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
+    }
+    
+    // 调用AI进行全面匹配分析
+    try {
+        const aiAnalysis = await getAIMatchingAnalysis(profile1, profile2);
+        
+        // 根据数据完整性调整最终分数
+        const dataQualityMultiplier = (profile1.data_quality.completeness_score + profile2.data_quality.completeness_score) / 2;
+        const adjustedScore = aiAnalysis.compatibility_score * Math.min(dataQualityMultiplier + 0.3, 1.0);
+        
+        // 缓存AI分析结果到高级缓存系统
+        advancedCacheSystem.setAIAnalysis(profile1, profile2, aiAnalysis);
+        
+        const result = {
+            score: adjustedScore,
+            reason: aiAnalysis.summary || "AI全面分析完成",
+            gender_preference_compatible: true,
+            data_completeness_issue: false,
+            analysis: {
+                ai_analysis: aiAnalysis,
+                data_quality_multiplier: dataQualityMultiplier,
+                user1_completeness: profile1.data_quality.completeness_score,
+                user2_completeness: profile2.data_quality.completeness_score,
+                // 保持向后兼容的字段
+                commonHobbies: aiAnalysis.shared_interests || [],
+                commonBooks: aiAnalysis.shared_books || [],
+                detailLevel: {
+                    exactMatches: aiAnalysis.exact_matches || 0,
+                    semanticMatches: aiAnalysis.semantic_matches || 0,
+                    categoryMatches: aiAnalysis.category_matches || 0
+                }
+            }
+        };
+        
+        // 缓存成功结果
+        requestCache.set(cacheKey, { data: result, timestamp: Date.now() });
+        return result;
+    } catch (error) {
+        console.warn('AI匹配分析失败，返回低分:', error);
+        const fallbackResult = {
+            score: 0.1,
+            reason: "AI分析失败",
+            gender_preference_compatible: true,
+        };
+        
+        // 不缓存失败结果，下次重试
+        return fallbackResult;
+    }
+}
+
+/**
+ * 根据用户匹配类型偏好调整AI分析分数
+ * @param {Object} aiResult - AI分析原始结果
+ * @param {Object} profile1 - 用户1的画像
+ * @param {Object} profile2 - 用户2的画像
+ * @returns {Object} 调整后的分析结果
+ */
+function adjustScoreByPreference(aiResult, profile1, profile2) {
+    const pref1 = profile1.matching_preferences.matching_type_preference;
+    const pref2 = profile2.matching_preferences.matching_type_preference;
+    
+    // 创建结果副本，避免修改原对象
+    const adjustedResult = { ...aiResult };
+    let adjustmentFactor = 1.0;
+    let adjustmentNote = '';
+    
+    // 偏好兼容性检查和分数调整
+    if (pref1 && pref2 && pref1 !== '' && pref2 !== '') {
+        if (pref1 !== 'no_preference' && pref2 !== 'no_preference') {
+            if (pref1 !== pref2) {
+                // 偏好不匹配，降低分数
+                adjustmentFactor = 0.7;
+                adjustedResult.preference_mismatch = true;
+                adjustmentNote = `用户偏好不匹配：一方偏好${pref1 === 'similar' ? '相似型' : '互补型'}，另一方偏好${pref2 === 'similar' ? '相似型' : '互补型'}搭档`;
+                
+                // 在潜在挑战中添加偏好差异提醒
+                adjustedResult.potential_challenges = [
+                    ...adjustedResult.potential_challenges,
+                    adjustmentNote
+                ];
+            } else {
+                // 偏好匹配，根据类型调整
+                if (pref1 === 'similar') {
+                    // 双方都要相似型，提升相似性权重
+                    const similarityBonus = (adjustedResult.detailed_analysis.similarity_score || 0) * 0.15;
+                    adjustmentFactor = 1.0 + Math.min(0.3, similarityBonus / 10);
+                    adjustmentNote = '双方都偏好相似型搭档，相似性权重提升';
+                } else if (pref1 === 'complementary') {
+                    // 双方都要互补型，提升互补性权重  
+                    const complementaryBonus = (adjustedResult.detailed_analysis.complementarity_score || 0) * 0.15;
+                    adjustmentFactor = 1.0 + Math.min(0.3, complementaryBonus / 10);
+                    adjustmentNote = '双方都偏好互补型搭档，互补性权重提升';
+                }
+            }
+        } else {
+            // 至少一方选择"都可以"，正常分析
+            adjustmentNote = '至少一方对匹配类型无特殊偏好，按正常权重分析';
+        }
+    } else {
+        // 偏好信息不完整
+        adjustmentNote = '偏好信息不完整，按正常权重分析';
+    }
+    
+    // 应用调整因子
+    adjustedResult.compatibility_score = Math.min(10, adjustedResult.compatibility_score * adjustmentFactor);
+    
+    // 添加偏好分析信息
+    adjustedResult.preference_analysis = {
+        user1_preference: pref1 || 'no_preference',
+        user2_preference: pref2 || 'no_preference',
+        preference_match: pref1 === pref2 || pref1 === 'no_preference' || pref2 === 'no_preference',
+        adjustment_factor: adjustmentFactor,
+        adjustment_note: adjustmentNote,
+        preference_impact: adjustmentFactor > 1.0 ? 'positive' : adjustmentFactor < 1.0 ? 'negative' : 'neutral'
+    };
+    
+    return adjustedResult;
+}
+
+/**
+ * 综合性AI匹配分析函数
+ * 使用先进的提示词工程，让AI对两个用户进行全面的兼容性分析
+ * @param {Object} profile1 - 第一个用户的标准化画像
+ * @param {Object} profile2 - 第二个用户的标准化画像
+ * @returns {Object} AI分析结果
+ */
+async function getAIMatchingAnalysis(profile1, profile2) {
+    if (!AI_BASE_URL || !AI_API_KEY) {
+        throw new Error('AI服务未配置');
+    }
+
+    const systemPrompt = `你是一位专业的读书会配对专家，具有深厚的心理学和社会学背景。你的任务是分析两个用户的全面信息，判断他们作为读书会伙伴的兼容性。
+
+## 分析维度框架
+
+### 1. 相似性分析 (Similarity Analysis)
+- **兴趣重叠度**: 共同爱好、相似偏好的程度
+- **阅读品味**: 喜欢的书籍类型、作者、主题的重叠
+- **阅读节奏**: 阅读速度、投入时间的匹配程度
+- **价值观共鸣**: 从阅读偏好中体现的价值观相似性
+
+### 2. 互补性分析 (Complementarity Analysis)  
+- **知识互补**: 不同领域的知识可以互相补充
+- **技能互补**: 分析能力、表达能力等技能的互补
+- **视角多样性**: 不同背景带来的多元视角
+- **成长潜力**: 互相促进学习和成长的可能性
+
+### 3. 兼容性分析 (Compatibility Analysis)
+- **沟通风格**: 基于偏好推断的沟通方式兼容性  
+- **学习方式**: 阅读习惯和学习偏好的匹配
+- **时间安排**: 阅读投入度和可用时间的协调性
+- **人格特质**: 从阅读偏好推断的性格特征兼容性
+
+## 用户匹配偏好考虑 ⭐ 重要
+在分析时必须考虑两个用户的匹配类型偏好：
+- **similar**: 用户倾向于寻找相似型搭档（兴趣相近、品味相似）
+- **complementary**: 用户倾向于寻找互补型搭档（不同背景、互相学习）
+- **no_preference**: 对匹配类型没有特殊偏好
+
+### 偏好匹配规则：
+1. **双方都偏好相似型**: 重点突出相似性分析，similarity_score权重增加
+2. **双方都偏好互补型**: 重点突出互补性分析，complementarity_score权重增加
+3. **一方偏好相似型，一方偏好互补型**: 平衡考虑，适度降低整体匹配分数
+4. **至少一方选择"都可以"**: 正常分析，不做特殊调整
+5. **偏好不匹配时**: 在分析中明确指出偏好差异，并在potential_challenges中提及
+
+## 评分标准
+- **优秀匹配 (8.0-10.0)**: 高度相似 + 良好互补 + 完美兼容
+- **良好匹配 (6.0-7.9)**: 中等相似 + 部分互补 + 基本兼容  
+- **一般匹配 (4.0-5.9)**: 少量共同点 + 有限互补 + 可接受兼容
+- **较差匹配 (2.0-3.9)**: 很少共同点 + 互补不足 + 兼容性问题
+- **不匹配 (0.0-1.9)**: 几乎无共同点 + 冲突倾向 + 严重不兼容
+
+## 分析要求
+1. 深度分析两个用户的所有可用信息
+2. 考虑显性和隐性的匹配因素
+3. 提供具体的匹配原因和建议
+4. 识别潜在的挑战和解决方案
+5. 给出具体的读书会活动建议
+6. 重点考虑用户的匹配类型偏好
+
+返回格式必须是JSON:
+{
+    "compatibility_score": 0.0到10.0的数字,
+    "match_type": "相似型/互补型/混合型",
+    "confidence_level": 0.0到1.0的置信度,
+    "summary": "简洁的匹配总结(1-2句话)",
+    "detailed_analysis": {
+        "similarity_score": 0.0到10.0,
+        "complementarity_score": 0.0到10.0,
+        "compatibility_score": 0.0到10.0,
+        "similarity_highlights": ["相似点1", "相似点2"],
+        "complementarity_highlights": ["互补点1", "互补点2"],  
+        "compatibility_highlights": ["兼容点1", "兼容点2"]
+    },
+    "preference_compatibility": {
+        "user1_preference": "similar/complementary/no_preference",
+        "user2_preference": "similar/complementary/no_preference", 
+        "preference_match": true/false,
+        "preference_impact": "positive/neutral/negative",
+        "preference_note": "关于偏好匹配的说明"
+    },
+    "shared_interests": ["共同兴趣1", "共同兴趣2"],
+    "shared_books": ["共同书籍1", "共同书籍2"],
+    "potential_challenges": ["潜在挑战1", "潜在挑战2"],
+    "reading_recommendations": ["推荐书籍1", "推荐书籍2"],
+    "activity_suggestions": ["活动建议1", "活动建议2"],
+    "growth_opportunities": ["成长机会1", "成长机会2"],
+    "exact_matches": 精确匹配数量,
+    "semantic_matches": 语义匹配数量,
+    "category_matches": 类别匹配数量,
+    "match_reasoning": "详细的匹配逻辑说明(3-5句话)"
+}`;
+
+    const userPrompt = JSON.stringify({
+        user1_profile: profile1,
+        user2_profile: profile2,
+        analysis_request: "进行全面的读书会伙伴兼容性分析",
+        focus_areas: ["相似性", "互补性", "兼容性", "成长潜力"]
+    });
+
+    try {
+        // 检查AI是否可用
+        if (!apiHealthMonitor.shouldUseAI()) {
+            const status = apiHealthMonitor.getDegradationStatus();
+            if (status.degraded) {
+                console.warn(`AI服务降级中：连续${status.consecutiveErrors}次错误，降级时长${Math.round(status.duration/1000)}秒`);
+                throw new Error('AI服务降级中，使用传统算法');
+            } else {
+                console.warn('AI暂时不可用，连续错误过多');
+                throw new Error('AI服务暂时不可用');
+            }
+        }
+        
+        // 添加速率限制处理和智能重试机制
+        let retryCount = 0;
+        
+        while (retryCount <= RETRY_CONFIG.maxRetries) {
+            try {
+                // 如果是重试，添加智能延迟
+                if (retryCount > 0) {
+                    const delay = calculateDelay(retryCount);
+                    console.log(`AI API重试 ${retryCount}/${RETRY_CONFIG.maxRetries}，等待 ${delay}ms...`);
+                    await sleep(delay);
+                }
+                
+                const response = await fetch(AI_BASE_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${AI_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: AI_MODEL_NAME,
+                        messages: [
+                            { role: "system", content: systemPrompt },
+                            { role: "user", content: userPrompt }
+                        ],
+                        response_format: { type: "json_object" },
+                        temperature: 0.7,
+                        max_tokens: 2000
+                    })
+                });
+
+                if (response.status === 429) {
+                    // 速率限制，记录错误并重试
+                    apiHealthMonitor.recordError();
+                    errorMonitoringSystem.logError('API_RATE_LIMIT', {
+                        retryCount,
+                        endpoint: AI_BASE_URL,
+                        responseStatus: 429
+                    });
+                    retryCount++;
+                    if (retryCount > RETRY_CONFIG.maxRetries) {
+                        throw new Error('AI API速率限制，请稍后再试');
+                    }
+                    continue;
+                }
+
+                if (!response.ok) {
+                    apiHealthMonitor.recordError();
+                    errorMonitoringSystem.logError('API_NETWORK_ERROR', {
+                        retryCount,
+                        endpoint: AI_BASE_URL,
+                        responseStatus: response.status,
+                        responseText: await response.text()
+                    });
+                    throw new Error(`AI API请求失败: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const content = data.choices[0].message.content;
+                
+                // 成功获取响应，记录成功
+                apiHealthMonitor.recordSuccess();
+                
+                // 解析JSON
+                try {
+                    const analysis = JSON.parse(content);
+                    
+                    // 验证和标准化返回结果
+                    const rawAnalysis = {
+                        compatibility_score: Math.max(0, Math.min(10, analysis.compatibility_score || 0)),
+                        match_type: analysis.match_type || "未知类型",
+                        confidence_level: Math.max(0, Math.min(1, analysis.confidence_level || 0.5)),
+                        summary: analysis.summary || "AI分析完成",
+                        detailed_analysis: analysis.detailed_analysis || {},
+                        preference_compatibility: analysis.preference_compatibility || {},
+                        shared_interests: analysis.shared_interests || [],
+                        shared_books: analysis.shared_books || [],
+                        potential_challenges: analysis.potential_challenges || [],
+                        reading_recommendations: analysis.reading_recommendations || [],
+                        activity_suggestions: analysis.activity_suggestions || [],
+                        growth_opportunities: analysis.growth_opportunities || [],
+                        exact_matches: analysis.exact_matches || 0,
+                        semantic_matches: analysis.semantic_matches || 0,
+                        category_matches: analysis.category_matches || 0,
+                        match_reasoning: analysis.match_reasoning || "AI分析完成"
+                    };
+                    
+                    // 根据用户偏好调整分数
+                    return adjustScoreByPreference(rawAnalysis, profile1, profile2);
+                } catch (parseError) {
+                    console.warn('AI返回的JSON解析失败:', parseError, content);
+                    errorMonitoringSystem.logError('AI_PARSING_ERROR', {
+                        content: content?.substring(0, 500) + '...',
+                        parseError: parseError.message,
+                        retryCount
+                    });
+                    throw new Error('AI返回格式错误');
+                }
+                
+            } catch (requestError) {
+                console.warn(`AI请求失败 (尝试 ${retryCount + 1}/${RETRY_CONFIG.maxRetries + 1}):`, requestError.message);
+                
+                // 记录错误
+                if (requestError.message.includes('429') || requestError.message.includes('速率限制')) {
+                    // 速率限制错误已经在上面处理
+                } else {
+                    apiHealthMonitor.recordError();
+                    errorMonitoringSystem.logError('AI_NETWORK_ERROR', {
+                        retryCount,
+                        errorMessage: requestError.message,
+                        endpoint: AI_BASE_URL
+                    });
+                }
+                
+                retryCount++;
+                if (retryCount > RETRY_CONFIG.maxRetries) {
+                    throw requestError;
+                }
+            }
+        }
+        
+        // 如果所有重试都失败，抛出最后的错误
+        throw new Error('AI API请求重试次数用尽');
+        
+    } catch (error) {
+        console.error('AI匹配分析请求失败:', error);
+        apiHealthMonitor.recordError();
+        errorMonitoringSystem.logError('AI_TIMEOUT_ERROR', {
+            errorMessage: error.message,
+            endpoint: AI_BASE_URL,
+            totalRetries: RETRY_CONFIG.maxRetries
+        });
+        throw error;
+    }
+}
+
+// 寻找相似搭档（仅管理员）- 升级版
+async function findSimilarMatches() {
+    if (!isAdmin || !validateAdminSession()) {
+        alert('只有管理员可以进行匹配或会话已过期');
+        if (!validateAdminSession()) logout();
         return;
     }
     if (members.length < 2) {
@@ -593,36 +4295,390 @@ async function findComplementaryMatches() {
         return;
     }
 
-    document.getElementById('loadingIndicator').style.display = 'block';
+    // 显示进度条
+    showProgress();
+    
     const matches = [];
-    const promises = [];
-
-    for (let i = 0; i < members.length; i++) {
-        for (let j = i + 1; j < members.length; j++) {
-            promises.push(
-                calculateSimilarity(members[i], members[j]).then(similarity => {
-                    matches.push({
-                        member1: members[i],
-                        member2: members[j],
-                        score: similarity.score,
-                        commonHobbies: similarity.commonHobbies,
-                        commonBooks: similarity.commonBooks,
-                        detailLevel: similarity.detailLevel,
-                        type: 'complementary'
-                    });
-                })
+    
+    // 使用预过滤函数获取优先级排序后的配对
+    const pairings = preFilterAndPrioritizePairs(members);
+    
+    console.log(`总共需要处理 ${pairings.length} 个配对，使用动态并发控制`);
+    
+    // 用户画像预热 - 提前创建所有用户画像缓存
+    await advancedCacheSystem.preheatUserProfiles(members);
+    
+    // 内存使用优化：清理缓存
+    memoryMonitor.checkMemoryUsage();
+    
+    // 显示所有缓存统计
+    const cacheStats = advancedCacheSystem.getCacheStats();
+    console.log('全面缓存统计:', cacheStats);
+    console.log('内存监控统计:', memoryMonitor.getCacheStats());
+    
+    // 重置API健康监控状态
+    apiHealthMonitor.consecutiveErrors = 0;
+    
+    const startTime = Date.now();
+    let processedCount = 0;
+    
+    // 初始化进度
+    updateProgress(0, pairings.length, 0, `准备分析 ${pairings.length} 个配对...`, startTime);
+    
+    // 使用分块处理优化内存使用
+    const processChunk = async (pairing) => {
+        try {
+            let result;
+            
+            // 智能算法选择：优先AI，降级时使用传统算法
+            if (apiHealthMonitor.shouldUseAI() && aiAnalysisEnabled) {
+                try {
+                    result = await calculateAICompatibility(pairing.user1, pairing.user2);
+                } catch (aiError) {
+                    console.warn(`AI匹配失败，降级到传统算法: ${pairing.user1.name} - ${pairing.user2.name}`, aiError.message);
+                    
+                    // 使用传统算法作为降级策略
+                    result = await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                    
+                    // 标记为降级结果
+                    result.degraded = true;
+                    result.degradationReason = aiError.message;
+                }
+            } else {
+                // 直接使用传统算法
+                result = await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                result.traditionalMode = !aiAnalysisEnabled;
+                result.healthDegraded = apiHealthMonitor.degradedMode;
+            }
+                
+            if (result.score > 0) {
+                return {
+                    member1: pairing.user1,
+                    member2: pairing.user2,
+                    score: result.score,
+                    reason: result.reason || `${getAnalysisModeLabel(result)}匹配分析完成`,
+                    // 向后兼容的字段
+                    commonHobbies: getFieldFromResult(result, 'commonHobbies'),
+                    commonBooks: getFieldFromResult(result, 'commonBooks'),
+                    detailLevel: getFieldFromResult(result, 'detailLevel'),
+                    // AI特有字段（仅在AI模式下有效）
+                    aiAnalysis: result.analysis?.ai_analysis || null,
+                    matchType: result.analysis?.ai_analysis?.match_type || getMatchTypeFromResult(result),
+                    confidenceLevel: result.analysis?.ai_analysis?.confidence_level || null,
+                    // 传统模式特有字段
+                    readingCommitmentCompatibility: result.readingCommitmentCompatibility || null,
+                    textPreferenceAnalysis: result.textPreferenceAnalysis || null,
+                    personalityProfiles: result.personalityProfiles || null,
+                    implicitAnalysis: result.implicitAnalysis || null,
+                    deepCompatibilityAnalysis: result.deepCompatibilityAnalysis || null,
+                    matchingDimensions: result.matchingDimensions || null,
+                    // 降级状态标记
+                    degraded: result.degraded || false,
+                    degradationReason: result.degradationReason || null,
+                    traditionalMode: result.traditionalMode || false,
+                    healthDegraded: result.healthDegraded || false,
+                    type: 'similar',
+                    analysisMode: getAnalysisMode(result)
+                };
+            }
+            return null;
+        } catch (error) {
+            console.warn(`配对失败 ${pairing.user1.name} - ${pairing.user2.name}:`, error);
+            return null;
+        }
+    };
+    
+    // 使用分块处理器处理配对
+    const chunks = chunkArray(pairings, MEMORY_CONFIG.CHUNK_SIZE);
+    let allMatches = [];
+    
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        const chunk = chunks[chunkIndex];
+        const startIdx = chunkIndex * MEMORY_CONFIG.CHUNK_SIZE;
+        const endIdx = Math.min(startIdx + chunk.length, pairings.length);
+        
+        console.log(`处理块 ${chunkIndex + 1}/${chunks.length}，包含 ${chunk.length} 个配对`);
+        
+        // 在每个块内使用动态并发
+        let i = 0;
+        while (i < chunk.length) {
+            const currentBatchSize = apiHealthMonitor.getDynamicBatchSize();
+            const batch = chunk.slice(i, Math.min(i + currentBatchSize, chunk.length));
+            
+            // 更新进度
+            const currentProcessed = startIdx + i;
+            updateProgress(
+                currentProcessed, 
+                pairings.length, 
+                allMatches.length, 
+                `正在处理配对 ${currentProcessed + 1}-${currentProcessed + batch.length}...`,
+                startTime
             );
+            
+            // 并发处理批次
+            const batchResults = await Promise.all(batch.map(processChunk));
+            const validResults = batchResults.filter(result => result !== null);
+            allMatches.push(...validResults);
+            
+            i += batch.length;
+            processedCount = startIdx + i;
+            
+            // 批次间延迟
+            if (i < chunk.length) {
+                const errorRate = apiHealthMonitor.getErrorRate();
+                const delay = errorRate > 0.2 ? 1000 : 500;
+                await sleep(delay);
+            }
+        }
+        
+        // 块间清理和延迟
+        if (chunkIndex < chunks.length - 1) {
+            // 检查内存使用
+            memoryMonitor.checkMemoryUsage();
+            
+            // 块间延迟，让出CPU
+            await sleep(200);
+            
+            console.log(`块 ${chunkIndex + 1} 完成，当前找到 ${allMatches.length} 个匹配`);
         }
     }
+    
+    matches.push(...allMatches);
+    
+    // 完成所有匹配
+    matches.sort((a, b) => b.score - a.score);
+    
+    // 显示完成进度
+    updateProgress(
+        pairings.length, 
+        pairings.length, 
+        matches.length, 
+        '匹配分析完成！',
+        startTime
+    );
+    
+    const titleInfo = getMatchingTitle(matches, 'similar');
+    displayMatches(matches.slice(0, 10), titleInfo.title, titleInfo.subtitle);
+}
 
-    await Promise.all(promises);
-    matches.sort((a, b) => a.score - b.score);
-    document.getElementById('loadingIndicator').style.display = 'none';
-    displayMatches(matches.slice(0, 10), '互补搭档推荐');
+// 寻找互补搭档（仅管理员）- 升级版
+async function findComplementaryMatches() {
+    if (!isAdmin || !validateAdminSession()) {
+        alert('只有管理员可以进行匹配或会话已过期');
+        if (!validateAdminSession()) logout();
+        return;
+    }
+    if (members.length < 2) {
+        alert('需要至少2个成员才能进行匹配');
+        return;
+    }
+
+    // 显示进度条
+    showProgress();
+    
+    const matches = [];
+    
+    // 使用预过滤函数获取优先级排序后的配对
+    const pairings = preFilterAndPrioritizePairs(members);
+    
+    console.log(`互补匹配：总共需要处理 ${pairings.length} 个配对，使用动态并发控制`);
+    
+    // 内存使用优化：清理缓存
+    memoryMonitor.checkMemoryUsage();
+    
+    // 显示所有缓存统计
+    const cacheStats = advancedCacheSystem.getCacheStats();
+    console.log('全面缓存统计:', cacheStats);
+    console.log('内存监控统计:', memoryMonitor.getCacheStats());
+    
+    // 重置API健康监控状态
+    apiHealthMonitor.consecutiveErrors = 0;
+    
+    const startTime = Date.now();
+    let processedCount = 0;
+    
+    // 初始化进度
+    updateProgress(0, pairings.length, 0, `准备分析 ${pairings.length} 个互补配对...`, startTime);
+    
+    // 使用分块处理优化内存使用
+    const processChunk = async (pairing) => {
+        try {
+            let result;
+            
+            // 智能算法选择：优先AI，降级时使用传统算法
+            if (apiHealthMonitor.shouldUseAI() && aiAnalysisEnabled) {
+                try {
+                    result = await calculateAICompatibility(pairing.user1, pairing.user2);
+                } catch (aiError) {
+                    console.warn(`AI匹配失败，降级到传统算法: ${pairing.user1.name} - ${pairing.user2.name}`, aiError.message);
+                    
+                    // 使用传统算法作为降级策略
+                    result = await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                    
+                    // 标记为降级结果
+                    result.degraded = true;
+                    result.degradationReason = aiError.message;
+                }
+            } else {
+                // 直接使用传统算法
+                result = await calculateSimilarity_deprecated(pairing.user1, pairing.user2);
+                result.traditionalMode = !aiAnalysisEnabled;
+                result.healthDegraded = apiHealthMonitor.degradedMode;
+            }
+                
+            return {
+                member1: pairing.user1,
+                member2: pairing.user2,
+                score: result.score,
+                reason: result.reason || `${getAnalysisModeLabel(result)}匹配分析完成`,
+                // 向后兼容的字段
+                commonHobbies: getFieldFromResult(result, 'commonHobbies'),
+                commonBooks: getFieldFromResult(result, 'commonBooks'),
+                detailLevel: getFieldFromResult(result, 'detailLevel'),
+                // AI特有字段（仅在AI模式下有效）
+                aiAnalysis: result.analysis?.ai_analysis || null,
+                matchType: result.analysis?.ai_analysis?.match_type || getMatchTypeFromResult(result),
+                confidenceLevel: result.analysis?.ai_analysis?.confidence_level || null,
+                // 传统模式特有字段
+                readingCommitmentCompatibility: result.readingCommitmentCompatibility || null,
+                textPreferenceAnalysis: result.textPreferenceAnalysis || null,
+                personalityProfiles: result.personalityProfiles || null,
+                implicitAnalysis: result.implicitAnalysis || null,
+                deepCompatibilityAnalysis: result.deepCompatibilityAnalysis || null,
+                matchingDimensions: result.matchingDimensions || null,
+                // 降级状态标记
+                degraded: result.degraded || false,
+                degradationReason: result.degradationReason || null,
+                traditionalMode: result.traditionalMode || false,
+                healthDegraded: result.healthDegraded || false,
+                type: 'complementary',
+                analysisMode: getAnalysisMode(result)
+            };
+        } catch (error) {
+            console.warn(`配对失败 ${pairing.user1.name} - ${pairing.user2.name}:`, error);
+            // 返回一个低分结果而不是null，确保所有配对都有结果
+            return {
+                member1: pairing.user1,
+                member2: pairing.user2,
+                score: 0.1,
+                reason: "分析失败",
+                commonHobbies: [],
+                commonBooks: [],
+                detailLevel: { exactMatches: 0, semanticMatches: 0, categoryMatches: 0 },
+                aiAnalysis: null,
+                matchType: "未知",
+                confidenceLevel: 0,
+                degraded: false,
+                traditionalMode: false,
+                healthDegraded: false,
+                type: 'complementary',
+                analysisMode: 'error'
+            };
+        }
+    };
+    
+    // 使用分块处理器处理配对
+    const chunks = chunkArray(pairings, MEMORY_CONFIG.CHUNK_SIZE);
+    let allMatches = [];
+    
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+        const chunk = chunks[chunkIndex];
+        const startIdx = chunkIndex * MEMORY_CONFIG.CHUNK_SIZE;
+        
+        console.log(`处理块 ${chunkIndex + 1}/${chunks.length}，包含 ${chunk.length} 个配对`);
+        
+        // 在每个块内使用动态并发
+        let i = 0;
+        while (i < chunk.length) {
+            const currentBatchSize = apiHealthMonitor.getDynamicBatchSize();
+            const batch = chunk.slice(i, Math.min(i + currentBatchSize, chunk.length));
+            
+            // 更新进度
+            const currentProcessed = startIdx + i;
+            updateProgress(
+                currentProcessed, 
+                pairings.length, 
+                allMatches.length, 
+                `正在处理互补配对 ${currentProcessed + 1}-${currentProcessed + batch.length}...`,
+                startTime
+            );
+            
+            // 并发处理批次
+            const batchResults = await Promise.all(batch.map(processChunk));
+            allMatches.push(...batchResults);
+            
+            i += batch.length;
+            processedCount = startIdx + i;
+            
+            // 批次间延迟
+            if (i < chunk.length) {
+                const errorRate = apiHealthMonitor.getErrorRate();
+                const delay = errorRate > 0.2 ? 1000 : 500;
+                await sleep(delay);
+            }
+        }
+        
+        // 块间清理和延迟
+        if (chunkIndex < chunks.length - 1) {
+            // 检查内存使用
+            memoryMonitor.checkMemoryUsage();
+            
+            // 块间延迟，让出CPU
+            await sleep(200);
+            
+            console.log(`块 ${chunkIndex + 1} 完成，当前处理 ${allMatches.length} 个配对`);
+        }
+    }
+    
+    matches.push(...allMatches);
+    
+    // 互补匹配排序：根据分析模式使用不同的排序策略
+    matches.sort((a, b) => {
+        if (aiAnalysisEnabled) {
+            // AI模式：基于AI分析的匹配类型和成长潜力排序
+            const aGrowthScore = (a.aiAnalysis?.growth_opportunities?.length || 0) * 0.5 + 
+                               (a.aiAnalysis?.detailed_analysis?.complementarity_score || 0) * 0.3 +
+                               (a.confidenceLevel || 0) * 0.2;
+            const bGrowthScore = (b.aiAnalysis?.growth_opportunities?.length || 0) * 0.5 + 
+                               (b.aiAnalysis?.detailed_analysis?.complementarity_score || 0) * 0.3 +
+                               (b.confidenceLevel || 0) * 0.2;
+            
+            // 如果都没有AI分析数据，则按基础分数排序
+            if (aGrowthScore === 0 && bGrowthScore === 0) {
+                return b.score - a.score;
+            }
+            
+            return bGrowthScore - aGrowthScore;
+        } else {
+            // 传统模式：基于传统匹配维度排序，互补性优先
+            const aComplementarity = (a.matchingDimensions?.growth_potential || 0) + 
+                                   (a.matchingDimensions?.implicit_resonance || 0) * 0.8;
+            const bComplementarity = (b.matchingDimensions?.growth_potential || 0) + 
+                                   (b.matchingDimensions?.implicit_resonance || 0) * 0.8;
+            
+            if (aComplementarity === 0 && bComplementarity === 0) {
+                return b.score - a.score;
+            }
+            
+            return bComplementarity - aComplementarity;
+        }
+    });
+    
+    // 显示完成进度
+    updateProgress(
+        pairings.length, 
+        pairings.length, 
+        matches.length, 
+        '互补匹配分析完成！',
+        startTime
+    );
+    
+    const titleInfo = getMatchingTitle(matches, 'complementary');
+    displayMatches(matches.slice(0, 10), titleInfo.title, titleInfo.subtitle);
 }
 
 // 显示匹配结果
-function displayMatches(matches, title) {
+function displayMatches(matches, title, subtitle = null) {
     const resultsDiv = document.getElementById('matchResults');
     
     if (matches.length === 0) {
@@ -630,16 +4686,43 @@ function displayMatches(matches, title) {
         return;
     }
     
+    // 生成降级状态统计
+    const degradedCount = matches.filter(m => m.degraded).length;
+    const traditionalCount = matches.filter(m => m.traditionalMode || m.healthDegraded).length;
+    const aiCount = matches.filter(m => m.aiAnalysis && !m.degraded).length;
+    
+    let statusInfo = '';
+    if (degradedCount > 0 || traditionalCount > 0) {
+        statusInfo = `
+            <div style="margin-bottom: 15px; padding: 12px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+                <h4 style="margin: 0 0 8px 0; color: #1565c0;">📊 匹配模式统计</h4>
+                <div style="display: flex; gap: 15px; font-size: 13px;">
+                    ${aiCount > 0 ? `<span>🧠 AI智能: ${aiCount}个</span>` : ''}
+                    ${degradedCount > 0 ? `<span>🔀 AI降级: ${degradedCount}个</span>` : ''}
+                    ${traditionalCount > 0 ? `<span>📊 传统算法: ${traditionalCount}个</span>` : ''}
+                </div>
+                ${subtitle ? `<div style="margin-top: 5px; font-size: 12px; color: #666;">${subtitle}</div>` : ''}
+            </div>
+        `;
+    } else if (subtitle) {
+        statusInfo = `
+            <div style="margin-bottom: 15px; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                <div style="font-size: 13px; color: #666;">${subtitle}</div>
+            </div>
+        `;
+    }
+    
     resultsDiv.innerHTML = `
         <div class="section">
             <h2>${title}</h2>
+            ${statusInfo}
             <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
                 <p>📊 管理员专用：智能匹配结果分析</p>
                 <small>匹配类型：✅ 精确匹配 (1.0分) | 🔗 语义匹配 (0.8分) | 📂 类别匹配 (0.6分)</small>
             </div>
             ${matches.map((match, index) => `
-                <div class="match-item">
-                    <h3>匹配 ${index + 1} ${generateMatchIcon(match.score)}</h3>
+                <div class="${getMatchItemClass(match)}">
+                    <h3>匹配 ${index + 1} ${generateMatchIcon(match.score)} ${generateMatchStatusTags(match)}</h3>
                     ${generateMatchScoreHtml(match)}
                     
                     <div class="match-details">
@@ -657,6 +4740,7 @@ function displayMatches(matches, title) {
                     </div>
                     
                     ${generateMatchDetails(match)}
+                    ${generateDegradationInfo(match)}
                 </div>
             `).join('')}
         </div>
@@ -673,10 +4757,20 @@ function generateMatchScoreHtml(match) {
 
     if (match.type === 'similar') {
         const breakdown = `(精确${match.detailLevel.exactMatches} + 语义${match.detailLevel.semanticMatches} + 类别${match.detailLevel.categoryMatches})`;
+        
+        // 添加新维度的分数显示
+        let enhancedBreakdown = '';
+        if (match.readingCommitmentCompatibility) {
+            enhancedBreakdown += ` | 阅读承诺: ${(match.readingCommitmentCompatibility.score * 0.8).toFixed(1)}分`;
+        }
+        if (match.textPreferenceAnalysis && match.textPreferenceAnalysis.similarity_score > 0) {
+            enhancedBreakdown += ` | AI文本分析: ${(match.textPreferenceAnalysis.similarity_score * 1.5).toFixed(1)}分`;
+        }
+        
         return `
             <div class="match-score">
                 智能相似度：${scoreText} 分
-                <span class="match-breakdown">${breakdown}</span>
+                <span class="match-breakdown">${breakdown}${enhancedBreakdown}</span>
             </div>`;
     } else { // complementary
         let description = '';
@@ -699,9 +4793,11 @@ function generateMatchIcon(score) {
     return '💫';
 }
 
-// 生成详细匹配信息
+// 生成深度匹配详情（升级版）
 function generateMatchDetails(match) {
     let detailsHtml = '';
+    
+    // ===== 传统匹配结果 =====
     
     // 兴趣爱好匹配详情
     if (match.commonHobbies && match.commonHobbies.length > 0) {
@@ -725,7 +4821,411 @@ function generateMatchDetails(match) {
         `;
     }
     
+    // 阅读承诺兼容性详情
+    if (match.readingCommitmentCompatibility && match.readingCommitmentCompatibility.score > 0) {
+        const commitment = match.readingCommitmentCompatibility;
+        const compatibilityIcon = {
+            'perfect': '💯',
+            'good': '✨',
+            'moderate': '⚖️',
+            'poor': '⚠️',
+            'unknown': '❓'
+        }[commitment.compatibility] || '❓';
+        
+        detailsHtml += `
+            <div class="common-interests">
+                <h4>${compatibilityIcon} 阅读承诺兼容性</h4>
+                <div class="match-type-group">
+                    <span class="match-type-label">兼容度：</span>
+                    <span class="tag ${commitment.compatibility}-tag">${commitment.description}</span>
+                    <span class="tag score-tag">兼容分数: ${(commitment.score * 0.8).toFixed(1)}</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // ===== 深度AI分析结果 =====
+    
+    // 偏好匹配分析显示
+    if (match.aiAnalysis && match.aiAnalysis.preference_analysis) {
+        const prefAnalysis = match.aiAnalysis.preference_analysis;
+        const getPreferenceIcon = (impact) => {
+            const icons = {
+                'positive': '✅',
+                'neutral': '⚖️', 
+                'negative': '⚠️'
+            };
+            return icons[impact] || '❓';
+        };
+        
+        const getPreferenceLabel = (pref) => {
+            const labels = {
+                'similar': '🎯 相似型',
+                'complementary': '🌈 互补型',
+                'no_preference': '✨ 都可以'
+            };
+            return labels[pref] || '未设置';
+        };
+        
+        detailsHtml += `
+            <div class="common-interests preference-analysis">
+                <h4>${getPreferenceIcon(prefAnalysis.preference_impact)} 匹配偏好分析</h4>
+                <div class="match-type-group">
+                    <span class="match-type-label">用户偏好：</span>
+                    <span class="tag preference-tag">${getPreferenceLabel(prefAnalysis.user1_preference)}</span>
+                    <span class="vs-indicator">vs</span>
+                    <span class="tag preference-tag">${getPreferenceLabel(prefAnalysis.user2_preference)}</span>
+                </div>
+                <div class="match-type-group">
+                    <span class="match-type-label">偏好匹配：</span>
+                    <span class="tag ${prefAnalysis.preference_match ? 'exact' : 'poor'}-tag">
+                        ${prefAnalysis.preference_match ? '✓ 匹配' : '✗ 不匹配'}
+                    </span>
+                    <span class="tag score-tag">调整系数: ${prefAnalysis.adjustment_factor.toFixed(2)}</span>
+                </div>
+                ${prefAnalysis.adjustment_note ? `
+                    <div class="preference-note">
+                        <strong>说明：</strong>${prefAnalysis.adjustment_note}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    // 升级版AI文本偏好分析
+    if (match.textPreferenceAnalysis && match.textPreferenceAnalysis.similarity_score > 0) {
+        const analysis = match.textPreferenceAnalysis;
+        detailsHtml += `
+            <div class="common-interests deep-analysis">
+                <h4>🤖 深度AI文本分析</h4>
+                <div class="match-type-group">
+                    <span class="match-type-label">语义相似度：</span>
+                    <span class="tag ai-analysis-tag">${(analysis.similarity_score * 100).toFixed(0)}% 相似</span>
+                    ${analysis.semantic_depth_score ? `<span class="tag depth-tag">深度: ${(analysis.semantic_depth_score * 100).toFixed(0)}%</span>` : ''}
+                </div>
+                ${analysis.common_elements && analysis.common_elements.length > 0 ? `
+                    <div class="match-type-group">
+                        <span class="match-type-label">🔍 表面共同点：</span>
+                        ${analysis.common_elements.map(element => `
+                            <span class="tag surface-element-tag">${element}</span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                ${analysis.deep_connections && analysis.deep_connections.length > 0 ? `
+                    <div class="match-type-group">
+                        <span class="match-type-label">🧠 深层连接：</span>
+                        ${analysis.deep_connections.map(connection => `
+                            <span class="tag deep-connection-tag">${connection}</span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                ${analysis.recommendation_reasons && analysis.recommendation_reasons.length > 0 ? `
+                    <div class="match-type-group">
+                        <span class="match-type-label">💡 推荐理由：</span>
+                        <div class="recommendation-list">
+                            ${analysis.recommendation_reasons.map(reason => `
+                                <div class="recommendation-item">• ${reason}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                ${analysis.potential_book_recommendations && analysis.potential_book_recommendations.length > 0 ? `
+                    <div class="match-type-group">
+                        <span class="match-type-label">📖 建议共读书籍：</span>
+                        ${analysis.potential_book_recommendations.map(book => `
+                            <span class="tag book-rec-tag">${book}</span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                ${analysis.growth_potential ? `
+                    <div class="growth-potential">
+                        <strong>🌱 成长潜力：</strong> ${analysis.growth_potential}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    // 新AI分析结果显示
+    if (match.aiAnalysis && match.aiAnalysis.detailed_analysis) {
+        const analysis = match.aiAnalysis;
+        const details = analysis.detailed_analysis;
+        
+        detailsHtml += `
+            <div class="common-interests ai-analysis">
+                <h4>🤖 AI深度匹配分析</h4>
+                <div class="match-summary">
+                    <p><strong>匹配类型：</strong>${analysis.match_type}</p>
+                    <p><strong>分析总结：</strong>${analysis.summary}</p>
+                </div>
+                
+                <div class="analysis-dimensions">
+                    <div class="dimension-score">
+                        <span>相似性：</span>
+                        <span class="score">${(details.similarity_score || 0).toFixed(1)}/10</span>
+                    </div>
+                    <div class="dimension-score">
+                        <span>互补性：</span>
+                        <span class="score">${(details.complementarity_score || 0).toFixed(1)}/10</span>
+                    </div>
+                    <div class="dimension-score">
+                        <span>兼容性：</span>
+                        <span class="score">${(details.compatibility_score || 0).toFixed(1)}/10</span>
+                    </div>
+                </div>
+                
+                ${details.similarity_highlights && details.similarity_highlights.length > 0 ? `
+                    <div class="highlights-section">
+                        <h5>🎯 相似点：</h5>
+                        <ul>${details.similarity_highlights.map(h => `<li>${h}</li>`).join('')}</ul>
+                    </div>
+                ` : ''}
+                
+                ${details.complementarity_highlights && details.complementarity_highlights.length > 0 ? `
+                    <div class="highlights-section">
+                        <h5>🔄 互补点：</h5>
+                        <ul>${details.complementarity_highlights.map(h => `<li>${h}</li>`).join('')}</ul>
+                    </div>
+                ` : ''}
+                
+                ${analysis.growth_opportunities && analysis.growth_opportunities.length > 0 ? `
+                    <div class="highlights-section">
+                        <h5>🌱 成长机会：</h5>
+                        <ul>${analysis.growth_opportunities.map(o => `<li>${o}</li>`).join('')}</ul>
+                    </div>
+                ` : ''}
+                
+                ${analysis.reading_recommendations && analysis.reading_recommendations.length > 0 ? `
+                    <div class="highlights-section">
+                        <h5>📚 推荐书籍：</h5>
+                        <ul>${analysis.reading_recommendations.map(r => `<li>${r}</li>`).join('')}</ul>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    // 原深度兼容性分析已集成到上面的AI分析中，此处不再需要
+    
+    // 原匹配维度得分已集成到上面的AI分析维度中，此处不再需要
+    
     return detailsHtml;
+}
+
+// ===== 深度分析辅助函数 =====
+
+// 生成人格维度比较
+function generatePersonalityComparison(p1, p2) {
+    const dimensions = [
+        { key: 'exploration_vs_certainty', label: '探索vs确定性', icon: '🔍' },
+        { key: 'emotional_vs_rational', label: '感性vs理性', icon: '❤️🧠' },
+        { key: 'introspective_vs_social', label: '内省vs社交', icon: '🪞👥' },
+        { key: 'escapist_vs_realistic', label: '逃避vs现实', icon: '🌙☀️' },
+        { key: 'fast_paced_vs_contemplative', label: '快节奏vs沉思', icon: '⚡🧘' }
+    ];
+    
+    let html = '';
+    dimensions.forEach(dim => {
+        const val1 = p1.personality_dimensions?.[dim.key] || 0;
+        const val2 = p2.personality_dimensions?.[dim.key] || 0;
+        const similarity = 1 - Math.abs(val1 - val2);
+        const matchLevel = similarity > 0.8 ? 'high' : similarity > 0.5 ? 'medium' : 'low';
+        
+        html += `
+            <div class="personality-dimension">
+                <span class="dimension-icon">${dim.icon}</span>
+                <span class="dimension-name">${dim.label}</span>
+                <div class="dimension-bars">
+                    <div class="member-bar" style="width: ${val1 * 100}%"></div>
+                    <div class="member-bar member2" style="width: ${val2 * 100}%"></div>
+                </div>
+                <span class="similarity-indicator ${matchLevel}">${(similarity * 100).toFixed(0)}%</span>
+            </div>
+        `;
+    });
+    
+    return html;
+}
+
+// 生成文化取向比较
+function generateCulturalOrientation(p1, p2) {
+    if (p1.cultural_orientation && p2.cultural_orientation) {
+        const match = p1.cultural_orientation === p2.cultural_orientation;
+        return `
+            <div class="cultural-orientation">
+                <span class="match-type-label">文化取向：</span>
+                <span class="tag cultural-tag">${getCulturalLabel(p1.cultural_orientation)}</span>
+                <span class="vs-indicator">${match ? '✓' : 'vs'}</span>
+                <span class="tag cultural-tag">${getCulturalLabel(p2.cultural_orientation)}</span>
+            </div>
+        `;
+    }
+    return '';
+}
+
+// 生成隐含偏好比较
+function generateImplicitComparison(i1, i2) {
+    let html = '';
+    
+    // 主题共鸣
+    const commonThemes = findCommonElements(i1.implicit_themes || [], i2.implicit_themes || []);
+    if (commonThemes.length > 0) {
+        html += `
+            <div class="implicit-section">
+                <span class="match-type-label">🎨 共同主题：</span>
+                ${commonThemes.map(theme => `<span class="tag theme-tag">${theme}</span>`).join('')}
+            </div>
+        `;
+    }
+    
+    // 文化亲和力
+    const commonCultures = findCommonElements(i1.cultural_affinities || [], i2.cultural_affinities || []);
+    if (commonCultures.length > 0) {
+        html += `
+            <div class="implicit-section">
+                <span class="match-type-label">🌍 文化共鸣：</span>
+                ${commonCultures.map(culture => `<span class="tag culture-tag">${culture}</span>`).join('')}
+            </div>
+        `;
+    }
+    
+    // 叙事原型
+    const commonArchetypes = findCommonElements(i1.narrative_archetypes || [], i2.narrative_archetypes || []);
+    if (commonArchetypes.length > 0) {
+        html += `
+            <div class="implicit-section">
+                <span class="match-type-label">📖 叙事共性：</span>
+                ${commonArchetypes.map(archetype => `<span class="tag archetype-tag">${archetype}</span>`).join('')}
+            </div>
+        `;
+    }
+    
+    return html;
+}
+
+// 生成兼容性维度展示
+function generateCompatibilityDimensions(dimensions) {
+    const dimList = [
+        { key: 'cognitive_synergy', label: '认知协同', icon: '🧠' },
+        { key: 'aesthetic_harmony', label: '美学和谐', icon: '🎨' },
+        { key: 'growth_potential', label: '成长潜力', icon: '🌱' },
+        { key: 'emotional_resonance', label: '情感共鸣', icon: '💫' },
+        { key: 'exploratory_balance', label: '探索平衡', icon: '⚖️' }
+    ];
+    
+    let html = '<div class="compatibility-dimensions">';
+    dimList.forEach(dim => {
+        const value = dimensions[dim.key] || 0;
+        const percentage = (value * 100).toFixed(0);
+        html += `
+            <div class="compat-dimension">
+                <span class="dim-icon">${dim.icon}</span>
+                <span class="dim-label">${dim.label}</span>
+                <div class="dim-bar">
+                    <div class="dim-fill" style="width: ${percentage}%"></div>
+                    <span class="dim-value">${percentage}%</span>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    return html;
+}
+
+// 辅助函数：获取兼容性类型标签
+function getCompatibilityTypeLabel(type) {
+    const labels = {
+        'mirror': '镜像型',
+        'complementary': '互补型',
+        'bridge': '桥梁型',
+        'complex': '复合型'
+    };
+    return labels[type] || type;
+}
+
+// 辅助函数：获取化学反应标签
+function getChemistryLabel(chemistry) {
+    const labels = {
+        'explosive': '💥 爆发式',
+        'steady': '🔄 稳定式',
+        'gentle': '🌸 温和式',
+        'challenging': '⚡ 挑战式',
+        'inspiring': '✨ 启发式'
+    };
+    return labels[chemistry] || chemistry;
+}
+
+// 辅助函数：获取关系动态标签
+function getRelationshipDynamicsLabel(dynamics) {
+    const labels = {
+        'mentor_mentee': '师生型',
+        'equal_explorers': '共探型',
+        'complementary_guides': '互导型',
+        'kindred_spirits': '知音型'
+    };
+    return labels[dynamics] || dynamics;
+}
+
+// 辅助函数：获取文化标签
+function getCulturalLabel(orientation) {
+    const labels = {
+        'eastern': '东方文化',
+        'western': '西方文化',
+        'global': '全球视野',
+        'local': '本土文化'
+    };
+    return labels[orientation] || orientation;
+}
+
+// 辅助函数：找出共同元素
+function findCommonElements(arr1, arr2) {
+    return arr1.filter(item => arr2.includes(item));
+}
+
+// 生成降级信息显示
+function generateDegradationInfo(match) {
+    if (!match.degraded && !match.degradationReason && !match.healthDegraded) {
+        return '';
+    }
+    
+    let degradationHtml = '<div class="common-interests degradation-info" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 5px solid #ff9800;">';
+    degradationHtml += '<h4>⚠️ 降级处理信息</h4>';
+    
+    if (match.degraded) {
+        degradationHtml += `
+            <div class="match-type-group">
+                <span class="match-type-label">降级原因：</span>
+                <span class="tag degraded-tag">${match.degradationReason || 'AI服务异常'}</span>
+            </div>
+            <div class="match-type-group">
+                <span class="match-type-label">处理方式：</span>
+                <span class="tag ai-element-tag">自动切换到传统匹配算法</span>
+            </div>
+        `;
+    }
+    
+    if (match.healthDegraded) {
+        const status = apiHealthMonitor.getDegradationStatus();
+        degradationHtml += `
+            <div class="match-type-group">
+                <span class="match-type-label">系统状态：</span>
+                <span class="tag traditional-degraded-tag">API健康降级模式</span>
+            </div>
+            <div class="match-type-group">
+                <span class="match-type-label">降级时长：</span>
+                <span class="tag score-tag">${Math.round(status.duration/1000)}秒</span>
+            </div>
+        `;
+    }
+    
+    degradationHtml += '<div style="margin-top: 8px; font-size: 12px; color: #ef6c00;">';
+    degradationHtml += '💡 降级模式确保服务连续性，算法会在条件恢复后自动切换回AI模式';
+    degradationHtml += '</div>';
+    
+    degradationHtml += '</div>';
+    
+    return degradationHtml;
 }
 
 // 分类显示匹配项
@@ -761,3 +5261,302 @@ function categorizeMatches(matches) {
     
     return html;
 }
+
+// ===== 监控仪表板管理函数 =====
+
+/**
+ * 刷新监控数据显示
+ */
+function refreshMonitoringData() {
+    Logger.monitoring('刷新监控数据...');
+    
+    // 更新系统健康状态
+    errorMonitoringSystem.updateSystemHealth();
+    
+    // 获取最新统计数据
+    const errorStats = errorMonitoringSystem.getErrorStats();
+    const healthReport = errorMonitoringSystem.getHealthReport();
+    
+    // 更新错误统计显示
+    document.getElementById('totalErrors').textContent = errorStats.total;
+    document.getElementById('hourlyErrors').textContent = errorStats.lastHour;
+    document.getElementById('recentErrors').textContent = errorStats.last5min;
+    
+    // 更新性能统计显示
+    document.getElementById('totalRequests').textContent = healthReport.performance.totalRequests;
+    document.getElementById('successRate').textContent = healthReport.performance.successRate;
+    document.getElementById('avgResponseTime').textContent = healthReport.performance.averageResponseTime;
+    
+    // 更新系统健康状态显示
+    const healthElement = document.getElementById('systemHealth');
+    const healthMap = {
+        'healthy': { text: '良好', color: '#28a745' },
+        'degraded': { text: '降级', color: '#ffc107' },
+        'critical': { text: '严重', color: '#dc3545' },
+        'maintenance': { text: '维护', color: '#6c757d' }
+    };
+    
+    const healthInfo = healthMap[healthReport.systemHealth.overall] || healthMap['critical'];
+    healthElement.textContent = healthInfo.text;
+    healthElement.style.color = healthInfo.color;
+    
+    Logger.monitoring('监控数据刷新完成');
+}
+
+/**
+ * 显示详细健康报告
+ */
+function showDetailedHealthReport() {
+    const report = errorMonitoringSystem.getHealthReport();
+    
+    let reportHtml = `
+        <div style="max-width: 800px; max-height: 600px; overflow-y: auto; padding: 20px; background: white; border-radius: 12px;">
+            <h3 style="margin-bottom: 20px; color: #2c3e50;">📋 系统健康详细报告</h3>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #34495e; margin-bottom: 10px;">🏥 系统健康状态</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div><strong>整体状态:</strong> ${report.systemHealth.overall}</div>
+                    <div><strong>API状态:</strong> ${report.systemHealth.api}</div>
+                    <div><strong>缓存状态:</strong> ${report.systemHealth.cache}</div>
+                    <div><strong>内存状态:</strong> ${report.systemHealth.memory}</div>
+                    <div><strong>最后检查:</strong> ${new Date(report.systemHealth.lastHealthCheck).toLocaleString('zh-CN')}</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #34495e; margin-bottom: 10px;">📊 错误统计</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div><strong>总错误数:</strong> ${report.errorStats.total}</div>
+                    <div><strong>最近24小时:</strong> ${report.errorStats.last24h}</div>
+                    <div><strong>最近1小时:</strong> ${report.errorStats.lastHour}</div>
+                    <div><strong>最近5分钟:</strong> ${report.errorStats.last5min}</div>
+                    <div><strong>整体错误率:</strong> ${(report.errorStats.overallErrorRate * 100).toFixed(2)}%</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #34495e; margin-bottom: 10px;">⚡ 性能指标</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div><strong>总请求数:</strong> ${report.performance.totalRequests}</div>
+                    <div><strong>成功率:</strong> ${report.performance.successRate}</div>
+                    <div><strong>平均响应时间:</strong> ${report.performance.averageResponseTime}</div>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <h4 style="color: #34495e; margin-bottom: 10px;">🗄️ 缓存健康</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div><strong>AI缓存大小:</strong> ${report.cacheHealth.aiCacheSize}</div>
+                    <div><strong>AI缓存命中率:</strong> ${report.cacheHealth.aiCacheHitRate}</div>
+                    <div><strong>用户画像缓存:</strong> ${report.cacheHealth.userProfilesSize}</div>
+                    <div><strong>请求缓存大小:</strong> ${report.cacheHealth.requestCacheSize}</div>
+                </div>
+            </div>
+            
+            ${report.recommendations.length > 0 ? `
+                <div style="margin-bottom: 20px;">
+                    <h4 style="color: #34495e; margin-bottom: 10px;">💡 优化建议</h4>
+                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                        ${report.recommendations.map(rec => `
+                            <div style="margin-bottom: 8px;">
+                                <span style="font-weight: bold; color: ${rec.priority === 'high' ? '#dc3545' : rec.priority === 'medium' ? '#fd7e14' : '#6c757d'};">
+                                    [${rec.priority.toUpperCase()}]
+                                </span>
+                                ${rec.message}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="closeHealthReport()" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                    关闭报告
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // 创建模态框显示报告
+    const modal = document.createElement('div');
+    modal.id = 'healthReportModal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+    modal.innerHTML = reportHtml;
+    
+    document.body.appendChild(modal);
+    
+    // 点击外部关闭
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeHealthReport();
+        }
+    });
+}
+
+/**
+ * 关闭健康报告模态框
+ */
+function closeHealthReport() {
+    const modal = document.getElementById('healthReportModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * 重置监控数据
+ */
+function resetMonitoringData() {
+    if (confirm('确定要重置所有监控数据吗？这将清除错误日志、性能统计等数据。')) {
+        errorMonitoringSystem.resetMonitoring();
+        refreshMonitoringData();
+        alert('✅ 监控数据已重置');
+    }
+}
+
+/**
+ * 显示API健康状态（保持向后兼容）
+ */
+function showApiHealthStatus() {
+    const report = errorMonitoringSystem.getHealthReport();
+    const apiStats = apiHealthMonitor;
+    
+    const statusInfo = `
+📊 API健康状态报告
+
+🔹 基础统计:
+  • 成功请求: ${apiStats.successCount}
+  • 失败请求: ${apiStats.errorCount}
+  • 连续错误: ${apiStats.consecutiveErrors}
+  • 当前批处理大小: ${apiStats.currentBatchSize}
+  • 错误率: ${(apiStats.getErrorRate() * 100).toFixed(2)}%
+
+🔹 系统状态:
+  • 整体健康: ${report.systemHealth.overall}
+  • API状态: ${report.systemHealth.api}
+  • 缓存状态: ${report.systemHealth.cache}
+  • 内存状态: ${report.systemHealth.memory}
+
+🔹 降级状态:
+  • 降级模式: ${apiStats.degradedMode ? '已启用' : '未启用'}
+  • AI分析开关: ${aiAnalysisEnabled ? '开启' : '关闭'}
+
+点击"详细报告"查看更多信息...
+    `;
+    
+    alert(statusInfo);
+}
+
+/**
+ * 重置API健康状态（保持向后兼容）
+ */
+function resetApiHealth() {
+    if (confirm('确定要重置API健康监控数据吗？')) {
+        // 重置API健康监控器
+        apiHealthMonitor.errorCount = 0;
+        apiHealthMonitor.successCount = 0;
+        apiHealthMonitor.consecutiveErrors = 0;
+        apiHealthMonitor.lastErrorTime = null;
+        apiHealthMonitor.currentBatchSize = 3;
+        apiHealthMonitor.degradedMode = false;
+        apiHealthMonitor.degradationStartTime = null;
+        
+        // 重置错误监控系统
+        errorMonitoringSystem.resetMonitoring();
+        
+        // 启用AI分析（如果被禁用）
+        aiAnalysisEnabled = true;
+        updateAiToggleUI();
+        
+        // 刷新监控显示
+        refreshMonitoringData();
+        
+        alert('✅ API健康状态已重置');
+    }
+}
+
+// 页面加载时初始化监控仪表板
+// 新增：验证管理员会话 (移动到全局作用域)
+function validateAdminSession() {
+    const loginTime = sessionStorage.getItem('adminLoginTime');
+    if (!loginTime) {
+        return false;
+    }
+
+    const SESSION_TIMEOUT = 2 * 60 * 60 * 1000; // 2小时
+    const currentTime = Date.now();
+
+    if (currentTime - loginTime > SESSION_TIMEOUT) {
+        return false;
+    }
+
+    // 每次验证通过，刷新登录时间（活动检测）
+    sessionStorage.setItem('adminLoginTime', currentTime);
+    return true;
+}
+
+const originalShowLoggedInView = showLoggedInView;
+showLoggedInView = function() {
+    originalShowLoggedInView.apply(this, arguments);
+    
+    // 如果是管理员，初始化监控数据
+    if (isAdmin) {
+        setTimeout(() => {
+            refreshMonitoringData();
+            
+            // 智能监控刷新策略
+            let monitoringConfig = {
+                refreshInterval: 2 * 60 * 1000, // 2分钟
+                isMonitoringVisible: false,
+                pauseWhenHidden: true
+            };
+            
+            // 检测监控面板是否可见
+            function isMonitoringPanelVisible() {
+                const monitoringElements = [
+                    document.getElementById('totalErrors'),
+                    document.getElementById('systemHealth')
+                ];
+                return monitoringElements.some(el => el && el.offsetParent !== null);
+            }
+
+            // 智能刷新监控数据
+            function smartRefreshMonitoring() {
+                // 检查是否应该刷新
+                if (monitoringConfig.pauseWhenHidden && !isMonitoringPanelVisible()) {
+                    Logger.debug('监控面板不可见，跳过刷新');
+                    return;
+                }
+                
+                refreshMonitoringData();
+            }
+
+            // 设置定期刷新监控数据
+            if (!window.monitoringInterval) {
+                window.monitoringInterval = setInterval(smartRefreshMonitoring, monitoringConfig.refreshInterval);
+            }
+        }, 1000);
+    }
+};
+
+// 退出登录时清除监控定时器
+const originalLogout = logout;
+logout = function() {
+    if (window.monitoringInterval) {
+        clearInterval(window.monitoringInterval);
+        window.monitoringInterval = null;
+    }
+    originalLogout.apply(this, arguments);
+};

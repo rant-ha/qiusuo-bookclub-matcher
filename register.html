@@ -48,6 +48,7 @@
             font-size: 28px;
             font-weight: 600;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-align: center;
@@ -154,20 +155,342 @@
                 font-size: 24px;
             }
         }
+
+        /* Enhanced form styles */
+        .form-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .form-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        /* Radio button groups */
+        .radio-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 8px 12px;
+            border: 2px solid #e1e4e8;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .radio-item:hover {
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .radio-item input[type="radio"] {
+            margin-right: 8px;
+        }
+
+        .radio-item input[type="radio"]:checked + span {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        /* Checkbox groups */
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 10px 12px;
+            border: 2px solid #e1e4e8;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .checkbox-item:hover {
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        .checkbox-item input[type="checkbox"]:checked + span {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        /* Textarea styling */
+        textarea {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 16px;
+            border: 2px solid #e1e4e8;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            background-color: #fafafa;
+            resize: vertical;
+            min-height: 80px;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            background-color: #fff;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        /* Dynamic inputs */
+        .dynamic-inputs {
+            margin-bottom: 10px;
+        }
+
+        .input-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 10px;
+        }
+
+        .input-item input {
+            flex: 1;
+        }
+
+        .remove-btn {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .remove-btn:hover {
+            background: #ee5a24;
+            transform: translateY(-1px);
+        }
+
+        #addBookBtn {
+            background: #00b894;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+        }
+
+        #addBookBtn:hover {
+            background: #00a085;
+            transform: translateY(-1px);
+        }
+
+        /* Character counter */
+        .char-counter {
+            font-size: 12px;
+            color: #666;
+            text-align: right;
+            margin-top: 5px;
+        }
+
+        .char-counter.warning {
+            color: #ff6b6b;
+        }
+
+        .book-counter {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* Responsive design enhancements */
+        @media (max-width: 768px) {
+            .radio-group, .checkbox-group {
+                grid-template-columns: 1fr;
+            }
+            
+            .input-item {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .form-section {
+                padding: 15px;
+            }
+
+            .register-container {
+                max-width: 100%;
+                margin: 10px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="register-container">
         <h1>注册新用户</h1>
         <form id="registerForm">
-            <div class="form-group">
-                <label for="name">姓名</label>
-                <input type="text" id="name" placeholder="请输入您的真实姓名" required>
+            <!-- Basic Information Section -->
+            <div class="form-section">
+                <h3>基本信息</h3>
+                <div class="form-group">
+                    <label for="name">姓名</label>
+                    <input type="text" id="name" placeholder="请输入您的真实姓名" required>
+                </div>
+                <div class="form-group">
+                    <label for="studentId">学号</label>
+                    <input type="text" id="studentId" placeholder="请输入您的学号" required>
+                </div>
+                <div class="form-group">
+                    <label for="gender">性别 (可选)</label>
+                    <div class="radio-group">
+                        <label class="radio-item">
+                            <input type="radio" name="gender" value="male">
+                            <span>男性</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="gender" value="female">
+                            <span>女性</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="gender" value="other">
+                            <span>其他</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="gender" value="prefer_not_to_say">
+                            <span>不愿透露</span>
+                        </label>
+                    </div>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="studentId">学号</label>
-                <input type="text" id="studentId" placeholder="请输入您的学号" required>
+
+            <!-- Matching Preferences Section -->
+            <div class="form-section">
+                <h3>匹配偏好</h3>
+                <div class="form-group">
+                    <label>希望匹配的对象性别 (可选)</label>
+                    <div class="radio-group">
+                        <label class="radio-item">
+                            <input type="radio" name="matchGenderPreference" value="male">
+                            <span>男生</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="matchGenderPreference" value="female">
+                            <span>女生</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="matchGenderPreference" value="no_preference">
+                            <span>不介意</span>
+                        </label>
+                    </div>
+                    <small style="color: #666; font-size: 12px;">选择您希望匹配的读书伙伴性别偏好</small>
+                </div>
             </div>
+
+            <!-- Reading Preferences Section -->
+            <div class="form-section">
+                <h3>阅读偏好</h3>
+                <div class="form-group">
+                    <label>书籍类别 (可多选，至少选择1个)</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="bookCategories" value="literature_fiction">
+                            <span>文学/当代小说</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="bookCategories" value="mystery_detective">
+                            <span>悬疑/侦探/推理</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="bookCategories" value="sci_fi_fantasy">
+                            <span>科幻/奇幻</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="bookCategories" value="history_biography">
+                            <span>历史/传记/纪录片</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="bookCategories" value="social_science_philosophy">
+                            <span>社会科学/哲学</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="bookCategories" value="psychology_self_help">
+                            <span>心理学/自我提升</span>
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="bookCategories" value="art_design_lifestyle">
+                            <span>艺术/设计/生活方式</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="detailedPreferences">详细偏好描述 (可选，最多500字符)</label>
+                    <textarea id="detailedPreferences" placeholder="如：偏爱日本推理小说，特别是东野圭吾、伊坂幸太郎的作品..." maxlength="500"></textarea>
+                    <div class="char-counter">0/500</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>最爱书籍 (至少2本)</label>
+                    <div id="favoriteBooks" class="dynamic-inputs">
+                        <div class="input-item">
+                            <input type="text" placeholder="书名" maxlength="100">
+                            <button type="button" class="remove-btn" onclick="removeFavoriteBook(this)">删除</button>
+                        </div>
+                        <div class="input-item">
+                            <input type="text" placeholder="书名" maxlength="100">
+                            <button type="button" class="remove-btn" onclick="removeFavoriteBook(this)">删除</button>
+                        </div>
+                    </div>
+                    <button type="button" id="addBookBtn" onclick="addFavoriteBook()">+ 添加书籍</button>
+                    <div class="book-counter">已添加 <span id="bookCount">2</span> 本书</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>阅读承诺期望</label>
+                    <div class="radio-group">
+                        <label class="radio-item">
+                            <input type="radio" name="readingCommitment" value="light" required>
+                            <span>轻松阅读 (5-10万字)</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="readingCommitment" value="medium" required>
+                            <span>适中阅读 (10-25万字)</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="readingCommitment" value="intensive" required>
+                            <span>深度阅读 (25-50万字)</span>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="readingCommitment" value="epic" required>
+                            <span>史诗阅读 (50万字+)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
             <button type="submit">提交注册申请</button>
         </form>
         <div class="info-message">
@@ -179,25 +502,118 @@
     </div>
     <script src="app.js"></script>
     <script>
+        // Character counter for detailed preferences
+        document.getElementById('detailedPreferences').addEventListener('input', function() {
+            const charCount = this.value.length;
+            const counter = document.querySelector('.char-counter');
+            counter.textContent = `${charCount}/500`;
+            
+            if (charCount > 450) {
+                counter.classList.add('warning');
+            } else {
+                counter.classList.remove('warning');
+            }
+        });
+
+        // Dynamic favorite books management
+        function addFavoriteBook() {
+            const container = document.getElementById('favoriteBooks');
+            const currentCount = container.children.length;
+            
+            if (currentCount >= 10) {
+                alert('最多只能添加10本书');
+                return;
+            }
+            
+            const inputItem = document.createElement('div');
+            inputItem.className = 'input-item';
+            inputItem.innerHTML = `
+                <input type="text" placeholder="书名" maxlength="100">
+                <button type="button" class="remove-btn" onclick="removeFavoriteBook(this)">删除</button>
+            `;
+            container.appendChild(inputItem);
+            updateBookCounter();
+        }
+
+        function removeFavoriteBook(button) {
+            const container = document.getElementById('favoriteBooks');
+            if (container.children.length > 2) { // Minimum 2 books
+                button.parentElement.remove();
+                updateBookCounter();
+            } else {
+                alert('至少需要2本最爱书籍');
+            }
+        }
+
+        function updateBookCounter() {
+            const count = document.getElementById('favoriteBooks').children.length;
+            document.getElementById('bookCount').textContent = count;
+        }
+
+        // Collect enhanced form data
+        function collectEnhancedFormData() {
+            const formData = {
+                name: document.getElementById('name').value.trim(),
+                studentId: document.getElementById('studentId').value.trim(),
+                gender: document.querySelector('input[name="gender"]:checked')?.value || '',
+                bookCategories: Array.from(document.querySelectorAll('input[name="bookCategories"]:checked'))
+                    .map(cb => cb.value),
+                detailedBookPreferences: document.getElementById('detailedPreferences').value.trim(),
+                favoriteBooks: Array.from(document.querySelectorAll('#favoriteBooks input'))
+                    .map(input => input.value.trim())
+                    .filter(book => book),
+                readingCommitment: document.querySelector('input[name="readingCommitment"]:checked')?.value || ''
+            };
+            
+            return formData;
+        }
+
+        // Enhanced form submission
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const name = document.getElementById('name').value.trim();
-            const studentId = document.getElementById('studentId').value.trim();
-
-            if (!name || !studentId) {
+            
+            // Collect all enhanced form data
+            const enhancedFormData = collectEnhancedFormData();
+            
+            // Basic validation
+            if (!enhancedFormData.name || !enhancedFormData.studentId) {
                 alert('姓名和学号不能为空');
                 return;
             }
-
-            if (typeof handleRegistration === 'function') {
-                await handleRegistration(name, studentId);
+            
+            // Enhanced validation using the validation function from app.js
+            if (typeof validateEnhancedForm === 'function') {
+                const errors = validateEnhancedForm(enhancedFormData);
+                if (errors.length > 0) {
+                    alert('请修正以下错误：\n' + errors.join('\n'));
+                    return;
+                }
+            }
+            
+            // Submit using enhanced registration function if available
+            if (typeof handleEnhancedRegistration === 'function') {
+                await handleEnhancedRegistration(enhancedFormData);
+            } else if (typeof handleRegistration === 'function') {
+                // Fallback to basic registration for backward compatibility
+                await handleRegistration(enhancedFormData.name, enhancedFormData.studentId);
             } else {
+                // Local storage fallback
                 let pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-                pendingUsers.push({ name, studentId, status: 'pending' });
+                pendingUsers.push({ 
+                    name: enhancedFormData.name, 
+                    studentId: enhancedFormData.studentId, 
+                    status: 'pending',
+                    ...enhancedFormData
+                });
                 localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
                 alert('注册申请已提交，请等待管理员审核！');
                 window.location.href = 'index.html';
             }
+        });
+
+        // Initialize book counter on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateBookCounter();
         });
     </script>
 </body>
