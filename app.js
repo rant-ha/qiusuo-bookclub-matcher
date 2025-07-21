@@ -1262,6 +1262,12 @@ function showLoggedInView() {
            // 确保DOM操作完成后再进行数据填充
            setTimeout(() => {
                // 第三步：填充数据 - 使用迁移后的用户数据填充所有表单字段
+           Logger.info('开始填充表单数据，用户信息:', {
+               name: migratedUser.name,
+               studentId: migratedUser.studentId,
+               hasQuestionnaire: !!migratedUser.questionnaire
+           });
+           
            // 填充基本用户信息
            const nameInput = document.getElementById('name');
            const studentIdInput = document.getElementById('studentId');
@@ -1269,61 +1275,90 @@ function showLoggedInView() {
            if (nameInput && studentIdInput) {
                nameInput.value = migratedUser.name || '';
                studentIdInput.value = migratedUser.studentId || '';
+               Logger.info('基本信息填充成功:', {
+                   name: nameInput.value,
+                   studentId: studentIdInput.value
+               });
            } else {
                Logger.warn('基本信息输入框未找到');
            }
            
-           // 填充问卷信息
+           // 填充问卷信息 - 优先使用questionnaire中的数据，回退到根级别数据
            const questionnaire = migratedUser.questionnaire || {};
+           Logger.info('问卷数据:', questionnaire);
            
-           // 填充性别
-           if (questionnaire.gender) {
+           // 填充性别 - 优先使用questionnaire中的数据，回退到根级别数据
+           const userGender = questionnaire.gender || migratedUser.gender;
+           Logger.info('尝试填充性别:', userGender);
+           
+           if (userGender) {
                const genderRadios = document.querySelectorAll('input[name="gender"]');
+               Logger.info('找到性别单选框数量:', genderRadios.length);
+               
                genderRadios.forEach(radio => radio.checked = false); // 先清除所有选中状态
-               const genderRadio = document.querySelector(`input[name="gender"][value="${questionnaire.gender}"]`);
+               const genderRadio = document.querySelector(`input[name="gender"][value="${userGender}"]`);
                if (genderRadio) {
                    genderRadio.checked = true;
+                   Logger.info('性别填充成功:', userGender);
                } else {
-                   Logger.warn(`未找到性别单选框：${questionnaire.gender}`);
+                   Logger.warn(`未找到性别单选框：${userGender}`);
                }
            }
            
            // 填充匹配性别偏好
-           if (questionnaire.matchGenderPreference) {
+           const userMatchGenderPreference = questionnaire.matchGenderPreference || migratedUser.matchGenderPreference;
+           Logger.info('尝试填充匹配性别偏好:', userMatchGenderPreference);
+           
+           if (userMatchGenderPreference) {
                const matchGenderRadios = document.querySelectorAll('input[name="matchGenderPreference"]');
+               Logger.info('找到匹配性别偏好单选框数量:', matchGenderRadios.length);
+               
                matchGenderRadios.forEach(radio => radio.checked = false); // 先清除所有选中状态
-               const matchGenderRadio = document.querySelector(`input[name="matchGenderPreference"][value="${questionnaire.matchGenderPreference}"]`);
+               const matchGenderRadio = document.querySelector(`input[name="matchGenderPreference"][value="${userMatchGenderPreference}"]`);
                if (matchGenderRadio) {
                    matchGenderRadio.checked = true;
+                   Logger.info('匹配性别偏好填充成功:', userMatchGenderPreference);
                } else {
-                   Logger.warn(`未找到匹配性别偏好单选框：${questionnaire.matchGenderPreference}`);
+                   Logger.warn(`未找到匹配性别偏好单选框：${userMatchGenderPreference}`);
                }
            }
            
            // 填充匹配类型偏好
-           if (questionnaire.matchingTypePreference) {
+           const userMatchingTypePreference = questionnaire.matchingTypePreference || migratedUser.matchingTypePreference;
+           Logger.info('尝试填充匹配类型偏好:', userMatchingTypePreference);
+           
+           if (userMatchingTypePreference) {
                const matchingTypeRadios = document.querySelectorAll('input[name="matchingTypePreference"]');
+               Logger.info('找到匹配类型偏好单选框数量:', matchingTypeRadios.length);
+               
                matchingTypeRadios.forEach(radio => radio.checked = false); // 先清除所有选中状态
-               const matchingTypeRadio = document.querySelector(`input[name="matchingTypePreference"][value="${questionnaire.matchingTypePreference}"]`);
+               const matchingTypeRadio = document.querySelector(`input[name="matchingTypePreference"][value="${userMatchingTypePreference}"]`);
                if (matchingTypeRadio) {
                    matchingTypeRadio.checked = true;
+                   Logger.info('匹配类型偏好填充成功:', userMatchingTypePreference);
                } else {
-                   Logger.warn(`未找到匹配类型偏好单选框：${questionnaire.matchingTypePreference}`);
+                   Logger.warn(`未找到匹配类型偏好单选框：${userMatchingTypePreference}`);
                }
            }
            
            // 填充书目类型（多选）
+           const userBookCategories = questionnaire.bookCategories || migratedUser.bookCategories || [];
+           Logger.info('尝试填充书目类型:', userBookCategories);
+           
            const bookCategoryCheckboxes = document.querySelectorAll('input[name="bookCategories"]');
+           Logger.info('找到书籍类别复选框数量:', bookCategoryCheckboxes.length);
+           
            if (bookCategoryCheckboxes.length > 0) {
                // 先清除所有选中状态
                bookCategoryCheckboxes.forEach(cb => cb.checked = false);
                
                // 设置新的选中状态
-               if (questionnaire.bookCategories && questionnaire.bookCategories.length > 0) {
-                   questionnaire.bookCategories.forEach(category => {
+               if (userBookCategories.length > 0) {
+                   userBookCategories.forEach(category => {
                        const checkbox = document.querySelector(`input[name="bookCategories"][value="${category}"]`);
                        if (checkbox) {
                            checkbox.checked = true;
+                           Logger.info('书籍类别填充成功:', category);
                        } else {
                            Logger.warn(`未找到书籍类别复选框：${category}`);
                        }
@@ -1334,21 +1369,30 @@ function showLoggedInView() {
            }
        
            // 填充兴趣爱好和读过的书
+           const userHobbies = questionnaire.hobbies || migratedUser.hobbies || [];
+           const userBooks = questionnaire.books || migratedUser.books || [];
+           Logger.info('尝试填充兴趣爱好:', userHobbies);
+           Logger.info('尝试填充读过的书:', userBooks);
+           
            const hobbiesInput = document.getElementById('hobbies');
            const booksInput = document.getElementById('books');
            
            if (hobbiesInput && booksInput) {
-               hobbiesInput.value = (questionnaire.hobbies || []).join(', ');
-               booksInput.value = (questionnaire.books || []).join(', ');
+               hobbiesInput.value = userHobbies.join(', ');
+               booksInput.value = userBooks.join(', ');
+               Logger.info('兴趣爱好和读过的书填充成功');
            } else {
                Logger.warn('兴趣爱好或读过的书输入框未找到');
            }
            
            // 填充详细偏好
+           const userDetailedPreferences = questionnaire.detailedBookPreferences || migratedUser.detailedBookPreferences || '';
+           Logger.info('尝试填充详细偏好:', userDetailedPreferences);
+           
            const detailedPreferencesInput = document.getElementById('detailedPreferences');
            if (detailedPreferencesInput) {
-               if (questionnaire.detailedBookPreferences) {
-                   detailedPreferencesInput.value = questionnaire.detailedBookPreferences;
+               if (userDetailedPreferences) {
+                   detailedPreferencesInput.value = userDetailedPreferences;
                    // 触发字符计数器更新
                    try {
                        const event = new Event('input');
@@ -1356,27 +1400,38 @@ function showLoggedInView() {
                    } catch (error) {
                        Logger.warn('触发详细偏好字符计数器更新失败:', error);
                    }
+                   Logger.info('详细偏好填充成功');
                }
            } else {
                Logger.warn('详细偏好输入框未找到');
            }
            
            // 填充最爱书籍
+           const userFavoriteBooks = questionnaire.favoriteBooks || migratedUser.favoriteBooks || [];
+           Logger.info('尝试填充最爱书籍:', userFavoriteBooks);
+           
            try {
-               populateFavoriteBooks(questionnaire.favoriteBooks || []);
+               populateFavoriteBooks(userFavoriteBooks);
+               Logger.info('最爱书籍填充成功');
            } catch (error) {
                Logger.error('填充最爱书籍失败:', error);
            }
            
            // 填充阅读预期
-           if (questionnaire.readingCommitment) {
+           const userReadingCommitment = questionnaire.readingCommitment || migratedUser.readingCommitment;
+           Logger.info('尝试填充阅读预期:', userReadingCommitment);
+           
+           if (userReadingCommitment) {
                const commitmentRadios = document.querySelectorAll('input[name="readingCommitment"]');
+               Logger.info('找到阅读预期单选框数量:', commitmentRadios.length);
+               
                commitmentRadios.forEach(radio => radio.checked = false); // 先清除所有选中状态
-               const commitmentRadio = document.querySelector(`input[name="readingCommitment"][value="${questionnaire.readingCommitment}"]`);
+               const commitmentRadio = document.querySelector(`input[name="readingCommitment"][value="${userReadingCommitment}"]`);
                if (commitmentRadio) {
                    commitmentRadio.checked = true;
+                   Logger.info('阅读预期填充成功:', userReadingCommitment);
                } else {
-                   Logger.warn(`未找到阅读预期单选框：${questionnaire.readingCommitment}`);
+                   Logger.warn(`未找到阅读预期单选框：${userReadingCommitment}`);
                }
            }
            
