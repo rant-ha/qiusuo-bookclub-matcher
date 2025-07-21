@@ -346,6 +346,50 @@ function addProfileEventListeners() {
         editProfileBtn.addEventListener('click', () => {
             userProfileSection.style.display = 'none';
             memberSection.style.display = 'block';
+            
+            // 加载保存的头像到编辑界面
+            if (typeof loadSavedAvatar === 'function') {
+                loadSavedAvatar();
+            }
+            
+            // 预填充个人简介
+            const personalBioField = document.getElementById('personalBio');
+            if (personalBioField && currentUser) {
+                const savedBio = currentUser.personalBio || localStorage.getItem('userPersonalBio') || '';
+                personalBioField.value = savedBio;
+                
+                // 更新字符计数器
+                const bioCharCount = document.getElementById('personalBioCount');
+                if (bioCharCount) {
+                    bioCharCount.textContent = `${savedBio.length}/300字`;
+                    if (savedBio.length > 270) {
+                        bioCharCount.classList.add('warning');
+                    } else {
+                        bioCharCount.classList.remove('warning');
+                    }
+                }
+            }
+            
+            // 预填充兴趣标签
+            if (typeof loadSavedTags === 'function') {
+                loadSavedTags();
+            }
+            
+            // 预填充用户状态
+            const userStatus = currentUser.userStatus || 'active';
+            const statusRadio = document.querySelector(`input[name="userStatus"][value="${userStatus}"]`);
+            if (statusRadio) {
+                statusRadio.checked = true;
+            }
+            
+            // 预填充邮箱信息
+            const userEmailField = document.getElementById('userEmail');
+            if (userEmailField && currentUser) {
+                userEmailField.value = currentUser.email || '';
+                
+                // 显示邮箱验证状态
+                updateEmailVerificationDisplay();
+            }
         });
     }
 
@@ -353,6 +397,9 @@ function addProfileEventListeners() {
         cancelEditBtn.addEventListener('click', () => {
             memberSection.style.display = 'none';
             userProfileSection.style.display = 'block';
+            
+            // 重新渲染用户资料（包括头像）
+            renderUserProfile();
         });
     }
 }
@@ -400,6 +447,32 @@ function renderUserProfile() {
         return preference ? preferenceMap[preference] || preference : '未设置';
     };
 
+    // 格式化用户状态
+    const formatUserStatus = () => {
+        const statusMap = {
+            'active': '🟢 可匹配',
+            'busy': '🟡 忙碌中', 
+            'away': '🔴 暂不匹配',
+            'reading': '📖 专心阅读'
+        };
+        const status = user.userStatus || 'active';
+        return statusMap[status] || statusMap.active;
+    };
+    
+    // 格式化邮箱地址
+    const formatEmail = () => {
+        const email = user.email || '';
+        if (!email) {
+            return '未设置';
+        }
+        
+        const isVerified = user.emailVerified || false;
+        const verificationIcon = isVerified ? '✅' : '❌';
+        const verificationText = isVerified ? '已验证' : '未验证';
+        
+        return `${email} ${verificationIcon} ${verificationText}`;
+    };
+
     // 格式化书籍类别
     const formatBookCategories = () => {
         const categories = questionnaire.bookCategories || user.bookCategories || [];
@@ -430,42 +503,111 @@ function renderUserProfile() {
         return commitment ? commitmentMap[commitment] || commitment : '未填写';
     };
 
+    // 格式化个人简介
+    const formatPersonalBio = () => {
+        // 优先使用用户数据中的简介，回退到localStorage
+        const bio = user.personalBio || localStorage.getItem('userPersonalBio');
+        if (bio && bio.trim()) {
+            return `
+                <div class="profile-bio" style="margin-top: 12px;">
+                    <strong style="color: #495057;">💭 个人简介：</strong>
+                    <div style="margin-top: 6px;">${bio}</div>
+                </div>
+            `;
+        }
+        return '';
+    };
+
+    // 格式化兴趣标签
+    const formatInterestTags = () => {
+        // 优先使用用户数据中的标签，回退到localStorage
+        let tags = user.interestTags;
+        if (!tags || !Array.isArray(tags)) {
+            const savedTags = localStorage.getItem('userInterestTags');
+            if (savedTags) {
+                try {
+                    tags = JSON.parse(savedTags);
+                } catch (e) {
+                    console.warn('标签数据解析错误');
+                    tags = [];
+                }
+            } else {
+                tags = [];
+            }
+        }
+        
+        if (tags && tags.length > 0) {
+            return `
+                <div style="margin-top: 12px;">
+                    <strong style="color: #495057;">🏷️ 兴趣标签：</strong>
+                    <div class="profile-tags">
+                        ${tags.map(tag => `<span class="profile-tag">${tag}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        return '';
+    };
+
+    // 获取头像HTML
+    const getAvatarHTML = () => {
+        const savedAvatar = localStorage.getItem('userAvatar');
+        if (savedAvatar) {
+            try {
+                const avatar = JSON.parse(savedAvatar);
+                if (avatar.type === 'uploaded') {
+                    return `<img class="profile-avatar" src="${avatar.data}" alt="用户头像">`;
+                } else if (avatar.type === 'emoji') {
+                    return `<div class="profile-avatar">${avatar.data}</div>`;
+                }
+            } catch (e) {
+                return '<div class="profile-avatar">👤</div>';
+            }
+        }
+        return '<div class="profile-avatar">👤</div>';
+    };
+
     // 生成HTML
     profileContent.innerHTML = `
-        <div class="profile-info" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 25px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
-            <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #e9ecef;">
-                <div style="flex-grow: 1;">
-                    <h3 style="margin: 0; color: #2c3e50; font-size: 1.5em;">📚 ${user.name} 的读书档案</h3>
-                    <div style="color: #6c757d; margin-top: 5px; font-size: 0.9em;">学号：${user.studentId}</div>
+        <div class="profile-info" style="background: var(--card-bg); padding: 25px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 2px 10px var(--shadow-light); border: 1px solid var(--border-color); transition: all 0.3s ease;">
+            <div style="display: flex; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid var(--border-color);">
+                ${getAvatarHTML()}
+                <div style="flex-grow: 1; margin-left: 20px;">
+                    <h3 style="margin: 0; color: var(--text-primary); font-size: 1.5em;">📚 ${user.name} 的读书档案</h3>
+                    <div style="color: var(--text-muted); margin-top: 5px; font-size: 0.9em;">学号：${user.studentId}</div>
                 </div>
             </div>
             
             <div style="display: grid; gap: 16px;">
-                <div class="profile-section" style="background: white; padding: 15px; border-radius: 10px; border-left: 4px solid #4CAF50;">
-                    <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 1.1em;">👤 基本信息</h4>
+                <div class="profile-section" style="background: var(--profile-section-bg); padding: 15px; border-radius: 10px; border-left: 4px solid #4CAF50; border: 1px solid var(--border-color);">
+                    <h4 style="margin: 0 0 10px 0; color: var(--text-primary); font-size: 1.1em;">👤 基本信息</h4>
                     <div style="display: grid; gap: 8px;">
-                        <div><strong style="color: #495057;">性别：</strong><span style="color: #666;">${formatGender()}</span></div>
-                        <div><strong style="color: #495057;">匹配性别偏好：</strong><span style="color: #666;">${formatMatchGenderPreference()}</span></div>
-                        <div><strong style="color: #495057;">匹配类型偏好：</strong><span style="color: #666;">${formatMatchingTypePreference()}</span></div>
+                        <div><strong style="color: var(--text-secondary);">当前状态：</strong><span style="color: var(--text-tertiary);">${formatUserStatus()}</span></div>
+                        <div><strong style="color: var(--text-secondary);">邮箱地址：</strong><span style="color: var(--text-tertiary);">${formatEmail()}</span></div>
+                        <div><strong style="color: var(--text-secondary);">性别：</strong><span style="color: var(--text-tertiary);">${formatGender()}</span></div>
+                        <div><strong style="color: var(--text-secondary);">匹配性别偏好：</strong><span style="color: var(--text-tertiary);">${formatMatchGenderPreference()}</span></div>
+                        <div><strong style="color: var(--text-secondary);">匹配类型偏好：</strong><span style="color: var(--text-tertiary);">${formatMatchingTypePreference()}</span></div>
+                    </div>
+                    ${formatPersonalBio()}
+                    ${formatInterestTags()}
+                </div>
+
+                <div class="profile-section" style="background: var(--profile-section-bg); padding: 15px; border-radius: 10px; border-left: 4px solid #2196F3; border: 1px solid var(--border-color);">
+                    <h4 style="margin: 0 0 10px 0; color: var(--text-primary); font-size: 1.1em;">📖 阅读偏好</h4>
+                    <div style="display: grid; gap: 8px;">
+                        <div><strong style="color: var(--text-secondary);">书籍类别：</strong><span style="color: var(--text-tertiary);">${formatBookCategories()}</span></div>
+                        <div><strong style="color: var(--text-secondary);">阅读预期：</strong><span style="color: var(--text-tertiary);">${formatReadingCommitment()}</span></div>
+                        <div><strong style="color: var(--text-secondary);">最爱书籍：</strong><span style="color: var(--text-tertiary);">${(questionnaire.favoriteBooks || user.favoriteBooks || []).join('、') || '未填写'}</span></div>
+                        <div><strong style="color: var(--text-secondary);">读过的书：</strong><span style="color: var(--text-tertiary);">${(questionnaire.books || user.books || []).join('、') || '未填写'}</span></div>
                     </div>
                 </div>
 
-                <div class="profile-section" style="background: white; padding: 15px; border-radius: 10px; border-left: 4px solid #2196F3;">
-                    <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 1.1em;">📖 阅读偏好</h4>
+                <div class="profile-section" style="background: var(--profile-section-bg); padding: 15px; border-radius: 10px; border-left: 4px solid #FF9800; border: 1px solid var(--border-color);">
+                    <h4 style="margin: 0 0 10px 0; color: var(--text-primary); font-size: 1.1em;">🎯 兴趣爱好</h4>
                     <div style="display: grid; gap: 8px;">
-                        <div><strong style="color: #495057;">书籍类别：</strong><span style="color: #666;">${formatBookCategories()}</span></div>
-                        <div><strong style="color: #495057;">阅读预期：</strong><span style="color: #666;">${formatReadingCommitment()}</span></div>
-                        <div><strong style="color: #495057;">最爱书籍：</strong><span style="color: #666;">${(questionnaire.favoriteBooks || user.favoriteBooks || []).join('、') || '未填写'}</span></div>
-                        <div><strong style="color: #495057;">读过的书：</strong><span style="color: #666;">${(questionnaire.books || user.books || []).join('、') || '未填写'}</span></div>
-                    </div>
-                </div>
-
-                <div class="profile-section" style="background: white; padding: 15px; border-radius: 10px; border-left: 4px solid #FF9800;">
-                    <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 1.1em;">🎯 兴趣爱好</h4>
-                    <div style="display: grid; gap: 8px;">
-                        <div><strong style="color: #495057;">兴趣爱好：</strong><span style="color: #666;">${(questionnaire.hobbies || user.hobbies || []).join('、') || '未填写'}</span></div>
+                        <div><strong style="color: var(--text-secondary);">兴趣爱好：</strong><span style="color: var(--text-tertiary);">${(questionnaire.hobbies || user.hobbies || []).join('、') || '未填写'}</span></div>
                         ${questionnaire.detailedBookPreferences ?
-                            `<div><strong style="color: #495057;">详细偏好：</strong><span style="color: #666;">${questionnaire.detailedBookPreferences}</span></div>` :
+                            `<div><strong style="color: var(--text-secondary);">详细偏好：</strong><span style="color: var(--text-tertiary);">${questionnaire.detailedBookPreferences}</span></div>` :
                             ''}
                     </div>
                 </div>
@@ -945,10 +1087,25 @@ async function handleUpdateMemberInfo(e) {
    const hobbiesText = document.getElementById('hobbies').value.trim();
    const booksText = document.getElementById('books').value.trim();
    
+   // 获取个人简介和兴趣标签数据
+   const personalBio = document.getElementById('personalBio')?.value.trim() || '';
+   const interestTags = JSON.parse(localStorage.getItem('userInterestTags') || '[]');
+   
+   // 获取邮箱信息
+   const userEmail = document.getElementById('userEmail')?.value.trim() || '';
+   
+   // 保存个人简介到localStorage
+   if (personalBio) {
+       localStorage.setItem('userPersonalBio', personalBio);
+   } else {
+       localStorage.removeItem('userPersonalBio');
+   }
+   
    // New enhanced fields (if they exist in the form)
    const gender = document.querySelector('input[name="gender"]:checked')?.value || currentUser.gender || '';
    const matchGenderPreference = document.querySelector('input[name="matchGenderPreference"]:checked')?.value || currentUser.matchGenderPreference || '';
    const matchingTypePreference = document.querySelector('input[name="matchingTypePreference"]:checked')?.value || currentUser.matchingTypePreference || '';
+   const userStatus = document.querySelector('input[name="userStatus"]:checked')?.value || currentUser.userStatus || 'active';
    const bookCategories = Array.from(document.querySelectorAll('input[name="bookCategories"]:checked') || [])
        .map(cb => cb.value);
    const detailedPreferences = document.getElementById('detailedPreferences')?.value.trim() || currentUser.detailedBookPreferences || '';
@@ -962,6 +1119,7 @@ async function handleUpdateMemberInfo(e) {
        gender: gender,
        matchGenderPreference: matchGenderPreference,
        matchingTypePreference: matchingTypePreference,
+       userStatus: userStatus,
        bookCategories: bookCategories.length > 0 ? bookCategories : currentUser.bookCategories || [],
        detailedBookPreferences: detailedPreferences,
        favoriteBooks: favoriteBooks.length > 0 ? favoriteBooks : currentUser.favoriteBooks || [],
@@ -989,10 +1147,25 @@ async function handleUpdateMemberInfo(e) {
            members[userIndex].gender = enhancedFormData.gender;
            members[userIndex].matchGenderPreference = enhancedFormData.matchGenderPreference;
            members[userIndex].matchingTypePreference = enhancedFormData.matchingTypePreference;
+           members[userIndex].userStatus = enhancedFormData.userStatus;
            members[userIndex].bookCategories = enhancedFormData.bookCategories;
            members[userIndex].detailedBookPreferences = enhancedFormData.detailedBookPreferences;
            members[userIndex].favoriteBooks = enhancedFormData.favoriteBooks;
            members[userIndex].readingCommitment = enhancedFormData.readingCommitment;
+           
+           // 保存个人简介和兴趣标签
+           members[userIndex].personalBio = personalBio;
+           members[userIndex].interestTags = interestTags;
+           
+           // 保存邮箱信息
+           if (userEmail && userEmail !== currentUser.email) {
+               members[userIndex].email = userEmail;
+               // 如果邮箱改变了，重置验证状态
+               members[userIndex].emailVerified = false;
+               members[userIndex].emailVerificationDate = null;
+           } else if (userEmail) {
+               members[userIndex].email = userEmail;
+           }
            
            // Update questionnaire metadata
            if (!members[userIndex].questionnaire) {
@@ -1009,6 +1182,13 @@ async function handleUpdateMemberInfo(e) {
        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
        
        alert('信息更新成功！');
+       
+       // 隐藏编辑表单，显示用户资料
+       document.getElementById('memberSection').style.display = 'none';
+       document.getElementById('userProfileSection').style.display = 'block';
+       
+       // 重新渲染用户资料（包括头像）
+       renderUserProfile();
    }
 }
 
@@ -1146,6 +1326,31 @@ function renderMemberList() {
            return matchingTypePreference ? preferenceMap[matchingTypePreference] || matchingTypePreference : '未设置';
        };
        
+       const formatUserStatus = () => {
+           const statusMap = {
+               'active': '🟢 可匹配',
+               'busy': '🟡 忙碌中', 
+               'away': '🔴 暂不匹配',
+               'reading': '📖 专心阅读'
+           };
+           // 优先使用questionnaire中的数据，回退到根级别数据
+           const userStatus = questionnaire.userStatus || migratedMember.userStatus || 'active';
+           return statusMap[userStatus] || statusMap.active;
+       };
+       
+       const formatEmail = () => {
+           const email = migratedMember.email || '';
+           if (!email) {
+               return '未设置';
+           }
+           
+           const isVerified = migratedMember.emailVerified || false;
+           const verificationIcon = isVerified ? '✅' : '❌';
+           const verificationText = isVerified ? '已验证' : '未验证';
+           
+           return `${email} ${verificationIcon} ${verificationText}`;
+       };
+       
        const formatReadingCommitment = () => {
            const commitmentMap = {
                'light': '轻量阅读(5w-10w字)',
@@ -1163,6 +1368,8 @@ function renderMemberList() {
                <div class="member-info">
                    <h3>${migratedMember.name} (学号: ${migratedMember.studentId})</h3>
                    <div class="member-details">
+                       <div><strong>当前状态：</strong>${formatUserStatus()}</div>
+                       <div><strong>邮箱地址：</strong>${formatEmail()}</div>
                        <div><strong>性别：</strong>${formatGender()}</div>
                        <div><strong>性别偏好：</strong>${formatMatchGenderPreference()}</div>
                        <div><strong>匹配偏好：</strong>${formatMatchingTypePreference()}</div>
@@ -5749,3 +5956,676 @@ logout = function() {
     }
     originalLogout.apply(this, arguments);
 };
+
+// 密码重置功能
+function setupPasswordReset() {
+    const resetPasswordLink = document.getElementById('resetPasswordLink');
+    if (resetPasswordLink) {
+        resetPasswordLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            showPasswordResetModal();
+        });
+    }
+}
+
+function showPasswordResetModal() {
+    const modal = document.getElementById('passwordResetModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        // 清空输入框
+        document.getElementById('resetToken').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+    }
+}
+
+function closePasswordResetModal() {
+    const modal = document.getElementById('passwordResetModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function resetPassword() {
+    const resetToken = document.getElementById('resetToken').value.trim();
+    const newPassword = document.getElementById('newPassword').value.trim();
+    const confirmPassword = document.getElementById('confirmPassword').value.trim();
+    
+    // 基本验证
+    if (!resetToken) {
+        alert('请输入GitHub Token');
+        return;
+    }
+    
+    if (!newPassword) {
+        alert('请输入新密码');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        alert('密码长度至少需要6位');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        alert('两次输入的密码不一致');
+        return;
+    }
+    
+    // 验证GitHub Token是否正确
+    if (resetToken !== GITHUB_TOKEN && resetToken !== localStorage.getItem('github_token')) {
+        alert('GitHub Token验证失败，无法重置密码');
+        return;
+    }
+    
+    try {
+        // 更新本地存储的管理员密码
+        if (ADMIN_PASSWORD !== 'BUILD_TIME_ADMIN_PASSWORD') {
+            // 如果是构建时配置的密码，无法通过本地存储修改
+            alert('此系统使用构建时配置的管理员密码，无法通过此方式重置。请联系系统管理员。');
+            return;
+        }
+        
+        // 保存新密码到localStorage
+        localStorage.setItem('admin_password', newPassword);
+        ADMIN_PASSWORD = newPassword;
+        
+        alert('密码重置成功！请使用新密码登录。');
+        closePasswordResetModal();
+        
+        // 如果当前是管理员登录状态，自动退出
+        if (isAdmin) {
+            logout();
+        }
+        
+    } catch (error) {
+        console.error('密码重置失败:', error);
+        alert('密码重置失败，请稍后重试');
+    }
+}
+
+// 主题切换功能
+let currentTheme = 'light';
+
+function initTheme() {
+    // 从localStorage读取保存的主题，或使用系统偏好
+    const savedTheme = localStorage.getItem('userTheme');
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    
+    currentTheme = savedTheme || systemTheme;
+    applyTheme(currentTheme);
+    
+    // 设置主题切换按钮事件
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', toggleTheme);
+        updateThemeButton();
+    }
+    
+    // 监听系统主题变化
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (!localStorage.getItem('userTheme')) {
+            // 如果用户没有手动设置过主题，跟随系统
+            currentTheme = e.matches ? 'dark' : 'light';
+            applyTheme(currentTheme);
+            updateThemeButton();
+        }
+    });
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    currentTheme = theme;
+}
+
+function toggleTheme() {
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    applyTheme(newTheme);
+    localStorage.setItem('userTheme', newTheme);
+    updateThemeButton();
+    
+    // 添加切换动画效果
+    document.body.style.transition = 'all 0.3s ease';
+    setTimeout(() => {
+        document.body.style.transition = '';
+    }, 300);
+}
+
+function updateThemeButton() {
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    if (themeToggleBtn) {
+        themeToggleBtn.textContent = currentTheme === 'light' ? '🌙' : '☀️';
+        themeToggleBtn.title = currentTheme === 'light' ? '切换到深色模式' : '切换到浅色模式';
+    }
+}
+
+// 在DOMContentLoaded时初始化主题
+document.addEventListener('DOMContentLoaded', function() {
+    initTheme();
+    setupPasswordReset();
+});
+
+// 处理模态框外部点击关闭
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('passwordResetModal');
+    if (modal && e.target === modal) {
+        closePasswordResetModal();
+    }
+});
+
+// ESC键关闭模态框
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closePasswordResetModal();
+    }
+});
+
+// 邮箱验证功能
+let verificationCountdown = 0;
+let countdownTimer = null;
+
+function updateEmailVerificationDisplay() {
+    if (!currentUser) return;
+    
+    const emailStatus = document.getElementById('emailStatus');
+    const emailVerificationStatus = document.getElementById('emailVerificationStatus');
+    const verifyEmailBtn = document.getElementById('verifyEmailBtn');
+    
+    if (currentUser.emailVerified) {
+        if (emailStatus) emailStatus.style.display = 'none';
+        if (emailVerificationStatus) emailVerificationStatus.style.display = 'inline';
+        if (verifyEmailBtn) verifyEmailBtn.textContent = '重新验证';
+    } else {
+        if (emailStatus) emailStatus.style.display = 'inline';
+        if (emailVerificationStatus) emailVerificationStatus.style.display = 'none';
+        if (verifyEmailBtn) verifyEmailBtn.textContent = '发送验证';
+    }
+}
+
+function sendEmailVerification() {
+    const emailInput = document.getElementById('userEmail');
+    const email = emailInput.value.trim();
+    
+    if (!email) {
+        alert('请先输入邮箱地址');
+        emailInput.focus();
+        return;
+    }
+    
+    // 简单的邮箱格式验证
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        alert('请输入有效的邮箱地址');
+        emailInput.focus();
+        return;
+    }
+    
+    // 防止频繁发送
+    if (verificationCountdown > 0) {
+        alert(`请等待 ${verificationCountdown} 秒后再重新发送`);
+        return;
+    }
+    
+    // 模拟发送邮箱验证码
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // 在实际应用中，这里应该调用后端API发送邮件
+    // 现在我们将验证码存储在sessionStorage中进行模拟
+    sessionStorage.setItem('emailVerificationCode', verificationCode);
+    sessionStorage.setItem('verificationEmail', email);
+    sessionStorage.setItem('verificationTime', Date.now().toString());
+    
+    // 显示验证码输入区域
+    const verificationGroup = document.getElementById('emailVerificationGroup');
+    if (verificationGroup) {
+        verificationGroup.style.display = 'block';
+    }
+    
+    // 开始倒计时（60秒）
+    startCountdown(60);
+    
+    // 模拟提示（在实际应用中会发送真实邮件）
+    alert(`验证码已发送到 ${email}\n\n模拟验证码: ${verificationCode}\n（实际应用中验证码会发送到邮箱）`);
+}
+
+function startCountdown(seconds) {
+    verificationCountdown = seconds;
+    const verifyBtn = document.getElementById('verifyEmailBtn');
+    const countdownSpan = document.getElementById('verificationCountdown');
+    
+    if (verifyBtn) {
+        verifyBtn.disabled = true;
+        verifyBtn.style.opacity = '0.5';
+    }
+    
+    countdownTimer = setInterval(() => {
+        verificationCountdown--;
+        if (countdownSpan) {
+            countdownSpan.textContent = `重新发送 (${verificationCountdown}s)`;
+        }
+        
+        if (verificationCountdown <= 0) {
+            clearInterval(countdownTimer);
+            if (countdownSpan) countdownSpan.textContent = '';
+            if (verifyBtn) {
+                verifyBtn.disabled = false;
+                verifyBtn.style.opacity = '1';
+            }
+        }
+    }, 1000);
+}
+
+function verifyEmailCode() {
+    const codeInput = document.getElementById('emailVerificationCode');
+    const inputCode = codeInput.value.trim();
+    
+    if (!inputCode) {
+        alert('请输入验证码');
+        codeInput.focus();
+        return;
+    }
+    
+    const storedCode = sessionStorage.getItem('emailVerificationCode');
+    const storedEmail = sessionStorage.getItem('verificationEmail');
+    const verificationTime = parseInt(sessionStorage.getItem('verificationTime') || '0');
+    
+    // 检查验证码是否过期（10分钟）
+    const currentTime = Date.now();
+    const isExpired = (currentTime - verificationTime) > 10 * 60 * 1000;
+    
+    if (isExpired) {
+        alert('验证码已过期，请重新发送');
+        sessionStorage.removeItem('emailVerificationCode');
+        sessionStorage.removeItem('verificationEmail');
+        sessionStorage.removeItem('verificationTime');
+        return;
+    }
+    
+    if (inputCode === storedCode) {
+        // 验证成功
+        if (currentUser) {
+            const userIndex = members.findIndex(m => m.id === currentUser.id);
+            if (userIndex > -1) {
+                members[userIndex].emailVerified = true;
+                members[userIndex].emailVerificationDate = new Date().toISOString();
+                members[userIndex].email = storedEmail;
+                
+                // 保存到服务器
+                saveMembersToGist().then(() => {
+                    currentUser = members[userIndex];
+                    sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    
+                    alert('邮箱验证成功！');
+                    
+                    // 隐藏验证码输入区域
+                    const verificationGroup = document.getElementById('emailVerificationGroup');
+                    if (verificationGroup) {
+                        verificationGroup.style.display = 'none';
+                    }
+                    
+                    // 更新显示状态
+                    updateEmailVerificationDisplay();
+                    
+                    // 清理session数据
+                    sessionStorage.removeItem('emailVerificationCode');
+                    sessionStorage.removeItem('verificationEmail');
+                    sessionStorage.removeItem('verificationTime');
+                    
+                    // 清空输入框
+                    codeInput.value = '';
+                });
+            }
+        }
+    } else {
+        alert('验证码错误，请重新输入');
+        codeInput.focus();
+        codeInput.select();
+    }
+}
+
+// ===== 个性化设置功能 =====
+
+/**
+ * 显示用户设置界面
+ */
+function showUserSettings() {
+    // 隐藏其他界面
+    document.getElementById('userProfileSection').style.display = 'none';
+    document.getElementById('memberSection').style.display = 'none';
+    
+    // 显示设置界面
+    document.getElementById('userSettingsSection').style.display = 'block';
+    
+    // 加载当前设置
+    loadUserSettings();
+}
+
+/**
+ * 取消设置修改，返回资料界面
+ */
+function cancelUserSettings() {
+    document.getElementById('userSettingsSection').style.display = 'none';
+    document.getElementById('userProfileSection').style.display = 'block';
+}
+
+/**
+ * 加载用户设置
+ */
+function loadUserSettings() {
+    // 加载主题设置
+    const savedTheme = localStorage.getItem('userTheme');
+    let themePreference = 'auto';
+    
+    if (savedTheme) {
+        themePreference = savedTheme;
+    }
+    
+    const themeRadios = document.querySelectorAll('input[name="themePreference"]');
+    themeRadios.forEach(radio => {
+        if (radio.value === themePreference) {
+            radio.checked = true;
+        }
+    });
+    
+    // 加载通知设置
+    const notificationSettings = JSON.parse(localStorage.getItem('notificationSettings') || '["match_found", "system_updates"]');
+    const notificationCheckboxes = document.querySelectorAll('input[name="notifications"]');
+    notificationCheckboxes.forEach(checkbox => {
+        checkbox.checked = notificationSettings.includes(checkbox.value);
+    });
+    
+    // 加载匹配频率设置
+    const matchFrequency = localStorage.getItem('matchFrequency') || 'normal';
+    const frequencyRadios = document.querySelectorAll('input[name="matchFrequency"]');
+    frequencyRadios.forEach(radio => {
+        if (radio.value === matchFrequency) {
+            radio.checked = true;
+        }
+    });
+    
+    // 加载隐私设置
+    const privacySettings = JSON.parse(localStorage.getItem('privacySettings') || '[]');
+    const privacyCheckboxes = document.querySelectorAll('input[name="privacy"]');
+    privacyCheckboxes.forEach(checkbox => {
+        checkbox.checked = privacySettings.includes(checkbox.value);
+    });
+    
+    // 更新系统信息
+    updateSystemInfo();
+}
+
+/**
+ * 保存用户设置
+ */
+function saveUserSettings() {
+    try {
+        // 保存主题设置
+        const selectedTheme = document.querySelector('input[name="themePreference"]:checked');
+        if (selectedTheme) {
+            const themeValue = selectedTheme.value;
+            if (themeValue === 'auto') {
+                localStorage.removeItem('userTheme');
+                // 跟随系统设置
+                const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                applyTheme(systemTheme);
+            } else {
+                localStorage.setItem('userTheme', themeValue);
+                applyTheme(themeValue);
+            }
+            updateThemeButton();
+        }
+        
+        // 保存通知设置
+        const selectedNotifications = [];
+        const notificationCheckboxes = document.querySelectorAll('input[name="notifications"]:checked');
+        notificationCheckboxes.forEach(checkbox => {
+            selectedNotifications.push(checkbox.value);
+        });
+        localStorage.setItem('notificationSettings', JSON.stringify(selectedNotifications));
+        
+        // 保存匹配频率设置
+        const selectedFrequency = document.querySelector('input[name="matchFrequency"]:checked');
+        if (selectedFrequency) {
+            localStorage.setItem('matchFrequency', selectedFrequency.value);
+        }
+        
+        // 保存隐私设置
+        const selectedPrivacy = [];
+        const privacyCheckboxes = document.querySelectorAll('input[name="privacy"]:checked');
+        privacyCheckboxes.forEach(checkbox => {
+            selectedPrivacy.push(checkbox.value);
+        });
+        localStorage.setItem('privacySettings', JSON.stringify(selectedPrivacy));
+        
+        // 如果用户已登录，同步设置到用户数据
+        if (currentUser) {
+            syncSettingsToUserProfile();
+        }
+        
+        alert('设置保存成功！');
+        cancelUserSettings();
+        
+    } catch (error) {
+        console.error('保存设置时出错:', error);
+        alert('保存设置失败，请重试');
+    }
+}
+
+/**
+ * 同步设置到用户档案
+ */
+function syncSettingsToUserProfile() {
+    if (!currentUser) return;
+    
+    try {
+        const userIndex = members.findIndex(m => m.id === currentUser.id);
+        if (userIndex > -1) {
+            // 更新用户的设置数据
+            members[userIndex].userSettings = {
+                themePreference: localStorage.getItem('userTheme') || 'auto',
+                notifications: JSON.parse(localStorage.getItem('notificationSettings') || '[]'),
+                matchFrequency: localStorage.getItem('matchFrequency') || 'normal',
+                privacy: JSON.parse(localStorage.getItem('privacySettings') || '[]'),
+                lastUpdated: new Date().toISOString()
+            };
+            
+            // 更新本地currentUser
+            currentUser = members[userIndex];
+            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            
+            // 保存到远程
+            saveMembersToGist();
+        }
+    } catch (error) {
+        console.error('同步设置到用户档案时出错:', error);
+    }
+}
+
+/**
+ * 更新系统信息显示
+ */
+function updateSystemInfo() {
+    // 更新最后登录时间
+    const lastLoginElement = document.getElementById('lastLoginTime');
+    const lastLogin = sessionStorage.getItem('lastLoginTime') || localStorage.getItem('lastLoginTime');
+    if (lastLoginElement && lastLogin) {
+        lastLoginElement.textContent = new Date(lastLogin).toLocaleString('zh-CN');
+    }
+    
+    // 更新账号创建时间
+    const accountCreatedElement = document.getElementById('accountCreatedTime');
+    if (accountCreatedElement && currentUser && currentUser.createdAt) {
+        accountCreatedElement.textContent = new Date(currentUser.createdAt).toLocaleString('zh-CN');
+    }
+    
+    // 更新数据同步状态
+    const syncStatusElement = document.getElementById('dataSyncStatus');
+    if (syncStatusElement) {
+        const lastSync = localStorage.getItem('lastDataSync');
+        if (lastSync) {
+            const timeDiff = Date.now() - parseInt(lastSync);
+            if (timeDiff < 60000) {
+                syncStatusElement.textContent = '正常';
+                syncStatusElement.style.color = '#28a745';
+            } else if (timeDiff < 300000) {
+                syncStatusElement.textContent = '待同步';
+                syncStatusElement.style.color = '#ffc107';
+            } else {
+                syncStatusElement.textContent = '需要同步';
+                syncStatusElement.style.color = '#dc3545';
+            }
+        }
+    }
+}
+
+/**
+ * 导出用户数据
+ */
+function exportUserData() {
+    if (!currentUser) {
+        alert('请先登录');
+        return;
+    }
+    
+    try {
+        // 收集所有相关数据
+        const exportData = {
+            userProfile: currentUser,
+            settings: {
+                theme: localStorage.getItem('userTheme'),
+                notifications: JSON.parse(localStorage.getItem('notificationSettings') || '[]'),
+                matchFrequency: localStorage.getItem('matchFrequency'),
+                privacy: JSON.parse(localStorage.getItem('privacySettings') || '[]')
+            },
+            localData: {
+                avatar: localStorage.getItem('userAvatar'),
+                interestTags: JSON.parse(localStorage.getItem('userInterestTags') || '[]'),
+                lastLoginTime: localStorage.getItem('lastLoginTime')
+            },
+            exportInfo: {
+                exportDate: new Date().toISOString(),
+                version: '1.2.0'
+            }
+        };
+        
+        // 创建并下载文件
+        const dataBlob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `求索书社_用户数据_${currentUser.name}_${new Date().toISOString().split('T')[0]}.json`;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        
+        alert('数据导出成功！文件已下载到您的设备');
+        
+    } catch (error) {
+        console.error('导出数据时出错:', error);
+        alert('导出数据失败，请重试');
+    }
+}
+
+/**
+ * 清除本地缓存数据
+ */
+function clearLocalData() {
+    const confirmClear = confirm('确定要清除所有本地缓存数据吗？这将会：\n\n• 重置所有个人设置\n• 清除本地头像和标签数据\n• 清除登录状态\n\n注意：这不会删除您在服务器上的账号数据');
+    
+    if (confirmClear) {
+        try {
+            // 保留重要的配置数据
+            const importantKeys = ['githubToken', 'gistId'];
+            const importantData = {};
+            importantKeys.forEach(key => {
+                const value = localStorage.getItem(key);
+                if (value) {
+                    importantData[key] = value;
+                }
+            });
+            
+            // 清除localStorage
+            localStorage.clear();
+            
+            // 恢复重要配置
+            Object.keys(importantData).forEach(key => {
+                localStorage.setItem(key, importantData[key]);
+            });
+            
+            // 清除sessionStorage
+            sessionStorage.clear();
+            
+            alert('本地缓存已清除！页面即将刷新');
+            
+            // 刷新页面
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+            
+        } catch (error) {
+            console.error('清除缓存时出错:', error);
+            alert('清除缓存失败，请重试');
+        }
+    }
+}
+
+/**
+ * 删除用户账号（危险操作）
+ */
+function deleteUserAccount() {
+    if (!currentUser) {
+        alert('请先登录');
+        return;
+    }
+    
+    const userName = currentUser.name;
+    const confirmDelete = confirm(`⚠️ 危险操作警告 ⚠️\n\n您确定要永久删除账号 "${userName}" 吗？\n\n此操作将会：\n• 永久删除您的所有资料和数据\n• 从所有匹配结果中移除\n• 无法恢复\n\n如果确定删除，请在下一个对话框中输入您的姓名确认`);
+    
+    if (confirmDelete) {
+        const confirmName = prompt(`请输入您的姓名 "${userName}" 以确认删除账号：`);
+        
+        if (confirmName === userName) {
+            try {
+                // 从成员列表中删除用户
+                const userIndex = members.findIndex(m => m.id === currentUser.id);
+                if (userIndex > -1) {
+                    members.splice(userIndex, 1);
+                    
+                    // 保存到服务器
+                    saveMembersToGist().then(() => {
+                        // 清除本地数据
+                        localStorage.clear();
+                        sessionStorage.clear();
+                        
+                        alert('账号删除成功。感谢您使用求索书社，再见！');
+                        
+                        // 刷新页面回到登录界面
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    }).catch(error => {
+                        console.error('删除账号时出错:', error);
+                        alert('删除账号失败，请联系管理员或重试');
+                    });
+                }
+            } catch (error) {
+                console.error('删除账号时出错:', error);
+                alert('删除账号失败，请重试');
+            }
+        } else {
+            alert('姓名确认失败，账号删除操作已取消');
+        }
+    }
+}
+
+// 添加设置按钮事件监听
+document.addEventListener('DOMContentLoaded', function() {
+    const userSettingsBtn = document.getElementById('userSettingsBtn');
+    if (userSettingsBtn) {
+        userSettingsBtn.addEventListener('click', showUserSettings);
+    }
+});
