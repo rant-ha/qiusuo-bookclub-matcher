@@ -5,6 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>求索书社灵魂寻友</title>
     <style>
+        /* CSS变量定义 */
+        :root {
+            /* 浅色主题变量 */
+            --bg-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --bg-secondary: rgba(255, 255, 255, 0.95);
+            --bg-tertiary: #ffffff;
+            --text-primary: #333;
+            --text-secondary: #555;
+            --text-tertiary: #666;
+            --text-muted: #888;
+            --border-color: #e1e8ed;
+            --border-hover: #667eea;
+            --shadow-light: rgba(0,0,0,0.1);
+            --shadow-medium: rgba(0,0,0,0.15);
+            --input-bg: rgba(255, 255, 255, 0.9);
+            --card-bg: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            --profile-section-bg: white;
+        }
+
+        /* 深色主题变量 */
+        [data-theme="dark"] {
+            --bg-primary: linear-gradient(135deg, #2d3748 0%, #1a1a2e 100%);
+            --bg-secondary: rgba(45, 55, 72, 0.95);
+            --bg-tertiary: #4a5568;
+            --text-primary: #f7fafc;
+            --text-secondary: #e2e8f0;
+            --text-tertiary: #a0aec0;
+            --text-muted: #718096;
+            --border-color: #4a5568;
+            --border-hover: #667eea;
+            --shadow-light: rgba(0,0,0,0.3);
+            --shadow-medium: rgba(0,0,0,0.4);
+            --input-bg: rgba(74, 85, 104, 0.9);
+            --card-bg: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+            --profile-section-bg: #2d3748;
+        }
+        
         * {
             margin: 0;
             padding: 0;
@@ -13,12 +50,13 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--bg-primary);
             min-height: 100vh;
-            color: #333;
+            color: var(--text-primary);
             line-height: 1.6;
             margin: 0;
             padding: 0;
+            transition: background 0.3s ease, color 0.3s ease;
         }
         
         .container {
@@ -41,23 +79,23 @@
         }
         
         .section {
-            background: rgba(255, 255, 255, 0.95);
+            background: var(--bg-secondary);
             backdrop-filter: blur(10px);
             padding: 30px;
             border-radius: 16px;
             margin-bottom: 25px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 8px 32px var(--shadow-light);
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
         }
         
         .section:hover {
             transform: translateY(-2px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+            box-shadow: 0 12px 40px var(--shadow-medium);
         }
         
         .section h2 {
-            color: #2c3e50;
+            color: var(--text-primary);
             margin-bottom: 20px;
             font-size: 1.5rem;
             font-weight: 600;
@@ -79,22 +117,23 @@
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
-            color: #555;
+            color: var(--text-secondary);
         }
         
-        input[type="text"], input[type="password"], textarea {
+        input[type="text"], input[type="password"], input[type="email"], textarea {
             width: 100%;
             padding: 12px 16px;
-            border: 2px solid #e1e8ed;
+            border: 2px solid var(--border-color);
             border-radius: 8px;
             font-size: 14px;
             transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.9);
+            background: var(--input-bg);
+            color: var(--text-primary);
         }
         
-        input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
+        input[type="text"]:focus, input[type="password"]:focus, input[type="email"]:focus, textarea:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: var(--border-hover);
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
             transform: translateY(-1px);
         }
@@ -106,7 +145,7 @@
         
         .hint {
             font-size: 12px;
-            color: #888;
+            color: var(--text-muted);
             margin-top: 5px;
         }
         
@@ -147,7 +186,7 @@
         }
         
         .member-item {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            background: var(--card-bg);
             padding: 20px;
             border-radius: 12px;
             margin-bottom: 15px;
@@ -155,22 +194,22 @@
             justify-content: space-between;
             align-items: center;
             transition: all 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            border: 1px solid var(--border-color);
         }
         
         .member-item:hover {
             transform: translateX(5px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 20px var(--shadow-light);
         }
         
         .member-info h3 {
-            color: #2c3e50;
+            color: var(--text-primary);
             margin-bottom: 5px;
         }
         
         .member-details {
             font-size: 14px;
-            color: #666;
+            color: var(--text-tertiary);
         }
         
         .delete-btn {
@@ -449,6 +488,427 @@
         .required {
             color: #ff6b6b;
             font-weight: bold;
+        }
+
+        /* 头像相关样式 */
+        .avatar-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .avatar-preview-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .avatar-preview {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 3px solid #e1e8ed;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            transition: all 0.3s ease;
+        }
+
+        .avatar-preview:hover {
+            border-color: #667eea;
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+        }
+
+        .avatar-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+
+        .avatar-placeholder {
+            font-size: 48px;
+            color: #adb5bd;
+            opacity: 0.7;
+        }
+
+        .avatar-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .avatar-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .avatar-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .avatar-btn.secondary {
+            background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+            box-shadow: 0 3px 10px rgba(149, 165, 166, 0.3);
+        }
+
+        .avatar-btn.secondary:hover {
+            box-shadow: 0 5px 15px rgba(149, 165, 166, 0.4);
+        }
+
+        .avatar-btn.remove {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            box-shadow: 0 3px 10px rgba(255, 107, 107, 0.3);
+        }
+
+        .avatar-btn.remove:hover {
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .default-avatars {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            border: 2px solid #e1e8ed;
+        }
+
+        .avatars-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            max-width: 360px;
+        }
+
+        .default-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .default-avatar:hover {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .default-avatar.selected {
+            border-color: #00b894;
+            background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+            transform: scale(1.05);
+        }
+
+        /* 用户资料显示头像 */
+        .profile-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid #e1e8ed;
+            display: inline-block;
+            margin-right: 20px;
+            vertical-align: middle;
+            object-fit: cover;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            text-align: center;
+            line-height: 74px;
+            font-size: 32px;
+        }
+
+        .profile-info {
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .avatars-grid {
+                grid-template-columns: repeat(4, 1fr);
+                max-width: 240px;
+            }
+            
+            .avatar-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .avatar-btn {
+                width: 100%;
+                max-width: 200px;
+            }
+        }
+        
+        /* 个人简介和兴趣标签样式 */
+        .interest-tags-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #e1e8ed;
+        }
+
+        .preset-tags-container {
+            margin-bottom: 20px;
+        }
+
+        .preset-tags-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+
+        .preset-tags-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .tag-category {
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .category-title {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tags-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .preset-tag {
+            display: inline-block;
+            background: linear-gradient(135deg, #ffffff 0%, #f1f3f4 100%);
+            color: #495057;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            user-select: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .preset-tag:hover {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .preset-tag.selected {
+            border-color: #00b894;
+            background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+            color: white;
+            box-shadow: 0 3px 8px rgba(0, 184, 148, 0.3);
+        }
+
+        .custom-tags-container {
+            border-top: 2px dashed #e1e8ed;
+            padding-top: 15px;
+            margin-bottom: 20px;
+        }
+
+        .custom-tag-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .custom-tag-input-group input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .custom-tag-input-group input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .add-tag-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .add-tag-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .add-tag-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .selected-tags-container {
+            border-top: 2px dashed #e1e8ed;
+            padding-top: 15px;
+        }
+
+        .selected-tags-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+
+        .tags-count {
+            color: #6c757d;
+            font-size: 12px;
+            font-weight: normal;
+        }
+
+        .selected-tags {
+            min-height: 50px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            padding: 12px;
+            border: 2px dashed #e1e8ed;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .no-tags-message {
+            color: #adb5bd;
+            font-style: italic;
+            font-size: 13px;
+            text-align: center;
+            width: 100%;
+        }
+
+        .selected-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+            box-shadow: 0 2px 6px rgba(0, 184, 148, 0.3);
+            animation: tagSlideIn 0.3s ease-out;
+        }
+
+        .selected-tag .tag-remove {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            transition: all 0.2s ease;
+            line-height: 1;
+        }
+
+        .selected-tag .tag-remove:hover {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(1.1);
+        }
+
+        @keyframes tagSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px) scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* 用户资料中的标签显示 */
+        .profile-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .profile-tag {
+            display: inline-block;
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            box-shadow: 0 1px 4px rgba(116, 185, 255, 0.3);
+        }
+
+        .profile-bio {
+            background: rgba(255, 255, 255, 0.6);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 8px;
+            border-left: 3px solid #74b9ff;
+            font-style: italic;
+            color: #555;
+            line-height: 1.5;
         }
         .exact-tag {
             background: linear-gradient(135deg, #00b894 0%, #00a085 100%);
@@ -1026,6 +1486,13 @@
     </style>
 </head>
 <body>
+    <!-- 主题切换器 -->
+    <div id="themeToggle" style="position: fixed; top: 20px; right: 20px; z-index: 9999; background: var(--bg-secondary); border-radius: 25px; padding: 8px; box-shadow: 0 4px 15px var(--shadow-light); backdrop-filter: blur(10px); border: 1px solid var(--border-color); transition: all 0.3s ease;">
+        <button id="themeToggleBtn" style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 8px; border-radius: 50%; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px;" title="切换主题">
+            🌙
+        </button>
+    </div>
+
     <div class="container">
         <h1>🔍 求索书社灵魂寻友</h1>
         
@@ -1065,17 +1532,192 @@
                  <div class="form-group">
                     <label for="loginPassword">管理员密码 (可选)</label>
                     <input type="password" id="loginPassword" placeholder="管理员登录时填写">
+                    <div class="hint">
+                        <span>管理员账号可以查看所有成员信息并进行匹配</span>
+                        <a href="#" id="resetPasswordLink" style="color: #667eea; text-decoration: underline; font-size: 12px; float: right;">忘记密码？</a>
+                    </div>
                 </div>
                 <button type="submit">登录</button>
                 <button type="button" class="secondary" onclick="window.location.href='register.html'">注册新账号</button>
             </form>
         </div>
 
+        <!-- 密码重置模态框 -->
+        <div id="passwordResetModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <h3 style="color: #2c3e50; margin-bottom: 10px;">🔑 管理员密码重置</h3>
+                    <p style="color: #6c757d; font-size: 14px;">请输入您的GitHub Token进行身份验证</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="resetToken">GitHub Token</label>
+                    <input type="password" id="resetToken" placeholder="请输入您的GitHub Token">
+                    <div class="hint">需要与系统配置中的Token一致才能重置密码</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="newPassword">新管理员密码</label>
+                    <input type="password" id="newPassword" placeholder="请设置新的管理员密码">
+                    <div class="hint">建议使用8位以上包含字母和数字的密码</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmPassword">确认新密码</label>
+                    <input type="password" id="confirmPassword" placeholder="请再次输入新密码">
+                </div>
+                
+                <div style="text-align: center; margin-top: 25px;">
+                    <button onclick="resetPassword()" style="margin-right: 10px;">重置密码</button>
+                    <button class="secondary" onclick="closePasswordResetModal()">取消</button>
+                </div>
+            </div>
+        </div>
+
         <div id="userProfileSection" class="section">
             <h2>👤 我的资料</h2>
             <div id="userProfileContent"></div>
             <button id="editProfileBtn">编辑信息</button>
+            <button id="userSettingsBtn" class="secondary">⚙️ 个人设置</button>
             <button type="button" class="secondary" onclick="logout()">退出登录</button>
+        </div>
+
+        <!-- 个性化设置界面 -->
+        <div id="userSettingsSection" class="section" style="display: none;">
+            <h2>⚙️ 个人设置</h2>
+            
+            <!-- 主题设置 -->
+            <div class="form-group">
+                <label>主题偏好</label>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="themePreference" value="auto">
+                        <span class="radio-custom"></span>
+                        <div class="commitment-option">
+                            <strong>🌓 自动跟随系统</strong>
+                            <small>根据设备系统设置自动切换浅色/深色模式</small>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="themePreference" value="light">
+                        <span class="radio-custom"></span>
+                        <div class="commitment-option">
+                            <strong>☀️ 浅色模式</strong>
+                            <small>始终使用浅色主题，适合在明亮环境下使用</small>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="themePreference" value="dark">
+                        <span class="radio-custom"></span>
+                        <div class="commitment-option">
+                            <strong>🌙 深色模式</strong>
+                            <small>始终使用深色主题，保护眼睛适合夜间使用</small>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 通知设置 -->
+            <div class="form-group">
+                <label>通知偏好</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-option">
+                        <input type="checkbox" name="notifications" value="match_found">
+                        <span class="checkbox-custom"></span>
+                        匹配成功通知
+                    </label>
+                    <label class="checkbox-option">
+                        <input type="checkbox" name="notifications" value="new_messages">
+                        <span class="checkbox-custom"></span>
+                        新消息通知
+                    </label>
+                    <label class="checkbox-option">
+                        <input type="checkbox" name="notifications" value="system_updates">
+                        <span class="checkbox-custom"></span>
+                        系统更新通知
+                    </label>
+                </div>
+            </div>
+
+            <!-- 匹配偏好设置 -->
+            <div class="form-group">
+                <label>匹配频率偏好</label>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="matchFrequency" value="active">
+                        <span class="radio-custom"></span>
+                        <div class="commitment-option">
+                            <strong>🔥 积极匹配</strong>
+                            <small>优先在匹配结果中显示，增加被其他用户发现的机会</small>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="matchFrequency" value="normal">
+                        <span class="radio-custom"></span>
+                        <div class="commitment-option">
+                            <strong>📚 正常频率</strong>
+                            <small>按正常优先级参与匹配</small>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="matchFrequency" value="low">
+                        <span class="radio-custom"></span>
+                        <div class="commitment-option">
+                            <strong>🕊️ 低频匹配</strong>
+                            <small>降低在匹配结果中的优先级，适合不太活跃的用户</small>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 隐私设置 -->
+            <div class="form-group">
+                <label>隐私设置</label>
+                <div class="checkbox-group">
+                    <label class="checkbox-option">
+                        <input type="checkbox" name="privacy" value="hide_profile_visitors">
+                        <span class="checkbox-custom"></span>
+                        隐藏谁查看了我的资料
+                    </label>
+                    <label class="checkbox-option">
+                        <input type="checkbox" name="privacy" value="limit_contact_info">
+                        <span class="checkbox-custom"></span>
+                        限制联系方式显示（仅显示给匹配成功的用户）
+                    </label>
+                    <label class="checkbox-option">
+                        <input type="checkbox" name="privacy" value="anonymous_in_stats">
+                        <span class="checkbox-custom"></span>
+                        在统计数据中匿名显示
+                    </label>
+                </div>
+            </div>
+
+            <!-- 数据管理 -->
+            <div class="form-group">
+                <label>数据管理</label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" class="avatar-btn secondary" onclick="exportUserData()">📥 导出我的数据</button>
+                    <button type="button" class="avatar-btn secondary" onclick="clearLocalData()">🗑️ 清除本地缓存</button>
+                    <button type="button" class="avatar-btn remove" onclick="deleteUserAccount()">⚠️ 删除账号</button>
+                </div>
+                <div class="hint">导出数据：获取您在平台上的所有个人数据 | 清除缓存：重置本地存储的设置和缓存</div>
+            </div>
+
+            <!-- 系统信息 -->
+            <div class="form-group">
+                <label>系统信息</label>
+                <div style="background: rgba(108, 117, 125, 0.1); padding: 15px; border-radius: 8px; font-size: 14px; color: #6c757d;">
+                    <div><strong>版本:</strong> 1.2.0</div>
+                    <div><strong>最后登录:</strong> <span id="lastLoginTime">--</span></div>
+                    <div><strong>账号创建:</strong> <span id="accountCreatedTime">--</span></div>
+                    <div><strong>数据同步状态:</strong> <span id="dataSyncStatus">正常</span></div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <button onclick="saveUserSettings()" style="margin-right: 10px;">💾 保存设置</button>
+                <button class="secondary" onclick="cancelUserSettings()">取消</button>
+            </div>
         </div>
 
         <div id="memberSection" class="section" style="display: none;">
@@ -1088,6 +1730,71 @@
                 <div class="form-group">
                     <label for="studentId">学号</label>
                     <input type="text" id="studentId" disabled>
+                </div>
+                
+                <!-- 邮箱验证 -->
+                <div class="form-group">
+                    <label for="userEmail">邮箱地址</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="email" id="userEmail" placeholder="请输入您的邮箱地址" style="flex: 1;">
+                        <button type="button" class="avatar-btn" id="verifyEmailBtn" onclick="sendEmailVerification()" style="white-space: nowrap;">发送验证</button>
+                    </div>
+                    <div class="hint">
+                        <span id="emailStatus">邮箱验证可以提高账号安全性</span>
+                        <span id="emailVerificationStatus" style="color: #00b894; font-weight: bold; display: none;">✅ 邮箱已验证</span>
+                    </div>
+                </div>
+                
+                <!-- 邮箱验证码输入（初始隐藏） -->
+                <div class="form-group" id="emailVerificationGroup" style="display: none;">
+                    <label for="emailVerificationCode">邮箱验证码</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="text" id="emailVerificationCode" placeholder="请输入6位验证码" maxlength="6" style="flex: 1;">
+                        <button type="button" class="avatar-btn secondary" onclick="verifyEmailCode()">验证</button>
+                    </div>
+                    <div class="hint">
+                        <span id="verificationCountdown"></span>
+                        <span>验证码已发送到您的邮箱，请查收</span>
+                    </div>
+                </div>
+                
+                <!-- 头像设置 -->
+                <div class="form-group">
+                    <label>个人头像</label>
+                    <div class="avatar-section">
+                        <div class="avatar-preview-container">
+                            <div class="avatar-preview" id="avatarPreview">
+                                <img id="avatarImage" src="" alt="头像预览" style="display: none;">
+                                <div class="avatar-placeholder">📷</div>
+                            </div>
+                            <div class="avatar-actions">
+                                <button type="button" class="avatar-btn" onclick="triggerAvatarUpload()">上传头像</button>
+                                <button type="button" class="avatar-btn secondary" onclick="showDefaultAvatars()">选择默认</button>
+                                <button type="button" class="avatar-btn remove" onclick="removeAvatar()" style="display: none;">移除头像</button>
+                            </div>
+                        </div>
+                        <input type="file" id="avatarInput" accept="image/*" style="display: none;" onchange="handleAvatarUpload(event)">
+                        
+                        <!-- 默认头像选择器 -->
+                        <div class="default-avatars" id="defaultAvatars" style="display: none;">
+                            <div class="avatars-grid">
+                                <div class="default-avatar" onclick="selectDefaultAvatar('👤')">👤</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('👨')">👨</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('👩')">👩</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('🧑')">🧑</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('👦')">👦</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('👧')">👧</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('🎓')">🎓</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('📚')">📚</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('🤓')">🤓</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('😊')">😊</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('🌟')">🌟</div>
+                                <div class="default-avatar" onclick="selectDefaultAvatar('🎭')">🎭</div>
+                            </div>
+                        </div>
+                        
+                        <div class="hint">支持jpg、png格式，建议尺寸200x200像素</div>
+                    </div>
                 </div>
                 
                 <!-- 性别选择 -->
@@ -1114,6 +1821,111 @@
                             <span class="radio-custom"></span>
                             不愿透露
                         </label>
+                    </div>
+                </div>
+                
+                <!-- 个人简介 -->
+                <div class="form-group">
+                    <label for="personalBio">个人简介（可选）</label>
+                    <textarea id="personalBio" placeholder="简单介绍一下自己，比如你的阅读习惯、喜欢的书籍风格等..." maxlength="300"></textarea>
+                    <div class="hint">
+                        <span>让其他书友更好地了解你</span>
+                        <span class="char-count" id="personalBioCount">0/300字</span>
+                    </div>
+                </div>
+                
+                <!-- 兴趣标签 -->
+                <div class="form-group">
+                    <label>兴趣标签</label>
+                    <div class="interest-tags-section">
+                        <!-- 预设标签 -->
+                        <div class="preset-tags-container">
+                            <div class="preset-tags-header">
+                                <span>📌 预设标签（点击选择）</span>
+                            </div>
+                            <div class="preset-tags-grid" id="presetTagsGrid">
+                                <!-- 阅读相关标签 -->
+                                <div class="tag-category">
+                                    <div class="category-title">📚 阅读偏好</div>
+                                    <div class="tags-row">
+                                        <span class="preset-tag" data-tag="深度阅读" onclick="togglePresetTag(this)">深度阅读</span>
+                                        <span class="preset-tag" data-tag="快速阅读" onclick="togglePresetTag(this)">快速阅读</span>
+                                        <span class="preset-tag" data-tag="朗读爱好者" onclick="togglePresetTag(this)">朗读爱好者</span>
+                                        <span class="preset-tag" data-tag="读书笔记控" onclick="togglePresetTag(this)">读书笔记控</span>
+                                        <span class="preset-tag" data-tag="实体书控" onclick="togglePresetTag(this)">实体书控</span>
+                                        <span class="preset-tag" data-tag="电子书党" onclick="togglePresetTag(this)">电子书党</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="tag-category">
+                                    <div class="category-title">🎨 艺术文化</div>
+                                    <div class="tags-row">
+                                        <span class="preset-tag" data-tag="电影爱好者" onclick="togglePresetTag(this)">电影爱好者</span>
+                                        <span class="preset-tag" data-tag="音乐发烧友" onclick="togglePresetTag(this)">音乐发烧友</span>
+                                        <span class="preset-tag" data-tag="艺术欣赏" onclick="togglePresetTag(this)">艺术欣赏</span>
+                                        <span class="preset-tag" data-tag="摄影爱好" onclick="togglePresetTag(this)">摄影爱好</span>
+                                        <span class="preset-tag" data-tag="传统文化" onclick="togglePresetTag(this)">传统文化</span>
+                                        <span class="preset-tag" data-tag="当代艺术" onclick="togglePresetTag(this)">当代艺术</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="tag-category">
+                                    <div class="category-title">🌍 生活方式</div>
+                                    <div class="tags-row">
+                                        <span class="preset-tag" data-tag="咖啡文化" onclick="togglePresetTag(this)">咖啡文化</span>
+                                        <span class="preset-tag" data-tag="茶文化" onclick="togglePresetTag(this)">茶文化</span>
+                                        <span class="preset-tag" data-tag="旅行探索" onclick="togglePresetTag(this)">旅行探索</span>
+                                        <span class="preset-tag" data-tag="运动健身" onclick="togglePresetTag(this)">运动健身</span>
+                                        <span class="preset-tag" data-tag="美食烹饪" onclick="togglePresetTag(this)">美食烹饪</span>
+                                        <span class="preset-tag" data-tag="园艺植物" onclick="togglePresetTag(this)">园艺植物</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="tag-category">
+                                    <div class="category-title">🧠 学习成长</div>
+                                    <div class="tags-row">
+                                        <span class="preset-tag" data-tag="终身学习" onclick="togglePresetTag(this)">终身学习</span>
+                                        <span class="preset-tag" data-tag="技能提升" onclick="togglePresetTag(this)">技能提升</span>
+                                        <span class="preset-tag" data-tag="语言学习" onclick="togglePresetTag(this)">语言学习</span>
+                                        <span class="preset-tag" data-tag="思维训练" onclick="togglePresetTag(this)">思维训练</span>
+                                        <span class="preset-tag" data-tag="时间管理" onclick="togglePresetTag(this)">时间管理</span>
+                                        <span class="preset-tag" data-tag="效率工具" onclick="togglePresetTag(this)">效率工具</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="tag-category">
+                                    <div class="category-title">💭 性格特质</div>
+                                    <div class="tags-row">
+                                        <span class="preset-tag" data-tag="内向思考者" onclick="togglePresetTag(this)">内向思考者</span>
+                                        <span class="preset-tag" data-tag="外向交流者" onclick="togglePresetTag(this)">外向交流者</span>
+                                        <span class="preset-tag" data-tag="完美主义" onclick="togglePresetTag(this)">完美主义</span>
+                                        <span class="preset-tag" data-tag="随性自由" onclick="togglePresetTag(this)">随性自由</span>
+                                        <span class="preset-tag" data-tag="计划控" onclick="togglePresetTag(this)">计划控</span>
+                                        <span class="preset-tag" data-tag="夜猫子" onclick="togglePresetTag(this)">夜猫子</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 自定义标签输入 -->
+                        <div class="custom-tags-container">
+                            <div class="custom-tag-input-group">
+                                <input type="text" id="customTagInput" placeholder="输入自定义标签..." maxlength="20">
+                                <button type="button" class="add-tag-btn" onclick="addCustomTag()">添加</button>
+                            </div>
+                            <div class="hint">最多选择10个标签，每个标签最多20个字符</div>
+                        </div>
+                        
+                        <!-- 已选标签显示 -->
+                        <div class="selected-tags-container">
+                            <div class="selected-tags-header">
+                                <span>✨ 已选择的标签</span>
+                                <span class="tags-count" id="tagsCount">(0/10)</span>
+                            </div>
+                            <div class="selected-tags" id="selectedTags">
+                                <div class="no-tags-message">暂无标签，点击上方预设标签或添加自定义标签</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1170,6 +1982,46 @@
                         </label>
                     </div>
                     <div class="hint">选择您倾向的匹配类型，AI会据此为您推荐更合适的读书伙伴</div>
+                </div>
+
+                <!-- 用户状态设置 -->
+                <div class="form-group">
+                    <label>当前状态</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="userStatus" value="active">
+                            <span class="radio-custom"></span>
+                            <div class="commitment-option">
+                                <strong>🟢 可匹配</strong>
+                                <small>正在寻找读书伙伴，愿意参与匹配</small>
+                            </div>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="userStatus" value="busy">
+                            <span class="radio-custom"></span>
+                            <div class="commitment-option">
+                                <strong>🟡 忙碌中</strong>
+                                <small>暂时没有时间进行新的匹配活动</small>
+                            </div>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="userStatus" value="away">
+                            <span class="radio-custom"></span>
+                            <div class="commitment-option">
+                                <strong>🔴 暂不匹配</strong>
+                                <small>目前不参与任何匹配活动</small>
+                            </div>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="userStatus" value="reading">
+                            <span class="radio-custom"></span>
+                            <div class="commitment-option">
+                                <strong>📖 专心阅读</strong>
+                                <small>正在进行深度阅读，暂不接受新的匹配</small>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="hint">设置您当前的状态，这将影响其他用户能否看到您的匹配信息</div>
                 </div>
 
                 <!-- 书目类型（多选） -->
@@ -1489,9 +2341,370 @@
                 });
             }
             
+            // 个人简介字符计数器
+            const personalBio = document.getElementById('personalBio');
+            const bioCharCount = document.getElementById('personalBioCount');
+            
+            if (personalBio && bioCharCount) {
+                personalBio.addEventListener('input', function() {
+                    const length = this.value.length;
+                    bioCharCount.textContent = `${length}/300字`;
+                    
+                    if (length > 270) {
+                        bioCharCount.classList.add('warning');
+                    } else {
+                        bioCharCount.classList.remove('warning');
+                    }
+                });
+            }
+            
+            // 自定义标签输入回车键支持
+            const customTagInput = document.getElementById('customTagInput');
+            if (customTagInput) {
+                customTagInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addCustomTag();
+                    }
+                });
+            }
+            
             // 初始化书籍输入框显示状态
             updateBookInputsVisibility();
+            
+            // 加载保存的头像
+            loadSavedAvatar();
+            
+            // 加载保存的标签
+            loadSavedTags();
         });
+        
+        // 标签管理
+        let selectedTags = [];
+        const maxTags = 10;
+        
+        function togglePresetTag(element) {
+            const tagText = element.dataset.tag;
+            const isSelected = element.classList.contains('selected');
+            
+            if (isSelected) {
+                // 取消选择
+                element.classList.remove('selected');
+                removeTagFromSelected(tagText);
+            } else {
+                // 选择标签
+                if (selectedTags.length >= maxTags) {
+                    alert(`最多只能选择${maxTags}个标签`);
+                    return;
+                }
+                element.classList.add('selected');
+                addTagToSelected(tagText);
+            }
+            
+            updateSelectedTagsDisplay();
+        }
+        
+        function addCustomTag() {
+            const input = document.getElementById('customTagInput');
+            const tagText = input.value.trim();
+            
+            if (!tagText) {
+                alert('请输入标签内容');
+                return;
+            }
+            
+            if (tagText.length > 20) {
+                alert('标签最多20个字符');
+                return;
+            }
+            
+            if (selectedTags.includes(tagText)) {
+                alert('标签已存在');
+                return;
+            }
+            
+            if (selectedTags.length >= maxTags) {
+                alert(`最多只能选择${maxTags}个标签`);
+                return;
+            }
+            
+            addTagToSelected(tagText);
+            updateSelectedTagsDisplay();
+            input.value = '';
+        }
+        
+        function addTagToSelected(tagText) {
+            if (!selectedTags.includes(tagText)) {
+                selectedTags.push(tagText);
+                saveTagsToStorage();
+            }
+        }
+        
+        function removeTagFromSelected(tagText) {
+            const index = selectedTags.indexOf(tagText);
+            if (index > -1) {
+                selectedTags.splice(index, 1);
+                saveTagsToStorage();
+            }
+        }
+        
+        function removeSelectedTag(tagText) {
+            removeTagFromSelected(tagText);
+            
+            // 取消预设标签的选中状态
+            const presetTag = document.querySelector(`[data-tag="${tagText}"]`);
+            if (presetTag) {
+                presetTag.classList.remove('selected');
+            }
+            
+            updateSelectedTagsDisplay();
+        }
+        
+        function updateSelectedTagsDisplay() {
+            const selectedTagsContainer = document.getElementById('selectedTags');
+            const tagsCount = document.getElementById('tagsCount');
+            
+            tagsCount.textContent = `(${selectedTags.length}/${maxTags})`;
+            
+            if (selectedTags.length === 0) {
+                selectedTagsContainer.innerHTML = '<div class="no-tags-message">暂无标签，点击上方预设标签或添加自定义标签</div>';
+                return;
+            }
+            
+            selectedTagsContainer.innerHTML = selectedTags.map(tag => `
+                <div class="selected-tag">
+                    <span>${tag}</span>
+                    <button class="tag-remove" onclick="removeSelectedTag('${tag}')">×</button>
+                </div>
+            `).join('');
+            
+            // 更新添加按钮状态
+            const addBtn = document.querySelector('.add-tag-btn');
+            if (addBtn) {
+                addBtn.disabled = selectedTags.length >= maxTags;
+            }
+        }
+        
+        function saveTagsToStorage() {
+            localStorage.setItem('userInterestTags', JSON.stringify(selectedTags));
+        }
+        
+        function loadSavedTags() {
+            // 先尝试从用户数据中获取标签
+            let tagsToLoad = null;
+            if (typeof currentUser !== 'undefined' && currentUser && currentUser.interestTags) {
+                tagsToLoad = currentUser.interestTags;
+            } else {
+                // 回退到localStorage
+                const savedTags = localStorage.getItem('userInterestTags');
+                if (savedTags) {
+                    try {
+                        tagsToLoad = JSON.parse(savedTags);
+                    } catch (e) {
+                        console.warn('标签数据格式错误，已清除');
+                        localStorage.removeItem('userInterestTags');
+                    }
+                }
+            }
+            
+            if (tagsToLoad && Array.isArray(tagsToLoad)) {
+                selectedTags = [...tagsToLoad];
+                
+                // 更新预设标签的选中状态
+                selectedTags.forEach(tagText => {
+                    const presetTag = document.querySelector(`[data-tag="${tagText}"]`);
+                    if (presetTag) {
+                        presetTag.classList.add('selected');
+                    }
+                });
+                
+                updateSelectedTagsDisplay();
+                
+                // 同步到localStorage以确保一致性
+                saveTagsToStorage();
+            } else {
+                selectedTags = [];
+            }
+        }
+        
+        function getSelectedTagsHTML() {
+            if (selectedTags.length === 0) return '';
+            
+            return `
+                <div class="profile-tags">
+                    ${selectedTags.map(tag => `<span class="profile-tag">${tag}</span>`).join('')}
+                </div>
+            `;
+        }
+        
+        // 头像功能
+        function triggerAvatarUpload() {
+            document.getElementById('avatarInput').click();
+        }
+        
+        function handleAvatarUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // 验证文件类型
+            if (!file.type.match(/^image\/(jpeg|jpg|png)$/)) {
+                alert('请选择JPG或PNG格式的图片');
+                return;
+            }
+            
+            // 验证文件大小 (2MB)
+            if (file.size > 2 * 1024 * 1024) {
+                alert('图片大小不能超过2MB');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                compressAndDisplayAvatar(e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        function compressAndDisplayAvatar(imageSrc) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = function() {
+                // 设置画布尺寸为200x200
+                const size = 200;
+                canvas.width = size;
+                canvas.height = size;
+                
+                // 计算裁剪参数（保持比例，居中裁剪）
+                const minDimension = Math.min(img.width, img.height);
+                const sourceX = (img.width - minDimension) / 2;
+                const sourceY = (img.height - minDimension) / 2;
+                
+                // 绘制裁剪后的图片
+                ctx.drawImage(img, sourceX, sourceY, minDimension, minDimension, 0, 0, size, size);
+                
+                // 转换为base64并显示
+                const compressedImage = canvas.toDataURL('image/jpeg', 0.8);
+                displayAvatar(compressedImage, 'uploaded');
+                
+                // 隐藏默认头像选择器
+                document.getElementById('defaultAvatars').style.display = 'none';
+            };
+            
+            img.src = imageSrc;
+        }
+        
+        function showDefaultAvatars() {
+            const defaultAvatars = document.getElementById('defaultAvatars');
+            if (defaultAvatars.style.display === 'none' || !defaultAvatars.style.display) {
+                defaultAvatars.style.display = 'block';
+            } else {
+                defaultAvatars.style.display = 'none';
+            }
+        }
+        
+        function selectDefaultAvatar(emoji) {
+            // 清除之前的选择
+            document.querySelectorAll('.default-avatar').forEach(avatar => {
+                avatar.classList.remove('selected');
+            });
+            
+            // 选中当前头像
+            event.target.classList.add('selected');
+            
+            displayAvatar(emoji, 'emoji');
+            
+            // 隐藏选择器
+            setTimeout(() => {
+                document.getElementById('defaultAvatars').style.display = 'none';
+            }, 500);
+        }
+        
+        function displayAvatar(avatarData, type) {
+            const avatarImage = document.getElementById('avatarImage');
+            const avatarPlaceholder = document.querySelector('.avatar-placeholder');
+            const removeButton = document.querySelector('.avatar-btn.remove');
+            
+            if (type === 'uploaded') {
+                avatarImage.src = avatarData;
+                avatarImage.style.display = 'block';
+                avatarPlaceholder.style.display = 'none';
+                removeButton.style.display = 'inline-block';
+                
+                // 存储头像数据
+                localStorage.setItem('userAvatar', JSON.stringify({
+                    type: 'uploaded',
+                    data: avatarData
+                }));
+            } else if (type === 'emoji') {
+                avatarImage.style.display = 'none';
+                avatarPlaceholder.textContent = avatarData;
+                avatarPlaceholder.style.display = 'block';
+                removeButton.style.display = 'inline-block';
+                
+                // 存储头像数据
+                localStorage.setItem('userAvatar', JSON.stringify({
+                    type: 'emoji',
+                    data: avatarData
+                }));
+            }
+        }
+        
+        function removeAvatar() {
+            const avatarImage = document.getElementById('avatarImage');
+            const avatarPlaceholder = document.querySelector('.avatar-placeholder');
+            const removeButton = document.querySelector('.avatar-btn.remove');
+            const avatarInput = document.getElementById('avatarInput');
+            
+            // 重置显示
+            avatarImage.style.display = 'none';
+            avatarImage.src = '';
+            avatarPlaceholder.textContent = '📷';
+            avatarPlaceholder.style.display = 'block';
+            removeButton.style.display = 'none';
+            avatarInput.value = '';
+            
+            // 清除存储的头像数据
+            localStorage.removeItem('userAvatar');
+            
+            // 清除默认头像选择
+            document.querySelectorAll('.default-avatar').forEach(avatar => {
+                avatar.classList.remove('selected');
+            });
+        }
+        
+        function loadSavedAvatar() {
+            const savedAvatar = localStorage.getItem('userAvatar');
+            if (savedAvatar) {
+                try {
+                    const avatarData = JSON.parse(savedAvatar);
+                    displayAvatar(avatarData.data, avatarData.type);
+                } catch (e) {
+                    console.warn('头像数据格式错误，已清除');
+                    localStorage.removeItem('userAvatar');
+                }
+            }
+        }
+        
+        function getProfileAvatarHTML(avatarData) {
+            if (!avatarData) {
+                return '<div class="profile-avatar">👤</div>';
+            }
+            
+            try {
+                const avatar = JSON.parse(avatarData);
+                if (avatar.type === 'uploaded') {
+                    return `<img class="profile-avatar" src="${avatar.data}" alt="用户头像">`;
+                } else if (avatar.type === 'emoji') {
+                    return `<div class="profile-avatar">${avatar.data}</div>`;
+                }
+            } catch (e) {
+                return '<div class="profile-avatar">👤</div>';
+            }
+            
+            return '<div class="profile-avatar">👤</div>';
+        }
     </script>
     
     <script src="app.js"></script>
