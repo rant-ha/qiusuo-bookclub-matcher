@@ -88,6 +88,7 @@ const GIST_FILENAME = 'bookclub_members.json';
 const AUDIT_LOG_FILENAME = 'audit_log.json'; // 新增：审计日志文件名
 
 
+// 权限配置 - 集中管理便于维护
 const ROLE_PERMISSIONS = {
     [ROLES.SUPER_ADMIN]: [
         PERMISSIONS.USER_MANAGEMENT,
@@ -101,8 +102,8 @@ const ROLE_PERMISSIONS = {
     [ROLES.REGULAR_ADMIN]: [
         PERMISSIONS.USER_MANAGEMENT,
         PERMISSIONS.MEMBER_MANAGEMENT,
-        PERMISSIONS.MATCHING_FUNCTIONS
-        // 移除DATA_REFRESH - 这是技术操作，应由超级管理员处理
+        PERMISSIONS.MATCHING_FUNCTIONS,
+        PERMISSIONS.DATA_REFRESH  // QA修复：恢复数据刷新权限
     ],
     [ROLES.LEGACY_ADMIN]: [ // 兼容旧版管理员
         PERMISSIONS.USER_MANAGEMENT,
@@ -113,6 +114,11 @@ const ROLE_PERMISSIONS = {
         PERMISSIONS.DATA_REFRESH
     ]
 };
+
+// 权限验证辅助函数 - 提高代码复用性
+function hasPermission(role, permission) {
+    return ROLE_PERMISSIONS[role]?.includes(permission) || false;
+}
 
 
 // 存储所有成员数据
