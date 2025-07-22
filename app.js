@@ -897,7 +897,25 @@ async function handleRegistration(name, studentId) {
 
 // 权限检查函数 - 修复版本，确保权限正确更新
 function hasPermission(requiredPermission) {
-    if (!isAdmin || !currentAdminRole) return false;
+    // 如果不是管理员，直接返回false
+    if (!isAdmin) return false;
+    
+    // 如果currentAdminRole未初始化，尝试从sessionStorage恢复
+    if (!currentAdminRole) {
+        const storedRole = sessionStorage.getItem('adminRole');
+        const storedIsAdmin = sessionStorage.getItem('isAdmin') === 'true';
+        
+        Logger.debug(`权限检查时恢复会话: storedRole=${storedRole}, storedIsAdmin=${storedIsAdmin}`);
+        
+        if (storedIsAdmin && storedRole) {
+            currentAdminRole = storedRole;
+            currentAdminPermissions = JSON.parse(sessionStorage.getItem('adminPermissions') || '[]');
+            isAdmin = true;
+        } else {
+            Logger.debug('权限检查失败：无有效管理员会话');
+            return false;
+        }
+    }
     
     // 实时从角色配置获取权限，而不是依赖可能过期的sessionStorage
     const rolePermissions = ROLE_PERMISSIONS[currentAdminRole] || [];
@@ -908,6 +926,23 @@ function hasPermission(requiredPermission) {
     
     return hasCurrentPermission;
 }
+
+// 权限调试工具 - 添加到控制台
+function debugPermissionStatus() {
+    console.log('=== 权限状态调试 ===');
+    console.log('isAdmin:', isAdmin);
+    console.log('currentAdminRole:', currentAdminRole);
+    console.log('currentAdminPermissions:', currentAdminPermissions);
+    console.log('sessionStorage.adminRole:', sessionStorage.getItem('adminRole'));
+    console.log('sessionStorage.isAdmin:', sessionStorage.getItem('isAdmin'));
+    console.log('sessionStorage.adminPermissions:', sessionStorage.getItem('adminPermissions'));
+    console.log('ROLE_PERMISSIONS:', ROLE_PERMISSIONS);
+    console.log('DATA_REFRESH权限测试:', hasPermission(PERMISSIONS.DATA_REFRESH));
+    console.log('==================');
+}
+
+// 全局暴露调试函数
+window.debugPermissionStatus = debugPermissionStatus;
 
 // 审计日志系统
 const AUDIT_ACTIONS = {
