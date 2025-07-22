@@ -85,6 +85,7 @@ let AI_BASE_URL = 'BUILD_TIME_AI_BASE_URL';
 let AI_API_KEY = 'BUILD_TIME_AI_API_KEY';
 let AI_MODEL_NAME = 'BUILD_TIME_AI_MODEL_NAME';
 const GIST_FILENAME = 'bookclub_members.json';
+const AUDIT_LOG_FILENAME = 'audit_log.json'; // 新增：审计日志文件名
 
 
 const ROLE_PERMISSIONS = {
@@ -100,8 +101,8 @@ const ROLE_PERMISSIONS = {
     [ROLES.REGULAR_ADMIN]: [
         PERMISSIONS.USER_MANAGEMENT,
         PERMISSIONS.MEMBER_MANAGEMENT,
-        PERMISSIONS.MATCHING_FUNCTIONS,
-        PERMISSIONS.DATA_REFRESH
+        PERMISSIONS.MATCHING_FUNCTIONS
+        // 移除DATA_REFRESH - 这是技术操作，应由超级管理员处理
     ],
     [ROLES.LEGACY_ADMIN]: [ // 兼容旧版管理员
         PERMISSIONS.USER_MANAGEMENT,
@@ -116,6 +117,7 @@ const ROLE_PERMISSIONS = {
 
 // 存储所有成员数据
 let members = [];
+let auditLogs = []; // 新增：审计日志数据
 let currentUser = null; // 当前登录用户
 let isAdmin = false;
 let currentAdminRole = null; // 新增：当前管理员角色
@@ -642,6 +644,8 @@ window.onload = async function() {
     
     // 自动加载Gist数据
     if (GIST_ID) {
+        // 优先加载系统配置
+        await loadSystemConfig();
         await loadMembersFromGist();
     }
 
@@ -690,6 +694,13 @@ function toggleAiAnalysis() {
     aiAnalysisEnabled = !aiAnalysisEnabled;
     localStorage.setItem('ai_analysis_enabled', aiAnalysisEnabled.toString());
     updateAiToggleUI();
+    
+    // 记录AI功能切换审计日志
+    logAuditAction(AUDIT_ACTIONS.AI_TOGGLE, null, { 
+        newStatus: aiAnalysisEnabled ? 'enabled' : 'disabled',
+        timestamp: new Date().toISOString()
+    });
+    
     Logger.info(`AI分析已${aiAnalysisEnabled ? '启用' : '禁用'}`);
 }
 
@@ -884,6 +895,110 @@ function hasPermission(requiredPermission) {
     return currentAdminPermissions.includes(requiredPermission);
 }
 
+// 审计日志系统
+const AUDIT_ACTIONS = {
+    APPROVE_MEMBER: 'approve_member',
+    DELETE_MEMBER: 'delete_member',
+    EDIT_MEMBER: 'edit_member',
+    ADMIN_LOGIN: 'admin_login',
+    ADMIN_LOGOUT: 'admin_logout',
+    DATA_REFRESH: 'data_refresh',
+    API_RESET: 'api_reset',
+    AI_TOGGLE: 'ai_toggle',
+    CONFIG_CHANGE: 'config_change'
+};
+
+// 记录审计日志
+function logAuditAction(action, targetUser = null, details = null) {
+    if (!isAdmin || !currentAdminRole) return;
+    
+    const logEntry = {
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+        timestamp: new Date().toISOString(),
+        adminName: currentUser?.name || 'Unknown Admin',
+        adminRole: currentAdminRole,
+        action: action,
+        targetUser: targetUser ? {
+            id: targetUser.id,
+            name: targetUser.name,
+            studentId: targetUser.studentId
+        } : null,
+        details: details,
+        ipAddress: 'N/A', // 静态部署无法获取真实IP
+        userAgent: navigator.userAgent
+    };
+    
+    auditLogs.unshift(logEntry); // 添加到数组开头，最新的在前面
+    
+    // 保持日志数量限制，避免无限增长
+    if (auditLogs.length > 1000) {
+        auditLogs = auditLogs.slice(0, 1000);
+    }
+    
+    // 异步保存到Gist
+    saveAuditLogsToGist().catch(error => {
+        Logger.error('Failed to save audit log:', error);
+    });
+}
+
+// 保存审计日志到Gist
+async function saveAuditLogsToGist() {
+    try {
+        const headers = { 'Authorization': `token ${GITHUB_TOKEN}` };
+        const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, { headers });
+        
+        if (!response.ok) throw new Error('Failed to fetch gist');
+        
+        const gist = await response.json();
+        const files = gist.files;
+        
+        // 更新审计日志文件
+        files[AUDIT_LOG_FILENAME] = {
+            content: JSON.stringify(auditLogs, null, 2)
+        };
+        
+        const updateResponse = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `token ${GITHUB_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ files })
+        });
+        
+        if (!updateResponse.ok) throw new Error('Failed to update audit log');
+        
+        Logger.info('Audit log saved successfully');
+    } catch (error) {
+        Logger.error('Failed to save audit log:', error);
+        throw error;
+    }
+}
+
+// 加载审计日志从Gist
+async function loadAuditLogsFromGist() {
+    try {
+        const headers = { 'Authorization': `token ${GITHUB_TOKEN}` };
+        const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, { headers });
+        
+        if (!response.ok) throw new Error('Failed to fetch gist');
+        
+        const gist = await response.json();
+        const content = gist.files[AUDIT_LOG_FILENAME]?.content;
+        
+        if (content) {
+            auditLogs = JSON.parse(content);
+            Logger.info(`Loaded ${auditLogs.length} audit log entries`);
+        } else {
+            auditLogs = [];
+            Logger.info('No existing audit log found, starting fresh');
+        }
+    } catch (error) {
+        Logger.warn('Failed to load audit logs:', error);
+        auditLogs = []; // 如果加载失败，使用空数组
+    }
+}
+
 // 处理登录
 async function handleLogin(e) {
     e.preventDefault();
@@ -910,6 +1025,17 @@ async function handleLogin(e) {
         sessionStorage.setItem('adminLoginTime', Date.now());
 
         showLoggedInView();
+        
+        // 加载审计日志（异步执行）
+        loadAuditLogsFromGist().then(() => {
+            // 记录登录审计日志
+            logAuditAction(AUDIT_ACTIONS.ADMIN_LOGIN, null, { loginTime: new Date().toISOString() });
+        }).catch(error => {
+            Logger.error('Failed to load audit logs during login:', error);
+            // 即使加载失败也要记录登录日志
+            logAuditAction(AUDIT_ACTIONS.ADMIN_LOGIN, null, { loginTime: new Date().toISOString() });
+        });
+        
         alert(`管理员 (${authResult.role}) 登录成功！`);
         return;
     }
@@ -949,6 +1075,17 @@ async function handleLogin(e) {
             sessionStorage.setItem('adminLoginTime', Date.now());
 
             showLoggedInView();
+            
+            // 加载审计日志（异步执行）
+            loadAuditLogsFromGist().then(() => {
+                // 记录登录审计日志
+                logAuditAction(AUDIT_ACTIONS.ADMIN_LOGIN, null, { loginTime: new Date().toISOString() });
+            }).catch(error => {
+                Logger.error('Failed to load audit logs during login:', error);
+                // 即使加载失败也要记录登录日志
+                logAuditAction(AUDIT_ACTIONS.ADMIN_LOGIN, null, { loginTime: new Date().toISOString() });
+            });
+            
             alert(`管理员 (${authResult.role}) 登录成功！`);
         } else {
             alert('管理员密码错误！');
@@ -997,7 +1134,123 @@ function logout() {
 
 // 管理员退出登录
 function adminLogout() {
-   logout(); // 调用通用退出登录函数
+    // 记录退出登录审计日志
+    if (isAdmin && currentAdminRole) {
+        logAuditAction(AUDIT_ACTIONS.ADMIN_LOGOUT, null, { 
+            logoutTime: new Date().toISOString(),
+            sessionDuration: Date.now() - (parseInt(sessionStorage.getItem('adminLoginTime')) || Date.now())
+        });
+    }
+    
+    logout(); // 调用通用退出登录函数
+}
+
+// 系统配置管理
+let systemConfig = {};
+
+// 默认系统配置
+const defaultConfig = {
+    metadata: {
+        version: "1.0.0",
+        description: "求索书社匹配工具的系统配置",
+        lastUpdated: new Date().toISOString(),
+        lastUpdatedBy: "System"
+    },
+    aiConfig: {
+        enabled: false,
+        provider: "custom",
+        baseUrl: "",
+        modelName: "gpt-4.1-mini",
+        apiKeyPlaceholder: "在Netlify环境变量中设置",
+        similarityThreshold: 0.6
+    },
+    systemParams: {
+        logLevel: "INFO",
+        matchBatchSize: 10,
+        cacheTTL: 300,
+        sessionTimeout: 3600
+    },
+    featureToggles: {
+        enableSemanticSearch: false,
+        enableUserProfileCustomization: true,
+        enableAdminDashboardV2: true,
+        enableAuditLogging: true
+    },
+    security: {
+        roles: {
+            super_admin: { passwordHash: "" },
+            regular_admin: { passwordHash: "" },
+            legacy_admin: { passwordHash: "" }
+        },
+        mfaRequired: false
+    }
+};
+
+// 加载系统配置
+async function loadSystemConfig() {
+    if (!GIST_ID) {
+        console.warn("GIST_ID 未配置，使用默认系统配置。");
+        systemConfig = defaultConfig;
+        return;
+    }
+    
+    try {
+        const headers = GITHUB_TOKEN ? { 'Authorization': `token ${GITHUB_TOKEN}` } : {};
+        const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, { headers });
+        if (!response.ok) throw new Error('加载Gist失败');
+        
+        const gist = await response.json();
+        const content = gist.files['system_config.json']?.content;
+        
+        if (content) {
+            systemConfig = JSON.parse(content);
+            console.log('系统配置加载成功:', systemConfig);
+        } else {
+            console.warn('未找到 system_config.json，使用默认配置。');
+            systemConfig = defaultConfig;
+        }
+    } catch (error) {
+        console.error('加载系统配置失败:', error);
+        systemConfig = defaultConfig; // 加载失败时使用默认配置
+    }
+}
+
+// 保存系统配置
+async function saveSystemConfig(newConfig) {
+    if (!hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+        alert('权限不足');
+        return;
+    }
+
+    // 更新元数据
+    newConfig.metadata.lastUpdated = new Date().toISOString();
+    newConfig.metadata.lastUpdatedBy = currentUser?.name || 'Unknown';
+
+    try {
+        const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `token ${GITHUB_TOKEN}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                files: {
+                    'system_config.json': {
+                        content: JSON.stringify(newConfig, null, 2)
+                    }
+                }
+            })
+        });
+        if (!response.ok) throw new Error('保存配置失败');
+        
+        systemConfig = newConfig; // 更新本地的配置对象
+        logAuditAction('CONFIG_CHANGE', null, { changes: "System configuration updated" });
+        alert('系统配置已成功保存！');
+
+    } catch (error) {
+        console.error('保存配置失败:', error);
+        alert('保存配置失败：' + error.message);
+    }
 }
 
 // 从 Gist 加载成员数据
@@ -1384,7 +1637,10 @@ function renderMemberList() {
                        })()}
                    </div>
                </div>
-               <button class="delete-btn" onclick="deleteMember('${migratedMember.id}')">删除</button>
+               <div class="member-actions">
+                   <button class="secondary edit-btn" onclick="openEditMemberModal('${migratedMember.id}')" style="margin-right: 8px;" title="编辑用户资料">✏️ 编辑</button>
+                   <button class="delete-btn" onclick="deleteMember('${migratedMember.id}')" title="删除用户">🗑️ 删除</button>
+               </div>
            </div>
        `;
    }).join('');
@@ -1401,6 +1657,481 @@ async function deleteMember(id) {
        renderMemberList();
        document.getElementById('matchResults').innerHTML = '';
    }
+}
+
+// 编辑用户资料相关功能
+let currentEditingMember = null;
+
+// 打开编辑用户模态框
+function openEditMemberModal(memberId) {
+    if (!requirePermission(PERMISSIONS.USER_MANAGEMENT, '编辑用户资料')) {
+        return;
+    }
+    
+    const member = members.find(m => m.id === memberId);
+    if (!member) {
+        alert('找不到该用户');
+        return;
+    }
+    
+    currentEditingMember = member;
+    const migratedMember = migrateUserData(member);
+    const questionnaire = migratedMember.questionnaire;
+    
+    // 设置模态框标题
+    document.getElementById('editMemberTitle').textContent = `编辑用户资料：${migratedMember.name}`;
+    
+    // 填充只读字段
+    document.getElementById('editStudentId').value = migratedMember.studentId || '';
+    const registrationDate = migratedMember.registrationTime ? 
+        new Date(migratedMember.registrationTime).toLocaleString('zh-CN') : '未知';
+    document.getElementById('editRegistrationTime').value = registrationDate;
+    
+    // 填充可编辑字段
+    document.getElementById('editName').value = migratedMember.name || '';
+    document.getElementById('editEmail').value = migratedMember.email || '';
+    document.getElementById('editDetailedPreferences').value = questionnaire.detailedBookPreferences || migratedMember.detailedBookPreferences || '';
+    document.getElementById('editUserStatus').value = questionnaire.userStatus || migratedMember.userStatus || 'active';
+    
+    // 设置头像
+    updateEditMemberAvatar(migratedMember);
+    
+    // 动态生成兴趣标签选择
+    generateEditHobbiesOptions(questionnaire.hobbies || migratedMember.hobbies || []);
+    
+    // 动态生成书目类型选择
+    generateEditBookCategoriesOptions(questionnaire.bookCategories || migratedMember.bookCategories || []);
+    
+    // 显示模态框
+    document.getElementById('editMemberModal').style.display = 'block';
+    
+    // 阻止背景滚动
+    document.body.style.overflow = 'hidden';
+}
+
+// 关闭编辑用户模态框
+function closeEditMemberModal() {
+    document.getElementById('editMemberModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+    currentEditingMember = null;
+}
+
+// 更新编辑模态框中的头像显示
+function updateEditMemberAvatar(member) {
+    const avatarContainer = document.getElementById('editMemberAvatar');
+    const avatarData = member.avatar;
+    
+    if (!avatarData) {
+        avatarContainer.innerHTML = '👤';
+        return;
+    }
+    
+    if (typeof avatarData === 'string' && avatarData.startsWith('{')) {
+        try {
+            const avatar = JSON.parse(avatarData);
+            if (avatar.type === 'uploaded') {
+                avatarContainer.innerHTML = `<img src="${avatar.data}" alt="用户头像" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+            } else if (avatar.type === 'emoji') {
+                avatarContainer.innerHTML = avatar.data;
+            } else {
+                avatarContainer.innerHTML = '👤';
+            }
+        } catch (e) {
+            avatarContainer.innerHTML = '👤';
+        }
+    } else {
+        avatarContainer.innerHTML = '👤';
+    }
+}
+
+// 移除用户头像
+function removeUserAvatar() {
+    if (!currentEditingMember) return;
+    
+    if (confirm('确定要移除该用户的头像吗？此操作不可撤销。')) {
+        document.getElementById('editMemberAvatar').innerHTML = '👤';
+        // 标记头像已被移除
+        currentEditingMember.avatarRemoved = true;
+    }
+}
+
+// 生成兴趣标签选择项
+function generateEditHobbiesOptions(selectedHobbies) {
+    const container = document.getElementById('editHobbiesContainer');
+    const hobbiesOptions = [
+        '阅读写作', '音乐艺术', '运动健身', '电影戏剧', '旅行摄影', 
+        '科技数码', '烹饪美食', '学习进修', '社交聚会', '游戏娱乐'
+    ];
+    
+    container.innerHTML = hobbiesOptions.map(hobby => `
+        <label class="checkbox-option">
+            <input type="checkbox" name="editHobbies" value="${hobby}" ${selectedHobbies.includes(hobby) ? 'checked' : ''}>
+            <span class="checkbox-custom"></span>
+            ${hobby}
+        </label>
+    `).join('');
+}
+
+// 生成书目类型选择项
+function generateEditBookCategoriesOptions(selectedCategories) {
+    const container = document.getElementById('editBookCategoriesContainer');
+    const categoryOptions = [
+        { value: 'literature_fiction', label: '文学/当代小说' },
+        { value: 'mystery_detective', label: '悬疑侦探/推理' },
+        { value: 'sci_fi_fantasy', label: '科幻奇幻' },
+        { value: 'history_biography', label: '历史传记/记实' },
+        { value: 'social_science_philosophy', label: '社科思想/哲学' },
+        { value: 'psychology_self_help', label: '心理成长/自助' },
+        { value: 'art_design_lifestyle', label: '艺术设计/生活方式' }
+    ];
+    
+    container.innerHTML = categoryOptions.map(option => `
+        <label class="checkbox-option">
+            <input type="checkbox" name="editBookCategories" value="${option.value}" ${selectedCategories.includes(option.value) ? 'checked' : ''}>
+            <span class="checkbox-custom"></span>
+            ${option.label}
+        </label>
+    `).join('');
+}
+
+// 邮箱验证函数
+function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
+// 处理编辑用户表单提交
+async function handleEditMemberSubmit(e) {
+    e.preventDefault();
+    
+    if (!currentEditingMember || !requirePermission(PERMISSIONS.USER_MANAGEMENT, '编辑用户资料')) {
+        return;
+    }
+    
+    try {
+        // 收集表单数据
+        const formData = {
+            name: document.getElementById('editName').value.trim(),
+            email: document.getElementById('editEmail').value.trim(),
+            detailedBookPreferences: document.getElementById('editDetailedPreferences').value.trim(),
+            userStatus: document.getElementById('editUserStatus').value,
+            hobbies: Array.from(document.querySelectorAll('input[name="editHobbies"]:checked')).map(cb => cb.value),
+            bookCategories: Array.from(document.querySelectorAll('input[name="editBookCategories"]:checked')).map(cb => cb.value)
+        };
+        
+        // 验证必填字段
+        if (!formData.name) {
+            alert('姓名不能为空');
+            return;
+        }
+        
+        if (formData.email && !isValidEmail(formData.email)) {
+            alert('请输入有效的邮箱地址');
+            return;
+        }
+        
+        // 记录更改内容
+        const changes = [];
+        const originalMember = migrateUserData(currentEditingMember);
+        const originalQuestionnaire = originalMember.questionnaire;
+        
+        // 检查每个字段的变化
+        if (formData.name !== originalMember.name) {
+            changes.push({
+                field: 'name',
+                oldValue: originalMember.name,
+                newValue: formData.name
+            });
+        }
+        
+        if (formData.email !== (originalMember.email || '')) {
+            changes.push({
+                field: 'email',
+                oldValue: originalMember.email || '',
+                newValue: formData.email
+            });
+        }
+        
+        if (formData.detailedBookPreferences !== (originalQuestionnaire.detailedBookPreferences || '')) {
+            changes.push({
+                field: 'detailedBookPreferences',
+                oldValue: originalQuestionnaire.detailedBookPreferences || '',
+                newValue: formData.detailedBookPreferences
+            });
+        }
+        
+        if (formData.userStatus !== (originalQuestionnaire.userStatus || 'active')) {
+            changes.push({
+                field: 'userStatus',
+                oldValue: originalQuestionnaire.userStatus || 'active',
+                newValue: formData.userStatus
+            });
+        }
+        
+        // 检查数组字段的变化
+        const originalHobbies = originalQuestionnaire.hobbies || originalMember.hobbies || [];
+        if (JSON.stringify(formData.hobbies.sort()) !== JSON.stringify(originalHobbies.sort())) {
+            changes.push({
+                field: 'hobbies',
+                oldValue: originalHobbies.join(', '),
+                newValue: formData.hobbies.join(', ')
+            });
+        }
+        
+        const originalBookCategories = originalQuestionnaire.bookCategories || originalMember.bookCategories || [];
+        if (JSON.stringify(formData.bookCategories.sort()) !== JSON.stringify(originalBookCategories.sort())) {
+            changes.push({
+                field: 'bookCategories',
+                oldValue: originalBookCategories.join(', '),
+                newValue: formData.bookCategories.join(', ')
+            });
+        }
+        
+        // 检查头像移除
+        if (currentEditingMember.avatarRemoved) {
+            changes.push({
+                field: 'avatar',
+                oldValue: 'existing avatar',
+                newValue: 'removed'
+            });
+        }
+        
+        if (changes.length === 0) {
+            alert('没有检测到任何更改');
+            return;
+        }
+        
+        // 确认更改
+        const changesSummary = changes.map(c => `• ${c.field}: "${c.oldValue}" → "${c.newValue}"`).join('\n');
+        if (!confirm(`确定要保存以下更改吗？\n\n${changesSummary}\n\n此操作将被记录在审计日志中。`)) {
+            return;
+        }
+        
+        // 应用更改
+        const memberIndex = members.findIndex(m => m.id === currentEditingMember.id);
+        if (memberIndex === -1) {
+            alert('找不到该用户');
+            return;
+        }
+        
+        // 更新成员数据
+        members[memberIndex].name = formData.name;
+        members[memberIndex].email = formData.email;
+        
+        // 确保问卷数据结构存在
+        if (!members[memberIndex].questionnaire) {
+            members[memberIndex].questionnaire = {};
+        }
+        
+        members[memberIndex].questionnaire.detailedBookPreferences = formData.detailedBookPreferences;
+        members[memberIndex].questionnaire.userStatus = formData.userStatus;
+        members[memberIndex].questionnaire.hobbies = formData.hobbies;
+        members[memberIndex].questionnaire.bookCategories = formData.bookCategories;
+        
+        // 处理头像移除
+        if (currentEditingMember.avatarRemoved) {
+            members[memberIndex].avatar = null;
+        }
+        
+        // 保存到Gist
+        await saveMembersToGist();
+        
+        // 记录审计日志
+        logAuditAction(AUDIT_ACTIONS.EDIT_MEMBER, {
+            id: currentEditingMember.id,
+            name: formData.name,
+            studentId: currentEditingMember.studentId
+        }, { changes });
+        
+        // 更新UI
+        renderMemberList();
+        closeEditMemberModal();
+        
+        alert('用户资料更新成功！');
+        
+    } catch (error) {
+        Logger.error('Failed to edit member:', error);
+        alert('保存失败，请稍后重试');
+    }
+}
+
+// 系统配置界面管理
+function openSystemConfig() {
+    if (!hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+        alert('权限不足，仅超级管理员可访问系统配置');
+        return;
+    }
+    
+    // 显示模态框
+    document.getElementById('systemConfigModal').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    // 加载当前配置到表单
+    loadSystemConfigToForm();
+}
+
+function closeSystemConfigModal() {
+    document.getElementById('systemConfigModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+}
+
+function openConfigTab(evt, tabName) {
+    // 隐藏所有标签页内容
+    const tabContents = document.getElementsByClassName("config-tab-content");
+    for (let i = 0; i < tabContents.length; i++) {
+        tabContents[i].classList.remove("active");
+    }
+    
+    // 移除所有标签链接的active类
+    const tabLinks = document.getElementsByClassName("config-tab-link");
+    for (let i = 0; i < tabLinks.length; i++) {
+        tabLinks[i].classList.remove("active");
+    }
+    
+    // 显示当前标签页并添加active类
+    document.getElementById(tabName).classList.add("active");
+    evt.currentTarget.classList.add("active");
+}
+
+function loadSystemConfigToForm() {
+    if (!systemConfig || !systemConfig.aiConfig) {
+        console.warn('系统配置未加载，使用默认值');
+        return;
+    }
+    
+    // AI配置
+    document.getElementById('aiEnabled').checked = systemConfig.aiConfig.enabled || false;
+    document.getElementById('aiProvider').value = systemConfig.aiConfig.provider || 'custom';
+    document.getElementById('aiBaseUrl').value = systemConfig.aiConfig.baseUrl || '';
+    document.getElementById('aiModelName').value = systemConfig.aiConfig.modelName || 'gpt-4.1-mini';
+    document.getElementById('similarityThreshold').value = systemConfig.aiConfig.similarityThreshold || 0.6;
+    
+    // 系统参数
+    document.getElementById('logLevel').value = systemConfig.systemParams.logLevel || 'INFO';
+    document.getElementById('matchBatchSize').value = systemConfig.systemParams.matchBatchSize || 10;
+    document.getElementById('cacheTTL').value = systemConfig.systemParams.cacheTTL || 300;
+    document.getElementById('sessionTimeout').value = systemConfig.systemParams.sessionTimeout || 3600;
+    
+    // 功能开关
+    document.getElementById('enableSemanticSearch').checked = systemConfig.featureToggles.enableSemanticSearch || false;
+    document.getElementById('enableUserProfileCustomization').checked = systemConfig.featureToggles.enableUserProfileCustomization || true;
+    document.getElementById('enableAdminDashboardV2').checked = systemConfig.featureToggles.enableAdminDashboardV2 || true;
+    document.getElementById('enableAuditLogging').checked = systemConfig.featureToggles.enableAuditLogging || true;
+    
+    // 安全配置
+    document.getElementById('mfaRequired').checked = systemConfig.security.mfaRequired || false;
+}
+
+async function saveAllSystemConfig() {
+    if (!hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+        alert('权限不足');
+        return;
+    }
+    
+    try {
+        // 收集所有表单数据
+        const newConfig = {
+            ...systemConfig,
+            aiConfig: {
+                enabled: document.getElementById('aiEnabled').checked,
+                provider: document.getElementById('aiProvider').value,
+                baseUrl: document.getElementById('aiBaseUrl').value,
+                modelName: document.getElementById('aiModelName').value,
+                apiKeyPlaceholder: systemConfig.aiConfig.apiKeyPlaceholder,
+                similarityThreshold: parseFloat(document.getElementById('similarityThreshold').value)
+            },
+            systemParams: {
+                logLevel: document.getElementById('logLevel').value,
+                matchBatchSize: parseInt(document.getElementById('matchBatchSize').value),
+                cacheTTL: parseInt(document.getElementById('cacheTTL').value),
+                sessionTimeout: parseInt(document.getElementById('sessionTimeout').value)
+            },
+            featureToggles: {
+                enableSemanticSearch: document.getElementById('enableSemanticSearch').checked,
+                enableUserProfileCustomization: document.getElementById('enableUserProfileCustomization').checked,
+                enableAdminDashboardV2: document.getElementById('enableAdminDashboardV2').checked,
+                enableAuditLogging: document.getElementById('enableAuditLogging').checked
+            },
+            security: {
+                ...systemConfig.security,
+                mfaRequired: document.getElementById('mfaRequired').checked
+            }
+        };
+        
+        // 处理密码更新
+        const superAdminPassword = document.getElementById('superAdminPassword').value.trim();
+        const regularAdminPassword = document.getElementById('regularAdminPassword').value.trim();
+        
+        if (superAdminPassword) {
+            // 使用简单的哈希（在生产环境中应使用更安全的方法）
+            newConfig.security.roles.super_admin.passwordHash = await hashPassword(superAdminPassword);
+        }
+        
+        if (regularAdminPassword) {
+            newConfig.security.roles.regular_admin.passwordHash = await hashPassword(regularAdminPassword);
+        }
+        
+        // 保存配置
+        await saveSystemConfig(newConfig);
+        
+        // 显示成功消息
+        showConfigStatus('success', '所有配置已成功保存！', 'ai-config-status');
+        
+        // 清空密码字段
+        document.getElementById('superAdminPassword').value = '';
+        document.getElementById('regularAdminPassword').value = '';
+        
+        // 如果密码有更新，提醒需要重新登录
+        if (superAdminPassword || regularAdminPassword) {
+            alert('密码已更新！\n\n为了安全起见，所有管理员需要重新登录。\n系统将在5秒后自动退出登录。');
+            setTimeout(() => {
+                adminLogout();
+            }, 5000);
+        }
+        
+    } catch (error) {
+        console.error('保存配置失败:', error);
+        showConfigStatus('error', '保存配置失败：' + error.message, 'ai-config-status');
+    }
+}
+
+async function testSystemConfig() {
+    try {
+        // 测试GitHub连接
+        const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+            headers: GITHUB_TOKEN ? { 'Authorization': `token ${GITHUB_TOKEN}` } : {}
+        });
+        
+        if (response.ok) {
+            showConfigStatus('success', 'GitHub连接测试成功！', 'ai-config-status');
+        } else {
+            showConfigStatus('error', 'GitHub连接测试失败：' + response.statusText, 'ai-config-status');
+        }
+        
+    } catch (error) {
+        showConfigStatus('error', '连接测试失败：' + error.message, 'ai-config-status');
+    }
+}
+
+function showConfigStatus(type, message, elementId) {
+    const statusElement = document.getElementById(elementId);
+    statusElement.className = `config-status-message ${type}`;
+    statusElement.textContent = message;
+    statusElement.style.display = 'block';
+    
+    // 3秒后自动隐藏
+    setTimeout(() => {
+        statusElement.style.display = 'none';
+    }, 3000);
+}
+
+// 简单的密码哈希函数（生产环境应使用更安全的方法）
+async function hashPassword(password) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // UI 更新
@@ -1420,41 +2151,12 @@ function showLoggedInView() {
         
         // 更新管理员角色指示器
         updateAdminRoleIndicator();
+        
+        // 根据权限更新UI显示
+        updateUIBasedOnPermissions();
        
-       // 根据权限显示监控面板
-       const monitoringPanel = document.getElementById('monitoringPanel');
-       if (monitoringPanel) {
-           const restrictedPanel = monitoringPanel.querySelector('.permission-restricted');
-           if (hasPermission('system_monitoring')) {
-               monitoringPanel.style.display = 'block';
-               if (restrictedPanel) {
-                   restrictedPanel.style.display = 'none';
-               }
-           } else {
-               monitoringPanel.style.display = 'none';
-               if (restrictedPanel) {
-                   restrictedPanel.style.display = 'block';
-               }
-           }
-       }
-       
-       // 根据权限显示或隐藏技术相关按钮
-       const apiStatusBtn = document.getElementById('apiStatusBtn');
-       const resetApiBtn = document.getElementById('resetApiBtn');
-       const aiToggleBtnContainer = document.getElementById('aiToggleBtnContainer');
-
-       if (hasPermission('api_management')) {
-           if (apiStatusBtn) apiStatusBtn.style.display = 'inline-block';
-           if (resetApiBtn) resetApiBtn.style.display = 'inline-block';
-           if (aiToggleBtnContainer) aiToggleBtnContainer.style.display = 'flex';
-       } else {
-           if (apiStatusBtn) apiStatusBtn.style.display = 'none';
-           if (resetApiBtn) resetApiBtn.style.display = 'none';
-           if (aiToggleBtnContainer) aiToggleBtnContainer.style.display = 'none';
-       }
-       
-       renderPendingList();
-       renderMemberList();
+        renderPendingList();
+        renderMemberList();
    } else {
        document.getElementById('adminSection').style.display = 'none';
        document.getElementById('memberSection').style.display = 'none';
@@ -6622,10 +7324,344 @@ function deleteUserAccount() {
     }
 }
 
+// UI权限控制函数
+function updateUIBasedOnPermissions() {
+    if (!isAdmin || !currentAdminRole) return;
+
+    // 系统监控面板 - 仅超级管理员可见
+    const monitoringPanel = document.getElementById('monitoringPanel');
+    if (monitoringPanel) {
+        if (hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+            monitoringPanel.style.display = 'block';
+            // 移除权限限制提示
+            const permissionWarning = monitoringPanel.querySelector('.permission-restricted');
+            if (permissionWarning) {
+                permissionWarning.style.display = 'none';
+            }
+        } else {
+            // 显示权限限制提示
+            const permissionWarning = monitoringPanel.querySelector('.permission-restricted');
+            if (permissionWarning) {
+                permissionWarning.style.display = 'block';
+            }
+        }
+    }
+
+    // API管理按钮 - 仅超级管理员可见
+    const apiStatusBtn = document.getElementById('apiStatusBtn');
+    const resetApiBtn = document.getElementById('resetApiBtn');
+    
+    if (hasPermission(PERMISSIONS.API_MANAGEMENT)) {
+        if (apiStatusBtn) apiStatusBtn.style.display = 'inline-block';
+        if (resetApiBtn) resetApiBtn.style.display = 'inline-block';
+    } else {
+        if (apiStatusBtn) apiStatusBtn.style.display = 'none';
+        if (resetApiBtn) resetApiBtn.style.display = 'none';
+    }
+
+    // 系统配置按钮 - 仅超级管理员可见
+    const systemConfigBtn = document.getElementById('systemConfigBtn');
+    if (systemConfigBtn) {
+        if (hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+            systemConfigBtn.style.display = 'inline-block';
+        } else {
+            systemConfigBtn.style.display = 'none';
+        }
+    }
+
+    // 数据刷新按钮 - 根据权限显示
+    const refreshButtons = document.querySelectorAll('button[onclick="loadMembersFromGist()"]');
+    refreshButtons.forEach(btn => {
+        if (hasPermission(PERMISSIONS.DATA_REFRESH)) {
+            btn.style.display = 'inline-block';
+        } else {
+            btn.style.display = 'none';
+        }
+    });
+
+    // AI功能切换 - 仅超级管理员可见
+    const aiToggleBtnContainer = document.getElementById('aiToggleBtnContainer');
+    if (aiToggleBtnContainer) {
+        if (hasPermission(PERMISSIONS.API_MANAGEMENT)) {
+            aiToggleBtnContainer.style.display = 'flex';
+        } else {
+            aiToggleBtnContainer.style.display = 'none';
+        }
+    }
+
+    // 更新管理员面板标题显示权限级别
+    updateAdminPanelHeader();
+    
+    // 根据权限控制审计日志面板
+    updateAuditLogPermissions();
+}
+
+// 更新审计日志权限控制
+function updateAuditLogPermissions() {
+    const auditLogPanel = document.getElementById('auditLogPanel');
+    const auditLogPermissionHint = document.getElementById('auditLogPermissionHint');
+    const exportAuditBtn = document.getElementById('exportAuditBtn');
+    
+    if (!auditLogPanel) return;
+    
+    if (hasPermission(PERMISSIONS.USER_MANAGEMENT)) {
+        auditLogPanel.style.display = 'block';
+        
+        if (currentAdminRole === ROLES.SUPER_ADMIN) {
+            // 超级管理员可以看到提示和导出功能
+            if (auditLogPermissionHint) {
+                auditLogPermissionHint.style.display = 'block';
+                auditLogPermissionHint.textContent = '超级管理员可以查看所有管理员的操作记录。';
+            }
+            if (exportAuditBtn) exportAuditBtn.style.display = 'inline-block';
+        } else {
+            // 普通管理员看到限制提示
+            if (auditLogPermissionHint) {
+                auditLogPermissionHint.style.display = 'block';
+                auditLogPermissionHint.textContent = '普通管理员只能查看自己的操作记录。';
+            }
+            if (exportAuditBtn) exportAuditBtn.style.display = 'none';
+        }
+        
+        // 加载并显示审计日志
+        renderAuditLogs();
+    } else {
+        auditLogPanel.style.display = 'none';
+    }
+}
+
+// 渲染审计日志列表
+function renderAuditLogs() {
+    const auditLogList = document.getElementById('auditLogList');
+    if (!auditLogList || !auditLogs) return;
+    
+    // 获取筛选条件
+    const actionFilter = document.getElementById('auditLogFilter')?.value || 'all';
+    const dateFilter = document.getElementById('auditLogDateFilter')?.value || '';
+    
+    // 筛选日志
+    let filteredLogs = auditLogs.slice(); // 复制数组
+    
+    // 权限筛选：普通管理员只能看到自己的记录
+    if (currentAdminRole !== ROLES.SUPER_ADMIN) {
+        const currentAdminName = currentUser?.name || 'Unknown Admin';
+        filteredLogs = filteredLogs.filter(log => log.adminName === currentAdminName);
+    }
+    
+    // 操作类型筛选
+    if (actionFilter !== 'all') {
+        filteredLogs = filteredLogs.filter(log => log.action === actionFilter);
+    }
+    
+    // 日期筛选
+    if (dateFilter) {
+        const filterDate = new Date(dateFilter);
+        filteredLogs = filteredLogs.filter(log => {
+            const logDate = new Date(log.timestamp);
+            return logDate.toDateString() === filterDate.toDateString();
+        });
+    }
+    
+    // 渲染日志列表
+    if (filteredLogs.length === 0) {
+        auditLogList.innerHTML = `
+            <div class="no-data" style="padding: 20px; text-align: center; color: var(--text-muted);">
+                ${actionFilter === 'all' && !dateFilter ? '暂无操作记录' : '没有符合条件的记录'}
+            </div>
+        `;
+        return;
+    }
+    
+    const logHTML = filteredLogs.map(log => {
+        const date = new Date(log.timestamp);
+        const actionText = getActionDisplayText(log.action);
+        const roleIcon = log.adminRole === ROLES.SUPER_ADMIN ? '👑' : '⚙️';
+        
+        return `
+            <div class="audit-log-item" style="padding: 12px 15px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 10px;">
+                <div style="flex-shrink: 0; font-size: 18px;">${roleIcon}</div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                        <strong style="color: var(--text-primary);">${actionText}</strong>
+                        ${log.targetUser ? `<span style="color: var(--text-secondary);">→ ${log.targetUser.name}</span>` : ''}
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted); display: flex; gap: 15px;">
+                        <span>👤 ${log.adminName}</span>
+                        <span>⏰ ${date.toLocaleString('zh-CN')}</span>
+                        ${log.details ? `<span>📝 ${JSON.stringify(log.details)}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    auditLogList.innerHTML = logHTML;
+}
+
+// 获取操作类型的显示文本
+function getActionDisplayText(action) {
+    const actionTexts = {
+        [AUDIT_ACTIONS.ADMIN_LOGIN]: '🔑 管理员登录',
+        [AUDIT_ACTIONS.ADMIN_LOGOUT]: '🚪 管理员退出',
+        [AUDIT_ACTIONS.APPROVE_MEMBER]: '✅ 批准成员',
+        [AUDIT_ACTIONS.DELETE_MEMBER]: '🗑️ 删除成员',
+        [AUDIT_ACTIONS.EDIT_MEMBER]: '✏️ 编辑成员',
+        [AUDIT_ACTIONS.DATA_REFRESH]: '🔄 刷新数据',
+        [AUDIT_ACTIONS.API_RESET]: '🔧 重置API',
+        [AUDIT_ACTIONS.AI_TOGGLE]: '🤖 AI功能切换',
+        [AUDIT_ACTIONS.CONFIG_CHANGE]: '⚙️ 配置更改'
+    };
+    return actionTexts[action] || action;
+}
+
+// 刷新审计日志
+async function refreshAuditLogs() {
+    if (!requirePermission(PERMISSIONS.USER_MANAGEMENT, '查看审计日志')) {
+        return;
+    }
+    
+    try {
+        await loadAuditLogsFromGist();
+        renderAuditLogs();
+        Logger.info('Audit logs refreshed successfully');
+    } catch (error) {
+        Logger.error('Failed to refresh audit logs:', error);
+        alert('刷新审计日志失败，请稍后重试');
+    }
+}
+
+// 导出审计日志
+function exportAuditLogs() {
+    if (!requirePermission(PERMISSIONS.SYSTEM_MONITORING, '导出审计日志')) {
+        return;
+    }
+    
+    if (!auditLogs || auditLogs.length === 0) {
+        alert('没有可导出的审计日志');
+        return;
+    }
+    
+    const csvContent = convertAuditLogsToCsv(auditLogs);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `audit_logs_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+// 转换审计日志为CSV格式
+function convertAuditLogsToCsv(logs) {
+    const headers = ['时间戳', '管理员', '角色', '操作', '目标用户', '详情'];
+    const csvRows = [headers.join(',')];
+    
+    logs.forEach(log => {
+        const row = [
+            `"${log.timestamp}"`,
+            `"${log.adminName}"`,
+            `"${log.adminRole}"`,
+            `"${getActionDisplayText(log.action)}"`,
+            `"${log.targetUser ? log.targetUser.name : ''}"`,
+            `"${log.details ? JSON.stringify(log.details).replace(/"/g, '""') : ''}"`
+        ];
+        csvRows.push(row.join(','));
+    });
+    
+    return csvRows.join('\n');
+}
+
+// 更新管理员面板标题
+function updateAdminPanelHeader() {
+    const adminSection = document.querySelector('#adminSection h2');
+    if (adminSection && currentAdminRole) {
+        const roleConfig = ADMIN_ROLE_CONFIG[currentAdminRole];
+        if (roleConfig) {
+            adminSection.textContent = `${roleConfig.icon} ${roleConfig.text}面板`;
+        }
+    }
+}
+
+// 显示权限不足提示
+function showPermissionDenied(action) {
+    const roleConfig = ADMIN_ROLE_CONFIG[currentAdminRole] || { text: '当前角色' };
+    alert(`⚠️ 权限不足\n\n${roleConfig.text}无法执行此操作：${action}\n\n如需此权限，请联系超级管理员。`);
+}
+
+// 增强版权限检查，带用户友好提示
+function requirePermission(permission, actionName) {
+    if (!hasPermission(permission)) {
+        showPermissionDenied(actionName);
+        return false;
+    }
+    return true;
+}
+
+// 重写现有函数以添加权限检查
+const originalLoadMembersFromGist = window.loadMembersFromGist;
+window.loadMembersFromGist = function() {
+    if (!requirePermission(PERMISSIONS.DATA_REFRESH, '刷新数据')) {
+        return;
+    }
+    return originalLoadMembersFromGist.apply(this, arguments);
+};
+
+const originalShowApiHealthStatus = window.showApiHealthStatus;
+window.showApiHealthStatus = function() {
+    if (!requirePermission(PERMISSIONS.API_MANAGEMENT, '查看API状态')) {
+        return;
+    }
+    return originalShowApiHealthStatus.apply(this, arguments);
+};
+
+const originalResetApiHealth = window.resetApiHealth;
+window.resetApiHealth = function() {
+    if (!requirePermission(PERMISSIONS.API_MANAGEMENT, '重置API状态')) {
+        return;
+    }
+    return originalResetApiHealth.apply(this, arguments);
+};
+
+const originalToggleAiAnalysis = window.toggleAiAnalysis;
+window.toggleAiAnalysis = function() {
+    if (!requirePermission(PERMISSIONS.API_MANAGEMENT, '切换AI分析功能')) {
+        return;
+    }
+    return originalToggleAiAnalysis.apply(this, arguments);
+};
+
 // 添加设置按钮事件监听
 document.addEventListener('DOMContentLoaded', function() {
     const userSettingsBtn = document.getElementById('userSettingsBtn');
     if (userSettingsBtn) {
         userSettingsBtn.addEventListener('click', showUserSettings);
+    }
+
+    // 初始化权限控制
+    if (isAdmin) {
+        updateUIBasedOnPermissions();
+    }
+    
+    // 审计日志筛选事件监听
+    const auditLogFilter = document.getElementById('auditLogFilter');
+    const auditLogDateFilter = document.getElementById('auditLogDateFilter');
+    
+    if (auditLogFilter) {
+        auditLogFilter.addEventListener('change', renderAuditLogs);
+    }
+    
+    if (auditLogDateFilter) {
+        auditLogDateFilter.addEventListener('change', renderAuditLogs);
+    }
+    
+    // 编辑用户表单提交事件监听
+    const editMemberForm = document.getElementById('editMemberForm');
+    if (editMemberForm) {
+        editMemberForm.addEventListener('submit', handleEditMemberSubmit);
     }
 });
