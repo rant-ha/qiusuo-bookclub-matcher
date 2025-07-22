@@ -1354,6 +1354,51 @@ async function saveSystemConfig(newConfig) {
 }
 
 // 从 Gist 加载成员数据
+// 普通用户专用：只读数据加载函数（不执行数据迁移和写操作）
+async function loadMembersFromGistReadOnly() {
+    if (!GIST_ID) {
+        console.log("GIST_ID is not configured.");
+        return false;
+    }
+    // 对于公开Gist，不需要Token
+    const headers = GITHUB_TOKEN ? { 'Authorization': `token ${GITHUB_TOKEN}` } : {};
+    try {
+        const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, { headers });
+        if (!response.ok) {
+            throw new Error(`加载数据失败: ${response.statusText}`);
+        }
+        const gist = await response.json();
+        const content = gist.files[GIST_FILENAME]?.content;
+        if (content) {
+            // 只读模式：直接解析数据，不执行迁移
+            const loadedMembers = JSON.parse(content);
+            
+            // 为老数据做兼容处理，但不保存
+            members = loadedMembers.map(member => {
+                const needsMigration = typeof member.status === 'undefined' || 
+                                     !member.questionnaire || 
+                                     member.questionnaire.version !== '2.0';
+                
+                if (needsMigration) {
+                    // 只在内存中迁移，不保存到服务器
+                    return migrateUserData(member);
+                }
+                return member;
+            });
+            
+            console.log('普通用户数据刷新成功（只读模式）');
+            return true;
+        } else {
+            members = [];
+            return true;
+        }
+    } catch (error) {
+        console.error('加载Gist失败:', error);
+        alert('刷新数据失败，请稍后重试。');
+        return false;
+    }
+}
+
 async function loadMembersFromGist() {
    if (!GIST_ID) {
        console.log("GIST_ID is not configured.");
@@ -7469,10 +7514,11 @@ function updateUIBasedOnPermissions() {
         }
     }
 
-    // 数据刷新按钮 - 根据权限显示
+    // 数据刷新按钮 - 登录用户都可以使用
     const refreshButtons = document.querySelectorAll('button[onclick="loadMembersFromGist()"]');
     refreshButtons.forEach(btn => {
-        if (hasPermissionSync(PERMISSIONS.DATA_REFRESH)) {
+        // 只要用户已登录（管理员或普通用户），就显示刷新按钮
+        if (isAdmin || currentUser) {
             btn.style.display = 'inline-block';
         } else {
             btn.style.display = 'none';
@@ -7714,9 +7760,18 @@ function requirePermissionSync(permission, actionName) {
 // 重写现有函数以添加权限检查
 const originalLoadMembersFromGist = window.loadMembersFromGist;
 window.loadMembersFromGist = function() {
-    if (!requirePermissionSync(PERMISSIONS.DATA_REFRESH, '刷新数据')) {
+    // 普通用户和管理员都应该能够刷新数据
+    // 只有当用户完全未登录时才拒绝访问
+    if (!isAdmin && !currentUser) {
+        alert('请先登录后再刷新数据');
         return;
     }
+    
+    // 管理员需要DATA_REFRESH权限
+    if (isAdmin && !requirePermissionSync(PERMISSIONS.DATA_REFRESH, '刷新数据')) {
+        return;
+    }
+    
     return originalLoadMembersFromGist.apply(this, arguments);
 };
 
