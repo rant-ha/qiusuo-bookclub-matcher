@@ -7760,18 +7760,15 @@ function requirePermissionSync(permission, actionName) {
 // 重写现有函数以添加权限检查
 const originalLoadMembersFromGist = window.loadMembersFromGist;
 window.loadMembersFromGist = function() {
-    // 普通用户和管理员都应该能够刷新数据
-    // 只有当用户完全未登录时才拒绝访问
-    if (!isAdmin && !currentUser) {
-        alert('请先登录后再刷新数据');
-        return;
+    // Only check permissions if it's an admin.
+    if (isAdmin) {
+        // If the admin doesn't have permission, block them.
+        if (!requirePermissionSync(PERMISSIONS.DATA_REFRESH, '刷新数据')) {
+            return;
+        }
     }
     
-    // 管理员需要DATA_REFRESH权限
-    if (isAdmin && !requirePermissionSync(PERMISSIONS.DATA_REFRESH, '刷新数据')) {
-        return;
-    }
-    
+    // For all other cases (regular users, or initial page load), allow the function to run.
     return originalLoadMembersFromGist.apply(this, arguments);
 };
 
