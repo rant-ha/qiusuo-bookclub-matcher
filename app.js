@@ -115,8 +115,8 @@ const ROLE_PERMISSIONS = {
     ]
 };
 
-// 权限验证辅助函数 - 提高代码复用性
-function hasPermission(role, permission) {
+// 权限验证辅助函数 - 提高代码复用性  
+function checkRolePermission(role, permission) {
     return ROLE_PERMISSIONS[role]?.includes(permission) || false;
 }
 
@@ -895,10 +895,18 @@ async function handleRegistration(name, studentId) {
    window.location.href = 'index.html';
 }
 
-// 权限检查函数
+// 权限检查函数 - 修复版本，确保权限正确更新
 function hasPermission(requiredPermission) {
     if (!isAdmin || !currentAdminRole) return false;
-    return currentAdminPermissions.includes(requiredPermission);
+    
+    // 实时从角色配置获取权限，而不是依赖可能过期的sessionStorage
+    const rolePermissions = ROLE_PERMISSIONS[currentAdminRole] || [];
+    const hasCurrentPermission = rolePermissions.includes(requiredPermission);
+    
+    Logger.debug(`权限检查: 角色=${currentAdminRole}, 需要权限=${requiredPermission}, 结果=${hasCurrentPermission}`);
+    Logger.debug(`角色权限列表:`, rolePermissions);
+    
+    return hasCurrentPermission;
 }
 
 // 审计日志系统
