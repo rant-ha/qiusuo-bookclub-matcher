@@ -663,6 +663,11 @@ window.onload = async function() {
         currentAdminRole = sessionStorage.getItem('adminRole');
         currentAdminPermissions = JSON.parse(sessionStorage.getItem('adminPermissions') || '[]');
         
+        // 初始化权限管理器
+        if (isAdmin) {
+            await permissionManager.initialize();
+        }
+        
         if (isAdmin) {
             if (!validateAdminSession()) {
                 alert('会话已过期，请重新登录。');
@@ -693,7 +698,7 @@ window.onload = async function() {
 
 // AI分析开关管理函数
 function toggleAiAnalysis() {
-    if (!hasPermission('api_management')) {
+    if (!hasPermissionSync(PERMISSIONS.API_MANAGEMENT)) {
         alert('权限不足');
         return;
     }
@@ -895,54 +900,100 @@ async function handleRegistration(name, studentId) {
    window.location.href = 'index.html';
 }
 
-// 权限检查函数 - 修复版本，确保权限正确更新
-function hasPermission(requiredPermission) {
-    // 如果不是管理员，直接返回false
-    if (!isAdmin) return false;
-    
-    // 如果currentAdminRole未初始化，尝试从sessionStorage恢复
-    if (!currentAdminRole) {
-        const storedRole = sessionStorage.getItem('adminRole');
-        const storedIsAdmin = sessionStorage.getItem('isAdmin') === 'true';
-        
-        Logger.debug(`权限检查时恢复会话: storedRole=${storedRole}, storedIsAdmin=${storedIsAdmin}`);
-        
-        if (storedIsAdmin && storedRole) {
-            currentAdminRole = storedRole;
-            currentAdminPermissions = JSON.parse(sessionStorage.getItem('adminPermissions') || '[]');
-            isAdmin = true;
-        } else {
-            Logger.debug('权限检查失败：无有效管理员会话');
-            return false;
-        }
+// 权限管理器 - 统一权限检查入口
+class PermissionManager {
+    constructor() {
+        this.isInitialized = false;
+        this.initPromise = null;
     }
     
-    // 实时从角色配置获取权限，而不是依赖可能过期的sessionStorage
-    const rolePermissions = ROLE_PERMISSIONS[currentAdminRole] || [];
-    const hasCurrentPermission = rolePermissions.includes(requiredPermission);
+    // 异步初始化权限状态
+    async initialize() {
+        if (this.initPromise) return this.initPromise;
+        
+        this.initPromise = new Promise((resolve) => {
+            // 确保从sessionStorage正确恢复状态
+            const storedIsAdmin = sessionStorage.getItem('isAdmin') === 'true';
+            const storedRole = sessionStorage.getItem('adminRole');
+            
+            if (storedIsAdmin && storedRole) {
+                isAdmin = true;
+                currentAdminRole = storedRole;
+                currentAdminPermissions = JSON.parse(sessionStorage.getItem('adminPermissions') || '[]');
+                Logger.info(`权限管理器初始化: 角色=${currentAdminRole}`);
+            }
+            
+            this.isInitialized = true;
+            resolve();
+        });
+        
+        return this.initPromise;
+    }
     
-    Logger.debug(`权限检查: 角色=${currentAdminRole}, 需要权限=${requiredPermission}, 结果=${hasCurrentPermission}`);
-    Logger.debug(`角色权限列表:`, rolePermissions);
+    // 安全的权限检查
+    async checkPermission(requiredPermission) {
+        if (!this.isInitialized) {
+            await this.initialize();
+        }
+        
+        if (!isAdmin || !currentAdminRole) {
+            Logger.debug(`权限检查失败: isAdmin=${isAdmin}, currentAdminRole=${currentAdminRole}`);
+            return false;
+        }
+        
+        const rolePermissions = ROLE_PERMISSIONS[currentAdminRole] || [];
+        const hasPermission = rolePermissions.includes(requiredPermission);
+        
+        Logger.debug(`权限检查: 角色=${currentAdminRole}, 权限=${requiredPermission}, 结果=${hasPermission}`);
+        
+        return hasPermission;
+    }
     
-    return hasCurrentPermission;
+    // 重置权限状态
+    reset() {
+        this.isInitialized = false;
+        this.initPromise = null;
+        currentAdminRole = null;
+        currentAdminPermissions = [];
+        isAdmin = false;
+    }
 }
 
-// 权限调试工具 - 添加到控制台
+// 全局权限管理器实例
+const permissionManager = new PermissionManager();
+
+// 重构的权限检查函数 - 使用权限管理器
+async function hasPermission(requiredPermission) {
+    return await permissionManager.checkPermission(requiredPermission);
+}
+
+// 同步版本的权限检查（用于UI更新）
+function hasPermissionSync(requiredPermission) {
+    if (!isAdmin || !currentAdminRole) return false;
+    const rolePermissions = ROLE_PERMISSIONS[currentAdminRole] || [];
+    return rolePermissions.includes(requiredPermission);
+}
+
+// 权限调试工具 - 安全版本，仅开发环境使用
 function debugPermissionStatus() {
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+        console.warn('🔒 权限调试功能仅在开发环境可用');
+        return;
+    }
+    
     console.log('=== 权限状态调试 ===');
-    console.log('isAdmin:', isAdmin);
-    console.log('currentAdminRole:', currentAdminRole);
-    console.log('currentAdminPermissions:', currentAdminPermissions);
-    console.log('sessionStorage.adminRole:', sessionStorage.getItem('adminRole'));
-    console.log('sessionStorage.isAdmin:', sessionStorage.getItem('isAdmin'));
-    console.log('sessionStorage.adminPermissions:', sessionStorage.getItem('adminPermissions'));
-    console.log('ROLE_PERMISSIONS:', ROLE_PERMISSIONS);
-    console.log('DATA_REFRESH权限测试:', hasPermission(PERMISSIONS.DATA_REFRESH));
+    console.log('管理员状态:', isAdmin);
+    console.log('当前角色:', currentAdminRole);
+    console.log('权限管理器初始化状态:', permissionManager.isInitialized);
+    console.log('可用权限:', currentAdminRole ? ROLE_PERMISSIONS[currentAdminRole] : []);
+    console.log('DATA_REFRESH权限测试:', hasPermissionSync(PERMISSIONS.DATA_REFRESH));
     console.log('==================');
 }
 
-// 全局暴露调试函数
-window.debugPermissionStatus = debugPermissionStatus;
+// 仅在开发环境暴露调试函数
+if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    window.debugPermissionStatus = debugPermissionStatus;
+}
 
 // 审计日志系统
 const AUDIT_ACTIONS = {
@@ -1266,7 +1317,7 @@ async function loadSystemConfig() {
 
 // 保存系统配置
 async function saveSystemConfig(newConfig) {
-    if (!hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+    if (!await hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
         alert('权限不足');
         return;
     }
@@ -2006,7 +2057,7 @@ async function handleEditMemberSubmit(e) {
 
 // 系统配置界面管理
 function openSystemConfig() {
-    if (!hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+    if (!hasPermissionSync(PERMISSIONS.SYSTEM_MONITORING)) {
         alert('权限不足，仅超级管理员可访问系统配置');
         return;
     }
@@ -2072,7 +2123,7 @@ function loadSystemConfigToForm() {
 }
 
 async function saveAllSystemConfig() {
-    if (!hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+    if (!hasPermissionSync(PERMISSIONS.SYSTEM_MONITORING)) {
         alert('权限不足');
         return;
     }
@@ -3322,7 +3373,7 @@ function getMatchTypeFromResult(result) {
  * 手动重置API健康状态（管理员功能）
  */
 function resetApiHealth() {
-    if (!hasPermission('api_management')) {
+    if (!hasPermissionSync(PERMISSIONS.API_MANAGEMENT)) {
         alert('权限不足');
         return;
     }
@@ -3338,7 +3389,7 @@ function resetApiHealth() {
  * 检查和显示API健康状态（管理员功能）
  */
 function showApiHealthStatus() {
-    if (!hasPermission('api_management')) {
+    if (!hasPermissionSync(PERMISSIONS.API_MANAGEMENT)) {
         alert('权限不足');
         return;
     }
@@ -7380,7 +7431,7 @@ function updateUIBasedOnPermissions() {
     // 系统监控面板 - 仅超级管理员可见
     const monitoringPanel = document.getElementById('monitoringPanel');
     if (monitoringPanel) {
-        if (hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+        if (hasPermissionSync(PERMISSIONS.SYSTEM_MONITORING)) {
             monitoringPanel.style.display = 'block';
             // 移除权限限制提示
             const permissionWarning = monitoringPanel.querySelector('.permission-restricted');
@@ -7400,7 +7451,7 @@ function updateUIBasedOnPermissions() {
     const apiStatusBtn = document.getElementById('apiStatusBtn');
     const resetApiBtn = document.getElementById('resetApiBtn');
     
-    if (hasPermission(PERMISSIONS.API_MANAGEMENT)) {
+    if (hasPermissionSync(PERMISSIONS.API_MANAGEMENT)) {
         if (apiStatusBtn) apiStatusBtn.style.display = 'inline-block';
         if (resetApiBtn) resetApiBtn.style.display = 'inline-block';
     } else {
@@ -7411,7 +7462,7 @@ function updateUIBasedOnPermissions() {
     // 系统配置按钮 - 仅超级管理员可见
     const systemConfigBtn = document.getElementById('systemConfigBtn');
     if (systemConfigBtn) {
-        if (hasPermission(PERMISSIONS.SYSTEM_MONITORING)) {
+        if (hasPermissionSync(PERMISSIONS.SYSTEM_MONITORING)) {
             systemConfigBtn.style.display = 'inline-block';
         } else {
             systemConfigBtn.style.display = 'none';
@@ -7421,7 +7472,7 @@ function updateUIBasedOnPermissions() {
     // 数据刷新按钮 - 根据权限显示
     const refreshButtons = document.querySelectorAll('button[onclick="loadMembersFromGist()"]');
     refreshButtons.forEach(btn => {
-        if (hasPermission(PERMISSIONS.DATA_REFRESH)) {
+        if (hasPermissionSync(PERMISSIONS.DATA_REFRESH)) {
             btn.style.display = 'inline-block';
         } else {
             btn.style.display = 'none';
@@ -7431,7 +7482,7 @@ function updateUIBasedOnPermissions() {
     // AI功能切换 - 仅超级管理员可见
     const aiToggleBtnContainer = document.getElementById('aiToggleBtnContainer');
     if (aiToggleBtnContainer) {
-        if (hasPermission(PERMISSIONS.API_MANAGEMENT)) {
+        if (hasPermissionSync(PERMISSIONS.API_MANAGEMENT)) {
             aiToggleBtnContainer.style.display = 'flex';
         } else {
             aiToggleBtnContainer.style.display = 'none';
@@ -7453,7 +7504,7 @@ function updateAuditLogPermissions() {
     
     if (!auditLogPanel) return;
     
-    if (hasPermission(PERMISSIONS.USER_MANAGEMENT)) {
+    if (hasPermissionSync(PERMISSIONS.USER_MANAGEMENT)) {
         auditLogPanel.style.display = 'block';
         
         if (currentAdminRole === ROLES.SUPER_ADMIN) {
@@ -7642,9 +7693,18 @@ function showPermissionDenied(action) {
     alert(`⚠️ 权限不足\n\n${roleConfig.text}无法执行此操作：${action}\n\n如需此权限，请联系超级管理员。`);
 }
 
-// 增强版权限检查，带用户友好提示
-function requirePermission(permission, actionName) {
-    if (!hasPermission(permission)) {
+// 增强版权限检查，带用户友好提示 - 异步版本
+async function requirePermission(permission, actionName) {
+    if (!await hasPermission(permission)) {
+        showPermissionDenied(actionName);
+        return false;
+    }
+    return true;
+}
+
+// 同步版本的requirePermission（用于UI事件处理）
+function requirePermissionSync(permission, actionName) {
+    if (!hasPermissionSync(permission)) {
         showPermissionDenied(actionName);
         return false;
     }
@@ -7654,7 +7714,7 @@ function requirePermission(permission, actionName) {
 // 重写现有函数以添加权限检查
 const originalLoadMembersFromGist = window.loadMembersFromGist;
 window.loadMembersFromGist = function() {
-    if (!requirePermission(PERMISSIONS.DATA_REFRESH, '刷新数据')) {
+    if (!requirePermissionSync(PERMISSIONS.DATA_REFRESH, '刷新数据')) {
         return;
     }
     return originalLoadMembersFromGist.apply(this, arguments);
@@ -7662,7 +7722,7 @@ window.loadMembersFromGist = function() {
 
 const originalShowApiHealthStatus = window.showApiHealthStatus;
 window.showApiHealthStatus = function() {
-    if (!requirePermission(PERMISSIONS.API_MANAGEMENT, '查看API状态')) {
+    if (!requirePermissionSync(PERMISSIONS.API_MANAGEMENT, '查看API状态')) {
         return;
     }
     return originalShowApiHealthStatus.apply(this, arguments);
@@ -7670,7 +7730,7 @@ window.showApiHealthStatus = function() {
 
 const originalResetApiHealth = window.resetApiHealth;
 window.resetApiHealth = function() {
-    if (!requirePermission(PERMISSIONS.API_MANAGEMENT, '重置API状态')) {
+    if (!requirePermissionSync(PERMISSIONS.API_MANAGEMENT, '重置API状态')) {
         return;
     }
     return originalResetApiHealth.apply(this, arguments);
@@ -7678,7 +7738,7 @@ window.resetApiHealth = function() {
 
 const originalToggleAiAnalysis = window.toggleAiAnalysis;
 window.toggleAiAnalysis = function() {
-    if (!requirePermission(PERMISSIONS.API_MANAGEMENT, '切换AI分析功能')) {
+    if (!requirePermissionSync(PERMISSIONS.API_MANAGEMENT, '切换AI分析功能')) {
         return;
     }
     return originalToggleAiAnalysis.apply(this, arguments);
