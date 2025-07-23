@@ -27,7 +27,7 @@ export function showLoginView() {
         resetLoginForm();
         
         // 确保登录表单获得焦点
-        const nameInput = document.getElementById('nameInput');
+        const nameInput = document.getElementById('loginName');
         if (nameInput) {
             setTimeout(() => nameInput.focus(), 100);
         }
@@ -280,7 +280,7 @@ function setupLoginEventListeners() {
     }
     
     // 回车键登录
-    ['nameInput', 'studentIdInput', 'passwordInput'].forEach(inputId => {
+    ['loginName', 'loginStudentId', 'loginPassword'].forEach(inputId => {
         const input = document.getElementById(inputId);
         if (input) {
             input.addEventListener('keypress', (e) => {
@@ -385,9 +385,9 @@ async function handleLoginSubmit(e) {
     try {
         store.setLoading(true);
         
-        const nameInput = document.getElementById('nameInput');
-        const studentIdInput = document.getElementById('studentIdInput');
-        const passwordInput = document.getElementById('passwordInput');
+        const nameInput = document.getElementById('loginName');
+        const studentIdInput = document.getElementById('loginStudentId');
+        const passwordInput = document.getElementById('loginPassword');
         
         const name = nameInput?.value?.trim() || '';
         const studentId = studentIdInput?.value?.trim() || '';
