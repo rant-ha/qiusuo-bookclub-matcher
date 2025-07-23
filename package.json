@@ -2,6 +2,11 @@
   "name": "qiusuo-bookclub-matcher",
   "version": "1.0.0",
   "scripts": {
-    "build": "node build.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^7.0.5"
   }
 }
