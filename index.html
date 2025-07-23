@@ -1512,32 +1512,23 @@
             box-shadow: 0 2px 8px rgba(149, 165, 166, 0.3);
         }
         
-        /* 角色主题样式 */
-        .super-admin-theme {
-            --admin-color: #007bff;
-            --admin-bg: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-        }
-        
-        .regular-admin-theme {
+        /* 统一管理员主题样式 */
+        .admin-theme {
             --admin-color: #28a745;
             --admin-bg: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
-        }
-
-        .legacy-admin-theme {
-            --admin-color: #6c757d;
-            --admin-bg: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
         }
         
         .admin-role-badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 16px;
+            padding: 12px 20px;
             background: var(--admin-bg);
-            border-radius: 20px;
+            border-radius: 16px;
             border: 2px solid var(--admin-color);
             margin-bottom: 20px;
             transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
         }
 
         .admin-role-badge .admin-role-icon {
@@ -2386,7 +2377,7 @@
             <!-- 实时监控仪表板 -->
             <div class="section" id="monitoringPanel">
                 <div class="permission-restricted" style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; color: #856404; display: none;">
-                    ⚠️ 您没有访问此功能的权限。此功能仅对超级管理员开放。
+                    ⚠️ 您没有访问此功能的权限。
                 </div>
                 <h2>🔍 系统实时监控</h2>
                 <div class="monitoring-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
@@ -2461,7 +2452,7 @@
             <div class="section" id="auditLogPanel">
                 <h2>📋 操作审计日志</h2>
                 <div class="permission-hint" id="auditLogPermissionHint" style="display: none;">
-                    普通管理员只能查看自己的操作记录，超级管理员可以查看所有记录。
+                    管理员可以查看相关的操作记录。
                 </div>
                 
                 <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; align-items: center;">
@@ -3060,7 +3051,7 @@
             <div style="padding: 20px 30px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, var(--bg-primary)); color: white; border-radius: 15px 15px 0 0;">
                 <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
                     ⚙️ 系统配置管理
-                    <span style="font-size: 12px; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 12px;">超级管理员专用</span>
+                    <span style="font-size: 12px; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 12px;">高级配置</span>
                 </h3>
             </div>
 
