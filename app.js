@@ -1790,7 +1790,7 @@ function renderMemberList() {
                    </div>
                </div>
                <div class="member-actions">
-                   <button class="secondary edit-btn" onclick="openEditMemberModal('${migratedMember.id}')" style="margin-right: 8px;" title="编辑用户资料">✏️ 编辑</button>
+                   <button class="secondary edit-btn" onclick="openEditMemberModal('${migratedMember.id}')" title="编辑用户资料">✏️ 编辑</button>
                    <button class="delete-btn" onclick="deleteMember('${migratedMember.id}')" title="删除用户">🗑️ 删除</button>
                </div>
            </div>
