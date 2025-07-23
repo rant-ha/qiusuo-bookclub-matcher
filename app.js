@@ -44,13 +44,25 @@ function updateAdminRoleIndicator() {
 
     if (currentAdminRole && ADMIN_ROLE_CONFIG[currentAdminRole]) {
         const config = ADMIN_ROLE_CONFIG[currentAdminRole];
-        indicator.innerHTML = `
-            <div class="admin-role-content">
-                <span class="admin-role-icon">${config.icon}</span>
-                <span class="admin-role-text">${config.text}</span>
-                <span class="admin-role-description">${config.description}</span>
-            </div>
-        `;
+        
+        // 对普通管理员隐藏角色层级信息
+        if (currentAdminRole !== ROLES.SUPER_ADMIN) {
+            indicator.innerHTML = `
+                <div class="admin-role-content">
+                    <span class="admin-role-icon">⚙️</span>
+                    <span class="admin-role-text">管理员</span>
+                    <span class="admin-role-description">拥有管理权限</span>
+                </div>
+            `;
+        } else {
+            indicator.innerHTML = `
+                <div class="admin-role-content">
+                    <span class="admin-role-icon">${config.icon}</span>
+                    <span class="admin-role-text">${config.text}</span>
+                    <span class="admin-role-description">${config.description}</span>
+                </div>
+            `;
+        }
         indicator.style.display = 'inline-flex';
     } else {
         indicator.style.display = 'none';
@@ -60,18 +72,13 @@ function updateAdminRoleIndicator() {
 // 新增：更新管理员主题
 function updateAdminTheme() {
     const body = document.body;
-    const themes = {
-        [ROLES.SUPER_ADMIN]: 'super-admin-theme',
-        [ROLES.REGULAR_ADMIN]: 'regular-admin-theme',
-        [ROLES.LEGACY_ADMIN]: 'legacy-admin-theme'
-    };
-
+    
     // 移除所有可能的主题
-    Object.values(themes).forEach(theme => body.classList.remove(theme));
-
-    // 添加当前角色主题
-    if (currentAdminRole && themes[currentAdminRole]) {
-        body.classList.add(themes[currentAdminRole]);
+    body.classList.remove('super-admin-theme', 'regular-admin-theme', 'legacy-admin-theme');
+    
+    // 为所有管理员添加统一的主题class，不区分层级
+    if (currentAdminRole) {
+        body.classList.add('admin-theme');
     }
 }
 
@@ -2103,7 +2110,7 @@ async function handleEditMemberSubmit(e) {
 // 系统配置界面管理
 function openSystemConfig() {
     if (!hasPermissionSync(PERMISSIONS.SYSTEM_MONITORING)) {
-        alert('权限不足，仅超级管理员可访问系统配置');
+        alert('权限不足，无法访问此功能');
         return;
     }
     
@@ -7473,26 +7480,18 @@ function deleteUserAccount() {
 function updateUIBasedOnPermissions() {
     if (!isAdmin || !currentAdminRole) return;
 
-    // 系统监控面板 - 仅超级管理员可见
+    // 系统监控面板
     const monitoringPanel = document.getElementById('monitoringPanel');
     if (monitoringPanel) {
         if (hasPermissionSync(PERMISSIONS.SYSTEM_MONITORING)) {
             monitoringPanel.style.display = 'block';
-            // 移除权限限制提示
-            const permissionWarning = monitoringPanel.querySelector('.permission-restricted');
-            if (permissionWarning) {
-                permissionWarning.style.display = 'none';
-            }
         } else {
-            // 显示权限限制提示
-            const permissionWarning = monitoringPanel.querySelector('.permission-restricted');
-            if (permissionWarning) {
-                permissionWarning.style.display = 'block';
-            }
+            // 隐藏整个面板
+            monitoringPanel.style.display = 'none';
         }
     }
 
-    // API管理按钮 - 仅超级管理员可见
+    // API管理按钮
     const apiStatusBtn = document.getElementById('apiStatusBtn');
     const resetApiBtn = document.getElementById('resetApiBtn');
     
@@ -7504,7 +7503,7 @@ function updateUIBasedOnPermissions() {
         if (resetApiBtn) resetApiBtn.style.display = 'none';
     }
 
-    // 系统配置按钮 - 仅超级管理员可见
+    // 系统配置按钮
     const systemConfigBtn = document.getElementById('systemConfigBtn');
     if (systemConfigBtn) {
         if (hasPermissionSync(PERMISSIONS.SYSTEM_MONITORING)) {
@@ -7514,10 +7513,10 @@ function updateUIBasedOnPermissions() {
         }
     }
 
-    // 数据刷新按钮 - 登录用户都可以使用
+    // 数据刷新按钮
     const refreshButtons = document.querySelectorAll('button[onclick="loadMembersFromGist()"]');
     refreshButtons.forEach(btn => {
-        // 只要用户已登录（管理员或普通用户），就显示刷新按钮
+        // 已登录用户可以使用
         if (isAdmin || currentUser) {
             btn.style.display = 'inline-block';
         } else {
@@ -7525,7 +7524,7 @@ function updateUIBasedOnPermissions() {
         }
     });
 
-    // AI功能切换 - 仅超级管理员可见
+    // AI功能切换
     const aiToggleBtnContainer = document.getElementById('aiToggleBtnContainer');
     if (aiToggleBtnContainer) {
         if (hasPermissionSync(PERMISSIONS.API_MANAGEMENT)) {
@@ -7554,17 +7553,17 @@ function updateAuditLogPermissions() {
         auditLogPanel.style.display = 'block';
         
         if (currentAdminRole === ROLES.SUPER_ADMIN) {
-            // 超级管理员可以看到提示和导出功能
+            // 高级管理员可以看到提示和导出功能
             if (auditLogPermissionHint) {
                 auditLogPermissionHint.style.display = 'block';
-                auditLogPermissionHint.textContent = '超级管理员可以查看所有管理员的操作记录。';
+                auditLogPermissionHint.textContent = '您可以查看所有管理员的操作记录。';
             }
             if (exportAuditBtn) exportAuditBtn.style.display = 'inline-block';
         } else {
             // 普通管理员看到限制提示
             if (auditLogPermissionHint) {
                 auditLogPermissionHint.style.display = 'block';
-                auditLogPermissionHint.textContent = '普通管理员只能查看自己的操作记录。';
+                auditLogPermissionHint.textContent = '您只能查看自己的操作记录。';
             }
             if (exportAuditBtn) exportAuditBtn.style.display = 'none';
         }
