@@ -1,8 +1,30 @@
 // P3 UI/UX功能组件
 // 主题切换、用户设置、数据导出相关的UI组件
 
-import { sanitizeText, createSafeTextElement, createSafeElement } from '../admin/components.js';
-import { Logger } from '../utils.js';
+import { createSafeTextElement } from '../admin/components.js';
+import { Logger, sanitizeText } from '../utils.js';
+
+/**
+ * 创建安全的DOM元素
+ * @param {string} tagName - 标签名
+ * @param {Object} attributes - 属性对象
+ * @returns {HTMLElement} DOM元素
+ */
+function createSafeElement(tagName, attributes = {}) {
+    const element = document.createElement(tagName);
+    
+    for (const [key, value] of Object.entries(attributes)) {
+        if (key === 'className') {
+            element.className = value;
+        } else if (key.startsWith('data-') || key === 'id' || key === 'type' || key === 'value' || key === 'checked' || key.startsWith('aria-')) {
+            element.setAttribute(key, value);
+        } else if (key === 'textContent') {
+            element.textContent = sanitizeText(value);
+        }
+    }
+    
+    return element;
+}
 
 /**
  * 创建主题切换按钮
