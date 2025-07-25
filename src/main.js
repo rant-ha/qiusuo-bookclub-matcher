@@ -6,6 +6,7 @@ import { Logger } from './utils.js';
 import { testConnection } from './api.js';
 import { validateSession } from './auth.js';
 import { showLoginView, showLoggedInView, initializeEventListeners } from './ui/views.js';
+import { configManager } from './admin/configManager.js';
 
 /**
  * 应用程序初始化函数
@@ -16,6 +17,9 @@ export async function initializeApp() {
 
         // 阶段1: 基础初始化
         await initializeCore();
+
+        // 阶段1.5: 加载动态配置
+        await configManager.loadConfig();
 
         // 阶段2: 恢复用户会话
         await restoreUserSession();

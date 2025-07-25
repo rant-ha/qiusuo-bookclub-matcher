@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>求索书社灵魂寻友</title>
+    <!-- P3 功能样式 -->
+    <link rel="stylesheet" href="src/ui/p3-styles.css">
     <style>
         /* CSS变量定义 */
         :root {
@@ -1720,6 +1722,12 @@
             border: 1px solid #ffeaa7;
         }
     </style>
+    
+    <!-- 权重配置管理样式 -->
+    <link rel="stylesheet" href="./src/admin/weightConfig.css">
+    
+    <!-- 审计日志管理样式 -->
+    <link rel="stylesheet" href="./src/admin/auditLog.css">
 </head>
 <body>
     <!-- 主题切换器 -->
@@ -1769,7 +1777,8 @@
                     <label for="loginPassword">管理员密码 (可选)</label>
                     <input type="password" id="loginPassword" placeholder="管理员登录时填写">
                     <div class="hint">
-                        <span>管理员账号可以查看所有成员信息并进行匹配</span>
+                        <span>管理员账号可以查看所有成员信息并进行匹配<br>
+                        <small style="color: #888;">超级管理员可仅填写密码登录（无需姓名学号）</small></span>
                         <a href="#" id="resetPasswordLink" style="color: #667eea; text-decoration: underline; font-size: 12px; float: right;">忘记密码？</a>
                     </div>
                 </div>
@@ -1815,7 +1824,7 @@
             <div id="userProfileContent"></div>
             <button id="editProfileBtn">编辑信息</button>
             <button id="userSettingsBtn" class="secondary">⚙️ 个人设置</button>
-            <button type="button" class="secondary" onclick="logout()">退出登录</button>
+            <button id="logoutBtn" type="button" class="secondary">退出登录</button>
         </div>
 
         <!-- 个性化设置界面 -->
@@ -1952,7 +1961,7 @@
 
             <div style="text-align: center; margin-top: 30px;">
                 <button onclick="saveUserSettings()" style="margin-right: 10px;">💾 保存设置</button>
-                <button class="secondary" onclick="cancelUserSettings()">取消</button>
+                <button id="cancelSettingsBtn" class="secondary">取消</button>
             </div>
         </div>
 
@@ -3072,203 +3081,6 @@
         </div>
     </div>
 
-    <!-- 系统配置模态框 -->
-    <div id="systemConfigModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001; align-items: flex-start; justify-content: center; padding: 20px; overflow-y: auto;">
-        <div style="background: var(--bg-tertiary); border-radius: 15px; max-width: 900px; width: 100%; box-shadow: 0 15px 35px rgba(0,0,0,0.3); margin-top: 20px;">
-            <div style="padding: 20px 30px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, var(--bg-primary)); color: white; border-radius: 15px 15px 0 0;">
-                <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
-                    ⚙️ 系统配置管理
-                    <span style="font-size: 12px; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 12px;">高级配置</span>
-                </h3>
-            </div>
-
-            <!-- 标签页导航 -->
-            <div style="display: flex; border-bottom: 2px solid var(--border-color); background: var(--bg-secondary);">
-                <button class="config-tab-link active" onclick="openConfigTab(event, 'ai-config')">🤖 AI配置</button>
-                <button class="config-tab-link" onclick="openConfigTab(event, 'system-params')">⚙️ 系统参数</button>
-                <button class="config-tab-link" onclick="openConfigTab(event, 'feature-toggles')">🎛️ 功能开关</button>
-                <button class="config-tab-link" onclick="openConfigTab(event, 'security-config')">🛡️ 安全配置</button>
-            </div>
-
-            <!-- AI配置标签页 -->
-            <div id="ai-config" class="config-tab-content active">
-                <form id="ai-config-form">
-                    <div style="padding: 20px;">
-                        <h4 style="margin: 0 0 15px 0; color: var(--text-primary);">AI服务配置</h4>
-                        
-                        <div class="form-group">
-                            <label>AI功能总开关</label>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <label class="config-switch">
-                                    <input type="checkbox" id="aiEnabled" name="aiEnabled">
-                                    <span class="config-slider"></span>
-                                </label>
-                                <span style="font-size: 14px; color: var(--text-secondary);">启用AI语义匹配和智能分析</span>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="aiProvider">AI服务提供商</label>
-                            <select id="aiProvider" name="aiProvider" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                                <option value="custom">自定义API</option>
-                                <option value="openai">OpenAI</option>
-                                <option value="google">Google AI</option>
-                                <option value="anthropic">Anthropic</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="aiBaseUrl">API基础URL</label>
-                            <input type="text" id="aiBaseUrl" name="aiBaseUrl" placeholder="https://api.example.com/v1" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                            <small style="color: var(--text-muted);">API的基础URL地址</small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="aiModelName">默认模型</label>
-                            <input type="text" id="aiModelName" name="aiModelName" placeholder="gpt-4.1-mini" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                            <small style="color: var(--text-muted);">使用的AI模型名称</small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="similarityThreshold">相似度阈值</label>
-                            <input type="number" id="similarityThreshold" name="similarityThreshold" min="0" max="1" step="0.1" value="0.6" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                            <small style="color: var(--text-muted);">语义匹配的相似度阈值 (0-1之间)</small>
-                        </div>
-
-                        <div class="config-status-message" id="ai-config-status" style="display: none;"></div>
-                    </div>
-                </form>
-            </div>
-
-            <!-- 系统参数标签页 -->
-            <div id="system-params" class="config-tab-content">
-                <form id="system-params-form">
-                    <div style="padding: 20px;">
-                        <h4 style="margin: 0 0 15px 0; color: var(--text-primary);">系统运行参数</h4>
-                        
-                        <div class="form-group">
-                            <label for="logLevel">日志级别</label>
-                            <select id="logLevel" name="logLevel" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                                <option value="ERROR">ERROR - 仅错误</option>
-                                <option value="WARN">WARN - 警告及以上</option>
-                                <option value="INFO">INFO - 信息及以上</option>
-                                <option value="DEBUG">DEBUG - 调试级别</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="matchBatchSize">匹配批次大小</label>
-                            <input type="number" id="matchBatchSize" name="matchBatchSize" min="5" max="50" value="10" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                            <small style="color: var(--text-muted);">AI匹配时每批处理的用户对数量</small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="cacheTTL">缓存有效期 (秒)</label>
-                            <input type="number" id="cacheTTL" name="cacheTTL" min="60" max="3600" value="300" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                            <small style="color: var(--text-muted);">数据缓存的有效时间</small>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="sessionTimeout">会话超时 (秒)</label>
-                            <input type="number" id="sessionTimeout" name="sessionTimeout" min="1800" max="86400" value="3600" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                            <small style="color: var(--text-muted);">管理员登录会话的超时时间</small>
-                        </div>
-
-                        <div class="config-status-message" id="system-params-status" style="display: none;"></div>
-                    </div>
-                </form>
-            </div>
-
-            <!-- 功能开关标签页 -->
-            <div id="feature-toggles" class="config-tab-content">
-                <form id="feature-toggles-form">
-                    <div style="padding: 20px;">
-                        <h4 style="margin: 0 0 15px 0; color: var(--text-primary);">功能开关控制</h4>
-                        
-                        <div class="switch-group" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 10px;">
-                            <label>语义搜索功能</label>
-                            <label class="config-switch">
-                                <input type="checkbox" id="enableSemanticSearch" name="enableSemanticSearch">
-                                <span class="config-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="switch-group" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 10px;">
-                            <label>用户资料定制</label>
-                            <label class="config-switch">
-                                <input type="checkbox" id="enableUserProfileCustomization" name="enableUserProfileCustomization">
-                                <span class="config-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="switch-group" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 10px;">
-                            <label>管理员仪表板V2</label>
-                            <label class="config-switch">
-                                <input type="checkbox" id="enableAdminDashboardV2" name="enableAdminDashboardV2">
-                                <span class="config-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="switch-group" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 10px;">
-                            <label>审计日志记录</label>
-                            <label class="config-switch">
-                                <input type="checkbox" id="enableAuditLogging" name="enableAuditLogging">
-                                <span class="config-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="config-status-message" id="feature-toggles-status" style="display: none;"></div>
-                    </div>
-                </form>
-            </div>
-
-            <!-- 安全配置标签页 -->
-            <div id="security-config" class="config-tab-content">
-                <form id="security-config-form">
-                    <div style="padding: 20px;">
-                        <h4 style="margin: 0 0 15px 0; color: var(--text-primary);">安全设置</h4>
-                        
-                        <div class="switch-group" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 20px;">
-                            <label>多因素认证 (预留)</label>
-                            <label class="config-switch">
-                                <input type="checkbox" id="mfaRequired" name="mfaRequired" disabled>
-                                <span class="config-slider"></span>
-                            </label>
-                        </div>
-
-                        <div class="form-group">
-                            <h5 style="margin: 15px 0 10px 0; color: var(--text-primary);">密码管理</h5>
-                            <small style="color: var(--text-muted); display: block; margin-bottom: 15px;">
-                                ⚠️ 密码更改后所有管理员需要重新登录
-                            </small>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                                <div>
-                                    <label for="superAdminPassword">超级管理员密码</label>
-                                    <input type="password" id="superAdminPassword" name="superAdminPassword" placeholder="留空表示不更改" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                                </div>
-                                <div>
-                                    <label for="regularAdminPassword">普通管理员密码</label>
-                                    <input type="password" id="regularAdminPassword" name="regularAdminPassword" placeholder="留空表示不更改" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="config-status-message" id="security-config-status" style="display: none;"></div>
-                    </div>
-                </form>
-            </div>
-
-            <!-- 操作按钮 -->
-            <div style="padding: 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; background: var(--bg-secondary); border-radius: 0 0 15px 15px;">
-                <button type="button" class="secondary" onclick="closeSystemConfigModal()">取消</button>
-                <div style="display: flex; gap: 10px;">
-                    <button type="button" class="secondary" onclick="testSystemConfig()">🧪 测试配置</button>
-                    <button type="button" class="primary" onclick="saveAllSystemConfig()">💾 保存所有配置</button>
-                </div>
-            </div>
-        </div>
-    </div>
     
     <style>
         /* 匹配功能UI样式 */
@@ -3969,7 +3781,164 @@
     <script type="module" src="src/main.js"></script>
     <script type="module">
         import { initializeApp } from './src/main.js';
-        document.addEventListener('DOMContentLoaded', initializeApp);
+        import { p3IntegrationManager } from './src/ui/p3Integration.js';
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            // 初始化主应用
+            await initializeApp();
+            
+            // 初始化P3功能（主题、设置、导出）
+            try {
+                await p3IntegrationManager.initialize();
+                console.log('✅ P3功能已初始化');
+            } catch (error) {
+                console.error('❌ P3功能初始化失败:', error);
+            }
+        });
+
+        // 在开发模式下加载测试脚本
+        if (import.meta.env?.DEV) {
+            import('./src/test/admin.test.js').then(module => {
+                console.log('Admin test module loaded.');
+                // 你可以在这里调用 module.runAdminTests() 或者在控制台手动调用
+            });
+        }
     </script>
 </body>
 </html>
+
+    <!-- 系统配置模态框 -->
+    <div id="systemConfigModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10001; align-items: flex-start; justify-content: center; padding: 20px; overflow-y: auto;">
+        <div style="background: var(--bg-tertiary); border-radius: 15px; max-width: 900px; width: 100%; box-shadow: 0 15px 35px rgba(0,0,0,0.3); margin-top: 20px;">
+            <div style="padding: 20px 30px; border-bottom: 1px solid var(--border-color); background: linear-gradient(135deg, var(--bg-primary)); color: white; border-radius: 15px 15px 0 0;">
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                    ⚙️ 系统配置管理
+                    <span style="font-size: 12px; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 12px;">高级配置</span>
+                </h3>
+            </div>
+
+            <!-- 标签页导航 -->
+            <div style="display: flex; border-bottom: 2px solid var(--border-color); background: var(--bg-secondary);">
+                <button class="config-tab-link active" onclick="openConfigTab(event, 'ai-config')">🤖 AI配置</button>
+                <button class="config-tab-link" onclick="openConfigTab(event, 'system-params')">⚙️ 系统参数</button>
+                <button class="config-tab-link" onclick="openConfigTab(event, 'feature-toggles')">🎛️ 功能开关</button>
+            </div>
+
+            <!-- AI配置标签页 -->
+            <div id="ai-config" class="config-tab-content active">
+                <form id="ai-config-form">
+                    <div style="padding: 20px;">
+                        <h4 style="margin: 0 0 15px 0; color: var(--text-primary);">AI服务配置</h4>
+                        
+                        <div class="form-group">
+                            <label>AI功能总开关</label>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <label class="config-switch">
+                                    <input type="checkbox" id="aiEnabled" name="aiEnabled">
+                                    <span class="config-slider"></span>
+                                </label>
+                                <span style="font-size: 14px; color: var(--text-secondary);">启用AI语义匹配和智能分析</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="aiModelName">默认模型</label>
+                            <input type="text" id="aiModelName" name="aiModelName" placeholder="gpt-4.1-mini" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
+                            <small style="color: var(--text-muted);">使用的AI模型名称</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="similarityThreshold">相似度阈值</label>
+                            <input type="number" id="similarityThreshold" name="similarityThreshold" min="0" max="1" step="0.1" value="0.6" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
+                            <small style="color: var(--text-muted);">语义匹配的相似度阈值 (0-1之间)</small>
+                        </div>
+
+                        <div class="config-status-message" id="ai-config-status" style="display: none;"></div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 系统参数标签页 -->
+            <div id="system-params" class="config-tab-content">
+                <form id="system-params-form">
+                    <div style="padding: 20px;">
+                        <h4 style="margin: 0 0 15px 0; color: var(--text-primary);">系统运行参数</h4>
+                        
+                        <div class="form-group">
+                            <label for="logLevel">日志级别</label>
+                            <select id="logLevel" name="logLevel" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
+                                <option value="ERROR">ERROR - 仅错误</option>
+                                <option value="WARN">WARN - 警告及以上</option>
+                                <option value="INFO">INFO - 信息及以上</option>
+                                <option value="DEBUG">DEBUG - 调试级别</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="matchBatchSize">匹配批次大小</label>
+                            <input type="number" id="matchBatchSize" name="matchBatchSize" min="5" max="50" value="10" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
+                            <small style="color: var(--text-muted);">AI匹配时每批处理的用户对数量</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cacheTTL">缓存有效期 (秒)</label>
+                            <input type="number" id="cacheTTL" name="cacheTTL" min="60" max="3600" value="300" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg);">
+                            <small style="color: var(--text-muted);">数据缓存的有效时间</small>
+                        </div>
+                        <div class="config-status-message" id="system-params-status" style="display: none;"></div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 功能开关标签页 -->
+            <div id="feature-toggles" class="config-tab-content">
+                <form id="feature-toggles-form">
+                    <div style="padding: 20px;">
+                        <h4 style="margin: 0 0 15px 0; color: var(--text-primary);">功能开关控制</h4>
+                        
+                        <div class="switch-group" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 10px;">
+                            <label>语义搜索功能</label>
+                            <label class="config-switch">
+                                <input type="checkbox" id="enableSemanticSearch" name="enableSemanticSearch">
+                                <span class="config-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="switch-group" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 10px;">
+                            <label>用户资料定制</label>
+                            <label class="config-switch">
+                                <input type="checkbox" id="enableUserProfileCustomization" name="enableUserProfileCustomization">
+                                <span class="config-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="switch-group" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 10px;">
+                            <label>管理员仪表板V2</label>
+                            <label class="config-switch">
+                                <input type="checkbox" id="enableAdminDashboardV2" name="enableAdminDashboardV2">
+                                <span class="config-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="switch-group" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 10px;">
+                            <label>审计日志记录</label>
+                            <label class="config-switch">
+                                <input type="checkbox" id="enableAuditLogging" name="enableAuditLogging">
+                                <span class="config-slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="config-status-message" id="feature-toggles-status" style="display: none;"></div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div style="padding: 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; background: var(--bg-secondary); border-radius: 0 0 15px 15px;">
+                <button type="button" class="secondary" onclick="closeSystemConfigModal()">取消</button>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="primary" onclick="saveAllSystemConfig()">💾 保存所有配置</button>
+                </div>
+            </div>
+        </div>
+    </div>

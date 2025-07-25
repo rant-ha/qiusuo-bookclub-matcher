@@ -15,6 +15,18 @@ const VALIDATION_RULES = {
         required: false,
         enum: ['male', 'female', 'other', 'prefer_not_to_say']
     },
+    grade: {
+        required: false,
+        enum: ['undergraduate_1', 'undergraduate_2', 'undergraduate_3', 'undergraduate_4', 'graduate', 'postgraduate', 'other']
+    },
+    major: {
+        required: false,
+        maxLength: 50
+    },
+    contact: {
+        required: false,
+        maxLength: 100
+    },
     bookCategories: {
         required: true,
         minItems: 1,
@@ -208,6 +220,32 @@ function renderEditForm(userData) {
                                 <span class="radio-label">📚 专心阅读</span>
                             </label>
                         </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="editGrade">年级</label>
+                        <select id="editGrade" name="grade">
+                            <option value="">请选择年级</option>
+                            <option value="undergraduate_1">本科一年级</option>
+                            <option value="undergraduate_2">本科二年级</option>
+                            <option value="undergraduate_3">本科三年级</option>
+                            <option value="undergraduate_4">本科四年级</option>
+                            <option value="graduate">研究生</option>
+                            <option value="postgraduate">博士研究生</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="editMajor">专业</label>
+                        <input type="text" id="editMajor" name="major" placeholder="请输入您的专业" maxlength="50">
+                        <small class="form-hint">如：计算机科学与技术、文学、经济学等</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="editContact">联系方式</label>
+                        <input type="text" id="editContact" name="contact" placeholder="微信号、QQ号或其他联系方式" maxlength="100">
+                        <small class="form-hint">用于匹配成功后的联系，不会公开显示</small>
                     </div>
                 </section>
                 
@@ -438,6 +476,21 @@ function populateBasicInfo(userData) {
     const userStatus = userData.userStatus || 'active';
     const statusRadio = document.querySelector(`input[name="userStatus"][value="${userStatus}"]`);
     if (statusRadio) statusRadio.checked = true;
+    
+    // 年级
+    const grade = userData.grade || userData.questionnaire?.basicInfo?.grade || '';
+    const gradeSelect = document.getElementById('editGrade');
+    if (gradeSelect) gradeSelect.value = grade;
+    
+    // 专业
+    const major = userData.major || userData.questionnaire?.basicInfo?.major || '';
+    const majorInput = document.getElementById('editMajor');
+    if (majorInput) majorInput.value = major;
+    
+    // 联系方式
+    const contact = userData.contact || userData.questionnaire?.basicInfo?.contact || '';
+    const contactInput = document.getElementById('editContact');
+    if (contactInput) contactInput.value = contact;
 }
 
 /**
@@ -746,6 +799,15 @@ function collectFormData() {
     const statusRadio = document.querySelector('input[name="userStatus"]:checked');
     if (statusRadio) formData.userStatus = statusRadio.value;
     
+    const gradeSelect = document.getElementById('editGrade');
+    if (gradeSelect) formData.grade = gradeSelect.value;
+    
+    const majorInput = document.getElementById('editMajor');
+    if (majorInput) formData.major = majorInput.value.trim();
+    
+    const contactInput = document.getElementById('editContact');
+    if (contactInput) formData.contact = contactInput.value.trim();
+    
     // 阅读偏好
     const categoryCheckboxes = document.querySelectorAll('input[name="bookCategories"]:checked');
     formData.bookCategories = Array.from(categoryCheckboxes).map(cb => cb.value);
@@ -861,7 +923,10 @@ async function updateUserProfile(formData) {
             basicInfo: {
                 ...currentUser.questionnaire?.basicInfo,
                 gender: formData.gender,
-                email: formData.email
+                email: formData.email,
+                grade: formData.grade,
+                major: formData.major,
+                contact: formData.contact
             },
             readingPreferences: {
                 categories: formData.bookCategories,

@@ -13,9 +13,41 @@ export async function handleLogin(name, studentId, password = '') {
     try {
         Logger.info('尝试登录', { name, studentId, hasPassword: !!password });
         
-        // 输入验证
+        // 检查是否为仅密码的超级管理员登录
+        if (password && (!name || !studentId)) {
+            // 仅密码登录，只允许超级管理员
+            if (password === CONFIG.SUPER_ADMIN_PASSWORD) {
+                const adminUser = {
+                    name: '超级管理员',
+                    studentId: 'SUPER_ADMIN',
+                    role: ROLES.SUPER_ADMIN,
+                    permissions: ROLE_PERMISSIONS[ROLES.SUPER_ADMIN],
+                    loginTime: new Date().toISOString(),
+                    isAdmin: true
+                };
+
+                // 更新状态
+                store.setCurrentUser(adminUser);
+                store.setAdminStatus(true, ROLES.SUPER_ADMIN, ROLE_PERMISSIONS[ROLES.SUPER_ADMIN]);
+
+                Logger.info('超级管理员仅密码登录成功');
+
+                return {
+                    success: true,
+                    message: '超级管理员登录成功',
+                    user: adminUser,
+                    isAdmin: true,
+                    role: ROLES.SUPER_ADMIN,
+                    permissions: ROLE_PERMISSIONS[ROLES.SUPER_ADMIN]
+                };
+            } else {
+                throw new Error('无效的凭据或权限不足');
+            }
+        }
+        
+        // 常规登录需要姓名和学号
         if (!name || !studentId) {
-            throw new Error('姓名和学号不能为空');
+            throw new Error('请填写姓名和学号');
         }
 
         // 清理输入

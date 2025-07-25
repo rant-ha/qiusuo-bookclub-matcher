@@ -3,6 +3,8 @@
 
 import { Logger, measureAsyncPerformance, shuffleArray } from './utils.js';
 import { getAiSimilarity } from './api.js';
+import { matchingEngine } from './matching/algorithms.js';
+import { apiHealthMonitor } from './api/healthMonitor.js';
 
 /**
  * 计算两个用户之间的相似度
@@ -101,7 +103,8 @@ export function calculateComplementarity(member1, member2) {
 }
 
 /**
- * 执行匹配算法并返回结果
+ * 执行匹配算法并返回结果（升级版）
+ * 集成AI增强算法和自动降级机制
  */
 export async function findMatches(currentUser, members, matchType, useAi = false) {
     try {
@@ -109,10 +112,16 @@ export async function findMatches(currentUser, members, matchType, useAi = false
             throw new Error('参数无效');
         }
 
+        // 检查API健康状态
+        const healthStatus = apiHealthMonitor.getDegradationStatus();
+        const actualUseAi = useAi && apiHealthMonitor.shouldUseAI();
+        
         Logger.info('开始匹配', { 
             user: currentUser.name, 
             type: matchType, 
-            useAi,
+            requestedAi: useAi,
+            actualUseAi,
+            degraded: healthStatus.degraded,
             totalMembers: members.length 
         });
 
@@ -131,13 +140,13 @@ export async function findMatches(currentUser, members, matchType, useAi = false
 
             switch (matchType) {
                 case 'similar':
-                    matches = await findSimilarMatches(currentUser, candidateMembers, useAi);
+                    matches = await findSimilarMatches(currentUser, candidateMembers, actualUseAi);
                     break;
                 case 'complementary':
-                    matches = await findComplementaryMatches(currentUser, candidateMembers, useAi);
+                    matches = await findComplementaryMatches(currentUser, candidateMembers, actualUseAi);
                     break;
                 case 'smart':
-                    matches = await findSmartMatches(currentUser, candidateMembers, useAi);
+                    matches = await findSmartMatches(currentUser, candidateMembers, actualUseAi);
                     break;
                 default:
                     throw new Error(`未知的匹配类型: ${matchType}`);
@@ -145,12 +154,16 @@ export async function findMatches(currentUser, members, matchType, useAi = false
 
             // 限制结果数量并排序
             const sortedMatches = matches
+                .filter(match => match && match.score > 0)
                 .sort((a, b) => b.score - a.score)
                 .slice(0, 10);
 
             Logger.info('匹配完成', {
                 user: currentUser.name,
                 type: matchType,
+                requestedAi: useAi,
+                actualUseAi,
+                degraded: healthStatus.degraded,
                 matches: sortedMatches.length,
                 topScore: sortedMatches[0]?.score || 0
             });
@@ -165,87 +178,244 @@ export async function findMatches(currentUser, members, matchType, useAi = false
 }
 
 /**
- * 相似性匹配
+ * 相似性匹配（升级版）
+ * 使用AI增强算法或传统算法降级
  */
 async function findSimilarMatches(currentUser, candidates, useAi) {
     const matches = [];
+    const batchSize = apiHealthMonitor.getDynamicBatchSize();
+    
+    Logger.debug('开始相似性匹配', {
+        candidateCount: candidates.length,
+        useAi,
+        batchSize
+    });
 
-    for (const candidate of candidates) {
-        let score = calculateSimilarity(currentUser, candidate);
-        
-        // 如果启用AI，添加语义相似度
-        if (useAi) {
-            const aiScore = await calculateAiSimilarity(currentUser, candidate);
-            score = Math.round(score * 0.7 + aiScore * 0.3); // 70%传统算法 + 30%AI
-        }
-
-        matches.push({
-            member: candidate,
-            score,
-            type: 'similar',
-            details: generateMatchDetails(currentUser, candidate, 'similar')
+    // 分批处理候选者
+    for (let i = 0; i < candidates.length; i += batchSize) {
+        const batch = candidates.slice(i, Math.min(i + batchSize, candidates.length));
+        const batchPromises = batch.map(async (candidate) => {
+            try {
+                let matchResult;
+                
+                if (useAi) {
+                    // 使用AI增强算法
+                    matchResult = await matchingEngine.calculateAICompatibility(currentUser, candidate);
+                } else {
+                    // 使用传统算法
+                    matchResult = await matchingEngine.calculateTraditionalCompatibility(currentUser, candidate);
+                }
+                
+                if (matchResult.score > 0) {
+                    return {
+                        member: candidate,
+                        score: matchResult.score,
+                        type: 'similar',
+                        details: {
+                            reason: matchResult.reason,
+                            commonInterests: matchResult.commonInterests || [],
+                            matchType: matchResult.match_type || '相似性匹配',
+                            confidenceLevel: matchResult.confidence_level,
+                            degraded: matchResult.degraded || false,
+                            analysis: matchResult.analysis
+                        }
+                    };
+                }
+                return null;
+            } catch (error) {
+                Logger.warn(`候选者匹配失败: ${candidate.name}`, error);
+                return null;
+            }
         });
+        
+        const batchResults = await Promise.all(batchPromises);
+        matches.push(...batchResults.filter(result => result !== null));
+        
+        // 批次间延迟，避免API压力
+        if (i + batchSize < candidates.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
     }
+
+    Logger.debug('相似性匹配完成', {
+        totalMatches: matches.length,
+        avgScore: matches.length > 0 ? matches.reduce((sum, m) => sum + m.score, 0) / matches.length : 0
+    });
 
     return matches;
 }
 
 /**
- * 互补性匹配
+ * 互补性匹配（升级版）
+ * 使用AI增强算法分析用户间的互补性
  */
 async function findComplementaryMatches(currentUser, candidates, useAi) {
     const matches = [];
+    const batchSize = apiHealthMonitor.getDynamicBatchSize();
+    
+    Logger.debug('开始互补性匹配', {
+        candidateCount: candidates.length,
+        useAi,
+        batchSize
+    });
 
-    for (const candidate of candidates) {
-        let score = calculateComplementarity(currentUser, candidate);
-        
-        // 如果启用AI，可以分析互补性的语义层面
-        if (useAi) {
-            const aiComplementarity = await calculateAiComplementarity(currentUser, candidate);
-            score = Math.round(score * 0.8 + aiComplementarity * 0.2);
-        }
-
-        matches.push({
-            member: candidate,
-            score,
-            type: 'complementary',
-            details: generateMatchDetails(currentUser, candidate, 'complementary')
+    // 分批处理候选者
+    for (let i = 0; i < candidates.length; i += batchSize) {
+        const batch = candidates.slice(i, Math.min(i + batchSize, candidates.length));
+        const batchPromises = batch.map(async (candidate) => {
+            try {
+                let matchResult;
+                
+                if (useAi) {
+                    // 使用AI增强算法进行互补性分析
+                    matchResult = await matchingEngine.calculateAICompatibility(currentUser, candidate);
+                    
+                    // AI结果需要从相似性转换为互补性视角
+                    if (matchResult.analysis?.ai_analysis) {
+                        const aiAnalysis = matchResult.analysis.ai_analysis;
+                        // 互补性分析：相似度低但兼容性高的情况
+                        const complementarityScore = Math.max(0, 
+                            (matchResult.score * 0.3) + // 基础兼容性
+                            ((10 - (aiAnalysis.semantic_similarity || 50) / 10) * 0.7) // 差异度转互补性
+                        );
+                        matchResult.score = Math.round(complementarityScore);
+                        matchResult.reason = `AI互补性分析：发现潜在的互补优势`;
+                    }
+                } else {
+                    // 使用传统互补性算法
+                    const complementarityScore = calculateComplementarity(currentUser, candidate);
+                    matchResult = {
+                        score: Math.min(Math.max(Math.round(complementarityScore / 10), 0), 10),
+                        reason: `传统互补性分析：评分 ${Math.round(complementarityScore)}%`,
+                        analysis: {
+                            traditional_analysis: {
+                                complementarity_score: complementarityScore
+                            }
+                        },
+                        commonInterests: []
+                    };
+                }
+                
+                if (matchResult.score > 0) {
+                    return {
+                        member: candidate,
+                        score: matchResult.score,
+                        type: 'complementary',
+                        details: {
+                            reason: matchResult.reason,
+                            commonInterests: matchResult.commonInterests || [],
+                            matchType: matchResult.match_type || '互补性匹配',
+                            confidenceLevel: matchResult.confidence_level,
+                            degraded: matchResult.degraded || false,
+                            analysis: matchResult.analysis
+                        }
+                    };
+                }
+                return null;
+            } catch (error) {
+                Logger.warn(`互补性匹配失败: ${candidate.name}`, error);
+                return null;
+            }
         });
+        
+        const batchResults = await Promise.all(batchPromises);
+        matches.push(...batchResults.filter(result => result !== null));
+        
+        // 批次间延迟
+        if (i + batchSize < candidates.length) {
+            await new Promise(resolve => setTimeout(resolve, 120));
+        }
     }
+
+    Logger.debug('互补性匹配完成', {
+        totalMatches: matches.length,
+        avgScore: matches.length > 0 ? matches.reduce((sum, m) => sum + m.score, 0) / matches.length : 0
+    });
 
     return matches;
 }
 
 /**
- * 智能匹配（综合相似性和互补性）
+ * 智能匹配（升级版）
+ * 综合相似性和互补性，使用AI增强分析
  */
 async function findSmartMatches(currentUser, candidates, useAi) {
     const matches = [];
+    const batchSize = apiHealthMonitor.getDynamicBatchSize();
+    
+    Logger.debug('开始智能匹配', {
+        candidateCount: candidates.length,
+        useAi,
+        batchSize
+    });
 
-    for (const candidate of candidates) {
-        const similarityScore = calculateSimilarity(currentUser, candidate);
-        const complementarityScore = calculateComplementarity(currentUser, candidate);
-        
-        // 智能匹配权衡相似性和互补性
-        let baseScore = Math.round(similarityScore * 0.6 + complementarityScore * 0.4);
-        
-        // AI增强
-        if (useAi) {
-            const aiScore = await calculateAiSimilarity(currentUser, candidate);
-            baseScore = Math.round(baseScore * 0.8 + aiScore * 0.2);
-        }
-
-        matches.push({
-            member: candidate,
-            score: baseScore,
-            type: 'smart',
-            details: {
-                similarity: similarityScore,
-                complementarity: complementarityScore,
-                ...generateMatchDetails(currentUser, candidate, 'smart')
+    // 分批处理候选者
+    for (let i = 0; i < candidates.length; i += batchSize) {
+        const batch = candidates.slice(i, Math.min(i + batchSize, candidates.length));
+        const batchPromises = batch.map(async (candidate) => {
+            try {
+                let matchResult;
+                
+                if (useAi) {
+                    // 使用AI增强算法进行综合分析
+                    matchResult = await matchingEngine.calculateAICompatibility(currentUser, candidate);
+                } else {
+                    // 传统智能匹配：结合相似性和互补性
+                    const similarityScore = calculateSimilarity(currentUser, candidate);
+                    const complementarityScore = calculateComplementarity(currentUser, candidate);
+                    
+                    const baseScore = Math.round(similarityScore * 0.6 + complementarityScore * 0.4);
+                    
+                    matchResult = {
+                        score: Math.min(Math.max(Math.round(baseScore / 10), 0), 10), // 转换为0-10分
+                        reason: `智能匹配分析：相似性${Math.round(similarityScore)}% + 互补性${Math.round(complementarityScore)}%`,
+                        analysis: {
+                            traditional_analysis: {
+                                similarity_score: similarityScore,
+                                complementarity_score: complementarityScore
+                            }
+                        },
+                        commonInterests: generateMatchDetails(currentUser, candidate, 'smart').commonInterests
+                    };
+                }
+                
+                if (matchResult.score > 0) {
+                    return {
+                        member: candidate,
+                        score: matchResult.score,
+                        type: 'smart',
+                        details: {
+                            reason: matchResult.reason,
+                            similarity: matchResult.analysis?.traditional_analysis?.similarity_score,
+                            complementarity: matchResult.analysis?.traditional_analysis?.complementarity_score,
+                            commonInterests: matchResult.commonInterests || [],
+                            matchType: matchResult.match_type || '智能匹配',
+                            confidenceLevel: matchResult.confidence_level,
+                            degraded: matchResult.degraded || false,
+                            analysis: matchResult.analysis
+                        }
+                    };
+                }
+                return null;
+            } catch (error) {
+                Logger.warn(`智能匹配失败: ${candidate.name}`, error);
+                return null;
             }
         });
+        
+        const batchResults = await Promise.all(batchPromises);
+        matches.push(...batchResults.filter(result => result !== null));
+        
+        // 批次间延迟
+        if (i + batchSize < candidates.length) {
+            await new Promise(resolve => setTimeout(resolve, 150));
+        }
     }
+
+    Logger.debug('智能匹配完成', {
+        totalMatches: matches.length,
+        avgScore: matches.length > 0 ? matches.reduce((sum, m) => sum + m.score, 0) / matches.length : 0
+    });
 
     return matches;
 }

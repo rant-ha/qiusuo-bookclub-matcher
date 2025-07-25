@@ -181,7 +181,7 @@ export const store = {
             // 恢复用户状态
             const currentUser = sessionStorage.getItem('currentUser');
             if (currentUser) {
-                _state.currentUser = JSON.parse(currentUser);
+                _state.currentUser = migrateUserData(JSON.parse(currentUser));
             }
 
             // 恢复管理员状态
